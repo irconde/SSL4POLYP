@@ -8,7 +8,6 @@ from datetime import datetime
 import torch
 import torchvision
 
-import segmentation_models_pytorch as smp
 
 from Data import dataloaders
 from Metrics import performance
