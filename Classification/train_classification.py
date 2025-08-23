@@ -127,7 +127,24 @@ def test(model, rank, test_loader, epoch, perf_fn, log_path):
 
 def build(args, rank):
 
-    if args.dataset.startswith("Hyperkvasir"):
+    if args.simple:
+        class_dirs = sorted(glob.glob(os.path.join(args.root, "*/")))
+        class_id = 0
+        input_paths = []
+        targets = []
+        N_in_class = []
+        N_total = 0
+        for cd in class_dirs:
+            contents = sorted(glob.glob(cd + "*.jpg"))
+            cd_targets = [class_id for _ in range(len(contents))]
+            input_paths += contents
+            targets += cd_targets
+            class_id += 1
+            N_in_class.append(len(contents))
+            N_total += len(contents)
+        n_class = class_id
+        class_weights = [1 / N * N_total / n_class for N in N_in_class]
+    elif args.dataset.startswith("Hyperkvasir"):
         if args.dataset.endswith("pathological"):
             class_type = "pathological-findings/"
         elif args.dataset.endswith("anatomical"):
@@ -374,8 +391,8 @@ def get_args():
         "--dataset",
         type=str,
         required=True,
-        choices=["Hyperkvasir_pathological", "Hyperkvasir_anatomical"],
     )
+    parser.add_argument("--simple-dataset", action="store_true", default=False, dest="simple")
     parser.add_argument("--data-root", type=str, required=True, dest="root")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)
