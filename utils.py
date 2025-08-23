@@ -15,12 +15,6 @@ def get_MAE_backbone(weight_path, head, num_classes, frozen, dense, out_token="c
     )
 
 
-def get_ImageNet_or_random_ResNet(head, num_classes, frozen, dense, ImageNet_weights):
-    return models.ResNet_from_Any(
-        None, head, num_classes, frozen, dense, ImageNet_weights
-    )
-
-
 def get_ImageNet_or_random_ViT(
     head,
     num_classes,
