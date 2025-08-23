@@ -6,7 +6,6 @@ from functools import partial
 from timm.models.vision_transformer import VisionTransformer
 from timm.models.hub import download_cached_file
 
-from .moco_v3 import vits
 from .mae import models_mae
 
 from .DPT_decoder import DPT_decoder
@@ -303,71 +302,4 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
         return x
 
 
-class ViT_from_MoCoV3(vits.VisionTransformerMoCo):
-    def __init__(
-        self,
-        weight_path,
-        head,
-        num_classes,
-        frozen,
-        dense,
-        embed_dim,
-        out_token,
-    ):
-        super(ViT_from_MoCoV3, self).__init__(
-            patch_size=16,
-            embed_dim=embed_dim,
-            depth=12,
-            num_heads=12,
-            mlp_ratio=4,
-            qkv_bias=True,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            num_classes=4096,
-        )
-        self.head = nn.Identity()
-        if weight_path is not None:
-            weights = torch.load(weight_path, map_location="cpu")
-            self.load_state_dict(weights)
-        self.patch_embed.proj.weight.requires_grad = True
-        self.patch_embed.proj.bias.requires_grad = True
-
-        self.head_bool = head
-        if head:
-            self.lin_head = nn.Linear(embed_dim, num_classes)
-        self.frozen = frozen
-        self.dense = dense
-
-        if dense:
-            self.decoder = DPT_decoder(num_classes=num_classes, dense=dense)
-        self.out_token = out_token
-
-    def forward_features(self, x):
-        x = self.patch_embed(x)
-        x = self._pos_embed(x)
-
-        z = []
-        for i, blk in enumerate(self.blocks):
-            x = blk(x)
-            if self.dense and i in [2, 5, 8, 11]:
-                z.append(x)
-
-        return z if self.dense else self.norm(x)
-
-    def forward(self, x):
-        if self.frozen:
-            with torch.no_grad():
-                x = self.forward_features(x)
-        else:
-            x = self.forward_features(x)
-        if self.dense:
-            x = self.decoder(x)
-        else:
-            if self.out_token == "cls":
-                x = x[:, 0]
-            elif self.out_token == "spatial":
-                x = x[:, 1:].mean(1)
-            if self.head_bool:
-                x = self.lin_head(x)
-
-        return x
 

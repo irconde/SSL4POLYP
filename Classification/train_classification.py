@@ -170,18 +170,9 @@ def build(args, rank):
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
         assert os.path.exists(args.ckpt)
-        if args.ss_framework == "barlowtwins":
-            model = utils.get_BarlowTwins_backbone(
-                args.ckpt, True, n_class, args.frozen, None
-            )
-        elif args.ss_framework == "mae":
-            model = utils.get_MAE_backbone(
-                args.ckpt, True, n_class, args.frozen, None
-            )
-        elif args.ss_framework == "mocov3":
-            model = utils.get_MoCoV3_backbone(
-                args.ckpt, args.arch, True, n_class, args.frozen, None
-            )
+        model = utils.get_MAE_backbone(
+            args.ckpt, True, n_class, args.frozen, None
+        )
     elif args.pretraining == "ImageNet_class":
         if args.arch == "resnet50":
             model = utils.get_ImageNet_or_random_ResNet(
@@ -386,9 +377,7 @@ def get_args():
         required=True,
         choices=["Hyperkvasir", "ImageNet_class", "ImageNet_self", "random"],
     )
-    parser.add_argument(
-        "--ss-framework", type=str, choices=["barlowtwins", "mocov3", "mae"]
-    )
+    parser.add_argument("--ss-framework", type=str, choices=["mae"])
     parser.add_argument("--checkpoint", type=str, dest="ckpt")
     parser.add_argument("--frozen", action="store_true", default=False)
     parser.add_argument(
