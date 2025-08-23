@@ -98,23 +98,13 @@ def build(args):
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
         model = utils.get_MAE_backbone(None, True, n_class, False, None)
     elif args.pretraining == "ImageNet_class":
-        if args.arch == "resnet50":
-            model = utils.get_ImageNet_or_random_ResNet(
-                True, n_class, False, None, ImageNet_weights=True
-            )
-        else:
-            model = utils.get_ImageNet_or_random_ViT(
-                True, n_class, False, None, ImageNet_weights=True
-            )
+        model = utils.get_ImageNet_or_random_ViT(
+            True, n_class, False, None, ImageNet_weights=True
+        )
     elif args.pretraining == "random":
-        if args.arch == "resnet50":
-            model = utils.get_ImageNet_or_random_ResNet(
-                True, n_class, False, None, ImageNet_weights=False
-            )
-        else:
-            model = utils.get_ImageNet_or_random_ViT(
-                True, n_class, False, None, ImageNet_weights=False
-            )
+        model = utils.get_ImageNet_or_random_ViT(
+            True, n_class, False, None, ImageNet_weights=False
+        )
     if args.ss_framework:
         ckpt_path = f"Trained models/{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(False)}-dataset_{args.dataset}.pth"
     else:
@@ -143,8 +133,8 @@ def get_args():
     parser.add_argument(
         "--architecture",
         type=str,
-        required=True,
-        choices=["resnet50", "vit_b"],
+        choices=["vit_b"],
+        default="vit_b",
         dest="arch",
     )
     parser.add_argument(

@@ -9,7 +9,7 @@ Links to the paper:
 
 ## 1. Abstract
 
-Solutions to vision tasks in gastrointestinal endoscopy (GIE) conventionally use image encoders pretrained in a supervised manner with ImageNet-1k as backbones. However, the use of modern self-supervised pretraining algorithms and a recent dataset of 100k unlabelled GIE images (Hyperkvasir-unlabelled) may allow for improvements. In this work, we study the fine-tuned performance of models with ResNet50 and ViT-B backbones pretrained in self-supervised and supervised manners with ImageNet-1k and Hyperkvasir-unlabelled (self-supervised only) in a range of GIE vision tasks. In addition to identifying the most suitable pretraining pipeline and backbone architecture for each task, out of those considered, our results suggest three general principles. Firstly, that self-supervised pretraining generally produces more suitable backbones for GIE vision tasks than supervised pretraining. Secondly, that self-supervised pretraining with ImageNet-1k is typically more suitable than pretraining with Hyperkvasir-unlabelled. Thirdly, that ViT-Bs are more suitable in polyp segmentation and monocular depth estimation in colonoscopy, ResNet50s are more suitable in polyp detection, and both architectures perform similarly in anatomical landmark recognition and pathological finding characterisation. We hope this work draws attention to the complexity of pretraining for GIE vision tasks, informs this development of more suitable approaches than the convention, and inspires further research on this topic to help advance this development.
+Solutions to vision tasks in gastrointestinal endoscopy (GIE) conventionally use image encoders pretrained in a supervised manner with ImageNet-1k as backbones. However, the use of modern self-supervised pretraining algorithms and a recent dataset of 100k unlabelled GIE images (Hyperkvasir-unlabelled) may allow for improvements. In this work, we study the fine-tuned performance of ViT-B backbones pretrained in self-supervised and supervised manners with ImageNet-1k and Hyperkvasir-unlabelled (self-supervised only) in a range of GIE vision tasks. In addition to identifying the most suitable pretraining pipeline for each task, out of those considered, our results suggest three general principles. Firstly, that self-supervised pretraining generally produces more suitable backbones for GIE vision tasks than supervised pretraining. Secondly, that self-supervised pretraining with ImageNet-1k is typically more suitable than pretraining with Hyperkvasir-unlabelled. Thirdly, that ViT-Bs are more suitable in polyp segmentation and monocular depth estimation in colonoscopy and perform similarly to alternative architectures in anatomical landmark recognition and pathological finding characterisation. We hope this work draws attention to the complexity of pretraining for GIE vision tasks, informs this development of more suitable approaches than the convention, and inspires further research on this topic to help advance this development.
 
 ## 2. Usage
 
@@ -17,7 +17,7 @@ Solutions to vision tasks in gastrointestinal endoscopy (GIE) conventionally use
 
 Follow the guidance in this section for obtaining the weights for pretrained models.
 
-+ For encoders pretrained in a supervised manner with ImageNet-1k, the weights provided with the [torchvision](https://pytorch.org/vision/stable/index.html) (ResNet50) and [timm](https://timm.fast.ai/) (ViT-B) libraries are automatically used by our code and no manual steps are required.
++ For encoders pretrained in a supervised manner with ImageNet-1k, the weights provided with the [timm](https://timm.fast.ai/) library (ViT-B) are automatically used by our code and no manual steps are required.
 + For encoders pretrained in a self-supervised manner with ImageNet-1k, using [MAE](https://github.com/facebookresearch/mae), the weights provided with the codebase should be used.
 + For encoders pretrained in a self-supervised manner with [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using [MAE](https://github.com/facebookresearch/mae), the codebase should be used for pretraining. The code should first be modified to allow pretraining with Hyperkvasir-unabelled (remove `'/train'` from data path) and the guidance in the respective codebase for running the pretraining should then be followed with any arguments adjusted for your given hardware as needed.
 
@@ -52,7 +52,7 @@ python train_classification.py \
     --batch-size [batch-size]
 ```
 
-* Replace `[architecture]` with name of encoder architecture (`resnet50` or `vit_b`).
+* Replace `[architecture]` with name of encoder architecture (`vit_b`).
 * Replace `[pretraining]` with general pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
 * For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm `mae` and `[checkpoint]` with path to pretrained weights (classification only).
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
@@ -88,7 +88,7 @@ python eval_classification.py \
     --data-root [data-root]
 ```
 
-* Replace `[architecture]` with name of encoder architecture (`resnet50` or `vit_b`).
+* Replace `[architecture]` with name of encoder architecture (`vit_b`).
 * Replace `[pretraining]` with general pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
 * For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm `mae`.
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
