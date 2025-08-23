@@ -5,17 +5,13 @@ def get_BarlowTwins_backbone(weight_path, head, num_classes, frozen, dense):
     return models.ResNet_from_Any(weight_path, head, num_classes, frozen, dense)
 
 
-def get_MAE_backbone(
-    weight_path, head, num_classes, frozen, dense, det, fixed_size=None, out_token="cls"
-):
+def get_MAE_backbone(weight_path, head, num_classes, frozen, dense, out_token="cls"):
     return models.ViT_from_MAE(
         weight_path,
         head,
         num_classes,
         frozen,
         dense,
-        det,
-        fixed_size,
         embed_dim=768,
         depth=12,
         num_heads=12,
@@ -30,8 +26,6 @@ def get_MoCoV3_backbone(
     num_classes,
     frozen,
     dense,
-    det,
-    fixed_size=None,
     out_token="cls",
 ):
     if arch == "vit_b":
@@ -41,8 +35,6 @@ def get_MoCoV3_backbone(
             num_classes,
             frozen,
             dense,
-            det,
-            fixed_size,
             embed_dim=768,
             out_token=out_token,
         )
@@ -61,9 +53,7 @@ def get_ImageNet_or_random_ViT(
     num_classes,
     frozen,
     dense,
-    det,
     ImageNet_weights,
-    fixed_size=None,
     out_token="cls",
 ):
     return models.VisionTransformer_from_Any(
@@ -71,8 +61,6 @@ def get_ImageNet_or_random_ViT(
         num_classes,
         frozen,
         dense,
-        det,
-        fixed_size,
         768,
         12,
         12,

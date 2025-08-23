@@ -3,7 +3,6 @@ import torch.nn as nn
 import torchvision
 
 from functools import partial
-from collections import OrderedDict
 from timm.models.vision_transformer import VisionTransformer
 from timm.models.hub import download_cached_file
 
@@ -152,111 +151,6 @@ class ResNet_from_Any(torchvision.models.resnet.ResNet):
         return x
 
 
-class WindowedAttention(nn.Module):
-    def __init__(
-        self,
-        dim,
-        num_heads=8,
-        qkv_bias=False,
-        attn_drop=0.0,
-        proj_drop=0.0,
-        window_size=16,
-    ):
-        super().__init__()
-        assert dim % num_heads == 0, "dim should be divisible by num_heads"
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        self.scale = head_dim**-0.5
-
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-        self.window_size = window_size
-
-    def forward(self, x):
-        B, N, C = x.shape
-        s = int(N**0.5)
-        idxs = torch.arange(N).reshape(s, s)
-        perm = []
-        for i in range(0, s, self.window_size):
-            for j in range(0, s, self.window_size):
-                perm.append(
-                    idxs[i : i + self.window_size, j : j + self.window_size].reshape(
-                        self.window_size**2
-                    )
-                )
-        windows = len(perm)
-        perm = torch.cat(perm)
-        inv_perm = torch.argsort(perm)
-
-        x = x[:, perm]
-
-        qkv = (
-            self.qkv(x)
-            .reshape(B, windows, N // windows, 3, self.num_heads, C // self.num_heads)
-            .permute(3, 0, 1, 4, 2, 5)
-        )
-        q, k, v = qkv.unbind(0)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(2, 3).reshape(B, N, C)
-        x = x[:, inv_perm]
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
-
-
-class ViTDet_FPN(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        self.fpn1 = nn.Sequential(
-            nn.MaxPool2d(2),
-            nn.Conv2d(768, 256, 1),
-            nn.LayerNorm((256, 32, 32)),
-            nn.Conv2d(256, 256, 3, padding=1),
-            nn.LayerNorm((256, 32, 32)),
-        )
-        self.fpn2 = nn.Sequential(
-            nn.Conv2d(768, 256, 1),
-            nn.LayerNorm((256, 64, 64)),
-            nn.Conv2d(256, 256, 3, padding=1),
-            nn.LayerNorm((256, 64, 64)),
-        )
-        self.fpn3 = nn.Sequential(
-            nn.ConvTranspose2d(768, 768, 2, 2),
-            nn.Conv2d(768, 256, 1),
-            nn.LayerNorm((256, 128, 128)),
-            nn.Conv2d(256, 256, 3, padding=1),
-            nn.LayerNorm((256, 128, 128)),
-        )
-        self.fpn4 = nn.Sequential(
-            nn.ConvTranspose2d(768, 768, 2, 2),
-            nn.LayerNorm((768, 128, 128)),
-            nn.GELU(),
-            nn.ConvTranspose2d(768, 768, 2, 2),
-            nn.Conv2d(768, 256, 1),
-            nn.LayerNorm((256, 256, 256)),
-            nn.Conv2d(256, 256, 3, padding=1),
-            nn.LayerNorm((256, 256, 256)),
-        )
-
-    def forward(self, x):
-        B = x.shape[0]
-        C = x.shape[2]
-        H = int(x.shape[1] ** 0.5)
-        W = H
-        x = torch.reshape(x.transpose(1, 2), (B, C, H, W))
-        l1 = self.fpn1(x)
-        l2 = self.fpn2(x)
-        l3 = self.fpn3(x)
-        l4 = self.fpn4(x)
-        pool = nn.functional.max_pool2d(l1, kernel_size=1, stride=2, padding=0)
-        return OrderedDict([("0", l4), ("1", l3), ("2", l2), ("3", l1), ("pool", pool)])
 
 
 class VisionTransformer_from_Any(VisionTransformer):
@@ -266,8 +160,6 @@ class VisionTransformer_from_Any(VisionTransformer):
         num_classes,
         frozen,
         dense,
-        det,
-        fixed_size,
         embed_dim,
         depth,
         num_heads,
@@ -278,11 +170,6 @@ class VisionTransformer_from_Any(VisionTransformer):
             patch_size=16, embed_dim=embed_dim, depth=depth, num_heads=num_heads
         )
 
-        if det:
-            for i in [0, 1, 3, 4, 6, 7, 9, 10]:
-                self.blocks[i].attn = WindowedAttention(
-                    dim=embed_dim, num_heads=num_heads, qkv_bias=True
-                )
         if ImageNet_weights:
             loc = download_cached_file(
                 "https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz"
@@ -295,39 +182,14 @@ class VisionTransformer_from_Any(VisionTransformer):
             self.lin_head = nn.Linear(embed_dim, num_classes)
         self.frozen = frozen
         self.dense = dense
-        self.det = det
 
         if dense:
             self.decoder = DPT_decoder(num_classes=num_classes, dense=dense)
-        if det:
-            self.fixed_size = fixed_size
-            self.fpn = ViTDet_FPN()
-            self.out_channels = 256
-            self.patch_embed.img_size = (fixed_size, fixed_size)
-            del self.cls_token
         self.out_token = out_token
-
-    def _pos_embed_interp(self, x):
-        pos_embed2d = self.pos_embed[:, 1:, :].transpose(1, 2).reshape(1, 768, 14, 14)
-        pos_embed2d = torch.nn.functional.interpolate(
-            pos_embed2d,
-            size=(self.fixed_size // 16, self.fixed_size // 16),
-            mode="bilinear",
-            align_corners=True,
-        )
-        pos_embed = pos_embed2d.reshape(
-            1, 768, self.fixed_size // 16 * self.fixed_size // 16
-        ).transpose(1, 2)
-
-        x = x + pos_embed
-        return self.pos_drop(x)
 
     def forward_features(self, x):
         x = self.patch_embed(x)
-        if self.det:
-            x = self._pos_embed_interp(x)
-        else:
-            x = self._pos_embed(x)
+        x = self._pos_embed(x)
 
         z = []
         for i, blk in enumerate(self.blocks):
@@ -345,15 +207,13 @@ class VisionTransformer_from_Any(VisionTransformer):
             x = self.forward_features(x)
         if self.dense:
             x = self.decoder(x)
-        elif not self.det:
+        else:
             if self.out_token == "cls":
                 x = x[:, 0]
             elif self.out_token == "spatial":
                 x = x[:, 1:].mean(1)
             if self.head_bool:
                 x = self.lin_head(x)
-        else:
-            x = self.fpn(x)
         return x
 
 
@@ -365,8 +225,6 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
         num_classes,
         frozen,
         dense,
-        det,
-        fixed_size,
         embed_dim,
         depth,
         num_heads,
@@ -384,11 +242,6 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
         )
 
-        if det:
-            for i in [0, 1, 3, 4, 6, 7, 9, 10]:
-                self.blocks[i].attn = WindowedAttention(
-                    dim=embed_dim, num_heads=num_heads, qkv_bias=True
-                )
         if weight_path is not None:
             weights = torch.load(weight_path, map_location="cpu")["model"]
             self.load_my_state_dict(weights)
@@ -403,15 +256,8 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
             self.lin_head = nn.Linear(embed_dim, num_classes)
         self.frozen = frozen
         self.dense = dense
-        self.det = det
         if dense:
             self.decoder = DPT_decoder(num_classes=num_classes, dense=dense)
-        if det:
-            self.fixed_size = fixed_size
-            self.fpn = ViTDet_FPN()
-            self.out_channels = 256
-            self.patch_embed.img_size = (fixed_size, fixed_size)
-            del self.cls_token
         self.out_token = out_token
 
     def load_my_state_dict(self, state_dict):
@@ -426,26 +272,10 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
 
     def forward_encoder(self, x):
         x = self.patch_embed(x)
-
-        if self.det:
-            pos_embed2d = (
-                self.pos_embed[:, 1:, :].transpose(1, 2).reshape(1, 768, 14, 14)
-            )
-            pos_embed2d = torch.nn.functional.interpolate(
-                pos_embed2d,
-                size=(self.fixed_size // 16, self.fixed_size // 16),
-                mode="bilinear",
-                align_corners=True,
-            )
-            pos_embed = pos_embed2d.reshape(
-                1, 768, self.fixed_size // 16 * self.fixed_size // 16
-            ).transpose(1, 2)
-            x = x + pos_embed
-        else:
-            x = x + self.pos_embed[:, 1:, :]
-            cls_token = self.cls_token + self.pos_embed[:, :1, :]
-            cls_tokens = cls_token.expand(x.shape[0], -1, -1)
-            x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.pos_embed[:, 1:, :]
+        cls_token = self.cls_token + self.pos_embed[:, :1, :]
+        cls_tokens = cls_token.expand(x.shape[0], -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
 
         z = []
         for i, blk in enumerate(self.blocks):
@@ -463,15 +293,13 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
             x = self.forward_encoder(imgs)
         if self.dense:
             x = self.decoder(x)
-        elif not self.det:
+        else:
             if self.out_token == "cls":
                 x = x[:, 0]
             elif self.out_token == "spatial":
                 x = x[:, 1:].mean(1)
             if self.head:
                 x = self.lin_head(x)
-        else:
-            x = self.fpn(x)
         return x
 
 
@@ -483,8 +311,6 @@ class ViT_from_MoCoV3(vits.VisionTransformerMoCo):
         num_classes,
         frozen,
         dense,
-        det,
-        fixed_size,
         embed_dim,
         out_token,
     ):
@@ -498,11 +324,6 @@ class ViT_from_MoCoV3(vits.VisionTransformerMoCo):
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
             num_classes=4096,
         )
-        if det:
-            for i in [0, 1, 3, 4, 6, 7, 9, 10]:
-                self.blocks[i].attn = WindowedAttention(
-                    dim=embed_dim, num_heads=12, qkv_bias=True
-                )
         self.head = nn.Identity()
         if weight_path is not None:
             weights = torch.load(weight_path, map_location="cpu")
@@ -515,39 +336,14 @@ class ViT_from_MoCoV3(vits.VisionTransformerMoCo):
             self.lin_head = nn.Linear(embed_dim, num_classes)
         self.frozen = frozen
         self.dense = dense
-        self.det = det
 
         if dense:
             self.decoder = DPT_decoder(num_classes=num_classes, dense=dense)
-        if det:
-            self.fixed_size = fixed_size
-            self.fpn = ViTDet_FPN()
-            self.out_channels = 256
-            self.patch_embed.img_size = (fixed_size, fixed_size)
-            del self.cls_token
         self.out_token = out_token
-
-    def _pos_embed_interp(self, x):
-        pos_embed2d = self.pos_embed[:, 1:, :].transpose(1, 2).reshape(1, 768, 14, 14)
-        pos_embed2d = torch.nn.functional.interpolate(
-            pos_embed2d,
-            size=(self.fixed_size // 16, self.fixed_size // 16),
-            mode="bilinear",
-            align_corners=True,
-        )
-        pos_embed = pos_embed2d.reshape(
-            1, 768, self.fixed_size // 16 * self.fixed_size // 16
-        ).transpose(1, 2)
-
-        x = x + pos_embed
-        return self.pos_drop(x)
 
     def forward_features(self, x):
         x = self.patch_embed(x)
-        if self.det:
-            x = self._pos_embed_interp(x)
-        else:
-            x = self._pos_embed(x)
+        x = self._pos_embed(x)
 
         z = []
         for i, blk in enumerate(self.blocks):
@@ -565,15 +361,13 @@ class ViT_from_MoCoV3(vits.VisionTransformerMoCo):
             x = self.forward_features(x)
         if self.dense:
             x = self.decoder(x)
-        elif not self.det:
+        else:
             if self.out_token == "cls":
                 x = x[:, 0]
             elif self.out_token == "spatial":
                 x = x[:, 1:].mean(1)
             if self.head_bool:
                 x = self.lin_head(x)
-        else:
-            x = self.fpn(x)
 
         return x
 
