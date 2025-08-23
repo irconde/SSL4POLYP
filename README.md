@@ -85,6 +85,20 @@ python train_classification.py \
 * Replace `[data-root]` with path to the chosen dataset.
 * Replace `[batch-size]` with desired batch size.
 
+The script expects the HyperKvasir directory structure by default. For datasets
+organised more simply as `data-root/class_x/*.jpg`, pass `--simple-dataset` and
+lay out the images like:
+
+```
+data-root/
+├─ class_0/
+│   ├─ img001.jpg
+│   └─ ...
+└─ class_1/
+    ├─ img050.jpg
+    └─ ...
+```
+
 To run all three pretraining configurations sequentially (SUP-imnet, SSL-imnet and SSL-colon) you may use the helper script:
 ```
 python run_all_pretrainings.py \
