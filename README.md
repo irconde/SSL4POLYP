@@ -23,12 +23,11 @@ Follow the guidance in this section for obtaining the weights for pretrained mod
 
 ### 2.2 Finetuning
 
-The finetuning scripts currently support frame-level classification and object detection. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `SSL4GIE/[Task]/Trained models`, replacing `[Task]` with `Classification` or `Object_detection`, if you wish to evaluate or make predictions with an already finetuned model.
+The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `SSL4GIE/Classification/Trained models` if you wish to evaluate or make predictions with an already finetuned model.
 
 Prior to running finetuning, download the required data and change directory:
 
 + For classification, download [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/) and change directory to `SSL4GIE/Classification`.
-+ For object detection, download [Kvasir-SEG](https://datasets.simula.no/kvasir-seg/) and change directory to `SSL4GIE/Object_detection`.
 
 For finetuning models pretrained in a self-supervised manner, run the following:
 ```
@@ -53,20 +52,10 @@ python train_classification.py \
     --batch-size [batch-size]
 ```
 
-For object detection, run the following:
-```
-python train_detection.py \
-    --architecture [architecture] \
-    --pretraining [pretraining] \
-    --dataset Kvasir \
-    --data-root [data-root] \
-    --batch-size [batch-size]
-```
-
 * Replace `[architecture]` with name of encoder architecture (`resnet50` or `vit_b`).
 * Replace `[pretraining]` with general pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
 * For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm (`mocov3`, `barlowtwins`, or `mae`) and `[checkpoint]` with path to pretrained weights (classification only).
-* For classification, replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`); for object detection this should be `Kvasir`.
+* Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 * Replace `[batch-size]` with desired batch size.
 
@@ -79,7 +68,7 @@ Please also note that, when using MoCo v3 or MAE, code from the [MoCo v3](https:
 
 ### 2.3 Evaluation
 
-Ensure that the weights for the desired model are located in `SSL4GIE/[Task]/Trained models`, replacing `[Task]` with `Classification` or `Object_detection`. This will have been done automatically if finetuning was run. Additionally, download the required data and change directory accordingly.
+Ensure that the weights for the desired model are located in `SSL4GIE/Classification/Trained models`. This will have been done automatically if finetuning was run. Additionally, download the required data and change directory accordingly.
 
 For evaluating classification models pretrained in a self-supervised manner, run the following:
 ```
@@ -99,35 +88,17 @@ python eval_classification.py \
     --data-root [data-root]
 ```
 
-For evaluating object detection models, run:
-```
-python eval_detection.py \
-    --architecture [architecture] \
-    --pretraining [pretraining] \
-    --dataset Kvasir \
-    --data-root [data-root]
-```
-
 * Replace `[architecture]` with name of encoder architecture (`resnet50` or `vit_b`).
 * Replace `[pretraining]` with general pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
-* For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm (`mocov3`, `barlowtwins`, or `mae`) when evaluating classification models.
-* For classification, replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`); for object detection this should be `Kvasir`.
+* For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm (`mocov3`, `barlowtwins`, or `mae`).
+* Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 
 In addition to printing the results of the evaluation in the output space, the results will also be saved to `SSL4GIE/eval_results.txt`.
 
 ### 2.4 Prediction
 
-Prediction utilities are provided for object detection:
-```
-python predict_detection.py \
-    --architecture [architecture] \
-    --pretraining [pretraining] \
-    --dataset Kvasir \
-    --data-root [data-root] \
-    --idx [image-idx]
-```
-`idx` specifies the image file within the dataset on which to run inference. Prediction utilities are not implemented for classification models.
+Prediction utilities are not implemented for classification models.
 
 ## 3. License
 

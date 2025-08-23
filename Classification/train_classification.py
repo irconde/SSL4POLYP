@@ -176,11 +176,11 @@ def build(args, rank):
             )
         elif args.ss_framework == "mae":
             model = utils.get_MAE_backbone(
-                args.ckpt, True, n_class, args.frozen, None, False
+                args.ckpt, True, n_class, args.frozen, None
             )
         elif args.ss_framework == "mocov3":
             model = utils.get_MoCoV3_backbone(
-                args.ckpt, args.arch, True, n_class, args.frozen, None, False
+                args.ckpt, args.arch, True, n_class, args.frozen, None
             )
     elif args.pretraining == "ImageNet_class":
         if args.arch == "resnet50":
@@ -189,7 +189,7 @@ def build(args, rank):
             )
         else:
             model = utils.get_ImageNet_or_random_ViT(
-                True, n_class, args.frozen, None, False, ImageNet_weights=True
+                True, n_class, args.frozen, None, ImageNet_weights=True
             )
     elif args.pretraining == "random":
         if args.arch == "resnet50":
@@ -198,7 +198,7 @@ def build(args, rank):
             )
         else:
             model = utils.get_ImageNet_or_random_ViT(
-                True, n_class, args.frozen, None, False, ImageNet_weights=False
+                True, n_class, args.frozen, None, ImageNet_weights=False
             )
     if args.ss_framework:
         ckpt_path = f"Trained models/{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(args.frozen)}-dataset_{args.dataset}.pth"

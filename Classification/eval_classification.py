@@ -99,10 +99,10 @@ def build(args):
         if args.ss_framework == "barlowtwins":
             model = utils.get_BarlowTwins_backbone(None, True, n_class, False, None)
         elif args.ss_framework == "mae":
-            model = utils.get_MAE_backbone(None, True, n_class, False, None, False)
+            model = utils.get_MAE_backbone(None, True, n_class, False, None)
         elif args.ss_framework == "mocov3":
             model = utils.get_MoCoV3_backbone(
-                None, args.arch, True, n_class, False, None, False
+                None, args.arch, True, n_class, False, None
             )
     elif args.pretraining == "ImageNet_class":
         if args.arch == "resnet50":
@@ -111,7 +111,7 @@ def build(args):
             )
         else:
             model = utils.get_ImageNet_or_random_ViT(
-                True, n_class, False, None, False, ImageNet_weights=True
+                True, n_class, False, None, ImageNet_weights=True
             )
     elif args.pretraining == "random":
         if args.arch == "resnet50":
@@ -120,7 +120,7 @@ def build(args):
             )
         else:
             model = utils.get_ImageNet_or_random_ViT(
-                True, n_class, False, None, False, ImageNet_weights=False
+                True, n_class, False, None, ImageNet_weights=False
             )
     if args.ss_framework:
         ckpt_path = f"Trained models/{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(False)}-dataset_{args.dataset}.pth"
