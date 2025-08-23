@@ -15,7 +15,15 @@ Follow the guidance in this section for obtaining the weights for pretrained mod
 
 + For encoders pretrained in a supervised manner with ImageNet-1k, the weights provided with the [timm](https://timm.fast.ai/) library (ViT-B) are automatically used by our code and no manual steps are required.
 + For encoders pretrained in a self-supervised manner with ImageNet-1k, using [MAE](https://github.com/facebookresearch/mae), the weights provided with the codebase should be used.
-+ For encoders pretrained in a self-supervised manner with [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using [MAE](https://github.com/facebookresearch/mae), the codebase should be used for pretraining. The code should first be modified to allow pretraining with Hyperkvasir-unabelled (remove `'/train'` from data path) and the guidance in the respective codebase for running the pretraining should then be followed with any arguments adjusted for your given hardware as needed.
++ For encoders pretrained in a self-supervised manner with [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using [MAE](https://github.com/facebookresearch/mae), use the helper script `Models/mae/run_hyperkvasir_pretraining.py` to generate the checkpoint. Example:
+
+```bash
+python Models/mae/run_hyperkvasir_pretraining.py \
+    --data-root /path/to/hyperkvasir-unlabelled \
+    --output-dir /path/to/save \
+    --batch-size 64 --epochs 400
+```
+Additional options supported by `main_pretrain.py` may be appended via `--extra-args`.
 
 ### Finetuning
 
@@ -54,6 +62,16 @@ python train_classification.py \
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 * Replace `[batch-size]` with desired batch size.
+
+To run all three pretraining configurations sequentially (SUP-imnet, SSL-imnet and SSL-colon) you may use the helper script:
+```
+python run_all_pretrainings.py \
+    --dataset [dataset] \
+    --data-root [data-root] \
+    --imagenet-mae /path/to/mae_pretrain_vit_base.pth \
+    --hyperkvasir-mae /path/to/hyperkvasir_mae.pth
+```
+Any additional options supported by `train_classification.py` can be appended via `--extra-args`.
 
 For all finetuning runs, the following optional arguments are also available:
 + `--frozen` - to freeze the pretrained encoder and only train the decoder. We did not use this in our experiments.

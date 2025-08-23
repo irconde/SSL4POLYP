@@ -22,6 +22,17 @@ from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
+import types
+import collections
+import sys
+
+if "torch._six" not in sys.modules:
+    module = types.ModuleType("torch._six")
+    module.container_abcs = collections.abc
+    module.inf = float("inf")
+    module.nan = float("nan")
+    sys.modules["torch._six"] = module
+
 import timm
 
 assert timm.__version__ == "0.3.2"  # version check
@@ -74,6 +85,11 @@ def get_args_parser():
     # Dataset parameters
     parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
                         help='dataset path')
+    parser.add_argument(
+        '--no_train_dir',
+        action='store_true',
+        help='Do not append /train to data_path (e.g. Hyperkvasir-unlabelled)',
+    )
 
     parser.add_argument('--output_dir', default='./output_dir',
                         help='path where to save, empty for no saving')
@@ -125,7 +141,8 @@ def main(args):
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+    data_dir = args.data_path if args.no_train_dir else os.path.join(args.data_path, 'train')
+    dataset_train = datasets.ImageFolder(data_dir, transform=transform_train)
     print(dataset_train)
 
     if True:  # args.distributed:
