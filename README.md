@@ -18,8 +18,8 @@ Solutions to vision tasks in gastrointestinal endoscopy (GIE) conventionally use
 Follow the guidance in this section for obtaining the weights for pretrained models.
 
 + For encoders pretrained in a supervised manner with ImageNet-1k, the weights provided with the [torchvision](https://pytorch.org/vision/stable/index.html) (ResNet50) and [timm](https://timm.fast.ai/) (ViT-B) libraries are automatically used by our code and no manual steps are required.
-+ For encoders pretrained in a self-supervised manner with ImageNet-1k, using [MoCo v3](https://github.com/facebookresearch/moco-v3)/[Barlow Twins](https://github.com/facebookresearch/barlowtwins)/[MAE](https://github.com/facebookresearch/mae), the weights provided with the respective codebase should be used. Please note that the weights provided with the MoCo v3 codebase are for the full MoCo v3 model, including the momentum encoder, in a `torch.nn.distributed.DataDistributedParallel` wrapper - for use with this codebase, we recommend first building the full MoCo v3 model, wrapping it with `torch.nn.distributed.DataDistributedParallel`, loading in the provided weights, and saving the weights for `self.module.base_encoder` separately. Please also note that, in our experiments, we use the provided weights for the ResNet50 pretrained with MoCo v3 after 100 epochs, for consistency with the corresponding model pretrained with Hyperkvasir-unlabelled.
-+ For encoders pretrained in a self-supervised manner with [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using [MoCo v3](https://github.com/facebookresearch/moco-v3)/[Barlow Twins](https://github.com/facebookresearch/barlowtwins)/[MAE](https://github.com/facebookresearch/mae), the respective codebase should be used for pretraining. The code should first be modified to allow pretraining with Hyperkvasir-unabelled (remove `'/train'` from data path) and the guidance in the respective codebase for running the pretraining should then be followed with any arguments adjusted for your given hardware as needed.
++ For encoders pretrained in a self-supervised manner with ImageNet-1k, using [MAE](https://github.com/facebookresearch/mae), the weights provided with the codebase should be used.
++ For encoders pretrained in a self-supervised manner with [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using [MAE](https://github.com/facebookresearch/mae), the codebase should be used for pretraining. The code should first be modified to allow pretraining with Hyperkvasir-unabelled (remove `'/train'` from data path) and the guidance in the respective codebase for running the pretraining should then be followed with any arguments adjusted for your given hardware as needed.
 
 ### 2.2 Finetuning
 
@@ -54,7 +54,7 @@ python train_classification.py \
 
 * Replace `[architecture]` with name of encoder architecture (`resnet50` or `vit_b`).
 * Replace `[pretraining]` with general pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
-* For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm (`mocov3`, `barlowtwins`, or `mae`) and `[checkpoint]` with path to pretrained weights (classification only).
+* For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm `mae` and `[checkpoint]` with path to pretrained weights (classification only).
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 * Replace `[batch-size]` with desired batch size.
@@ -64,7 +64,7 @@ For all finetuning runs, the following optional arguments are also available:
 + `--epochs [epochs]` - to set the number of epochs as desired (replace `[epochs]`). We did not use this in our experiments.
 + `--learning-rate-scheduler` - to use a learning rate scheduler that halves the learning rate when the performance on the validation set does not improve for 10 epochs. We did use this in our experiments.
 
-Please also note that, when using MoCo v3 or MAE, code from the [MoCo v3](https://github.com/facebookresearch/moco-v3) or [MAE](https://github.com/facebookresearch/mae) repositories is used, which are both released under CC BY-NC 4.0 licenses. Any results from such runs are therefore covered by a CC BY-NC 4.0 license.
+Please also note that, when using MAE, code from the [MAE](https://github.com/facebookresearch/mae) repository is used, which is released under a CC BY-NC 4.0 license. Any results from such runs are therefore covered by a CC BY-NC 4.0 license.
 
 ### 2.3 Evaluation
 
@@ -90,7 +90,7 @@ python eval_classification.py \
 
 * Replace `[architecture]` with name of encoder architecture (`resnet50` or `vit_b`).
 * Replace `[pretraining]` with general pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
-* For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm (`mocov3`, `barlowtwins`, or `mae`).
+* For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm `mae`.
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 
@@ -102,7 +102,7 @@ Prediction utilities are not implemented for classification models.
 
 ## 3. License
 
-This repository is released under the Apache 2.0 license as found in the [LICENSE](https://github.com/ESandML/SSL4GIE/blob/main/LICENSE) file. Please however note that when using MoCo v3 or MAE, code from the [MoCo v3](https://github.com/facebookresearch/moco-v3) or [MAE](https://github.com/facebookresearch/mae) repositories is used, which are both released under CC BY-NC 4.0 licenses, and any results from such runs are therefore covered by a CC BY-NC 4.0 license.
+This repository is released under the Apache 2.0 license as found in the [LICENSE](https://github.com/ESandML/SSL4GIE/blob/main/LICENSE) file. Please however note that when using MAE, code from the [MAE](https://github.com/facebookresearch/mae) repository is used, which is released under a CC BY-NC 4.0 license, and any results from such runs are therefore covered by a CC BY-NC 4.0 license.
 
 ## 4. Citation
 
@@ -130,7 +130,7 @@ This work was supported by the Science and Technology Facilities Council [grant 
 
 This work makes use of:
 + The [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/) dataset.
-+ The [MoCo v3](https://github.com/facebookresearch/moco-v3), [Barlow Twins](https://github.com/facebookresearch/barlowtwins), and [MAE](https://github.com/facebookresearch/mae) codebases. In addition to using these codebases for pretraining, as well as the weights provided, we also include the [MoCo v3](https://github.com/facebookresearch/moco-v3) and [MAE](https://github.com/facebookresearch/mae) repositories in `SSL4GIE/Models`, with modifications made for version compatibility.
++ The [MAE](https://github.com/facebookresearch/mae) codebase. In addition to using this codebase for pretraining, as well as the weights provided, we also include the [MAE](https://github.com/facebookresearch/mae) repository in `SSL4GIE/Models`, with modifications made for version compatibility.
 
 ## 7. Additional information
 
