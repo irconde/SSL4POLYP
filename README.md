@@ -7,13 +7,9 @@ Links to the paper:
 + [IEEE Access (open access)](https://ieeexplore.ieee.org/document/10478725)
 + [arXiv](https://arxiv.org/abs/2401.06278)
 
-## 1. Abstract
+## Usage
 
-Solutions to vision tasks in gastrointestinal endoscopy (GIE) conventionally use image encoders pretrained in a supervised manner with ImageNet-1k as backbones. However, the use of modern self-supervised pretraining algorithms and a recent dataset of 100k unlabelled GIE images (Hyperkvasir-unlabelled) may allow for improvements. In this work, we study the fine-tuned performance of ViT-B backbones pretrained in self-supervised and supervised manners with ImageNet-1k and Hyperkvasir-unlabelled (self-supervised only) in a range of GIE vision tasks. In addition to identifying the most suitable pretraining pipeline for each task, out of those considered, our results suggest three general principles. Firstly, that self-supervised pretraining generally produces more suitable backbones for GIE vision tasks than supervised pretraining. Secondly, that self-supervised pretraining with ImageNet-1k is typically more suitable than pretraining with Hyperkvasir-unlabelled. Thirdly, that ViT-Bs are more suitable in polyp segmentation and monocular depth estimation in colonoscopy and perform similarly to alternative architectures in anatomical landmark recognition and pathological finding characterisation. We hope this work draws attention to the complexity of pretraining for GIE vision tasks, informs this development of more suitable approaches than the convention, and inspires further research on this topic to help advance this development.
-
-## 2. Usage
-
-### 2.1 Pretraining
+### Pretraining
 
 Follow the guidance in this section for obtaining the weights for pretrained models.
 
@@ -21,7 +17,7 @@ Follow the guidance in this section for obtaining the weights for pretrained mod
 + For encoders pretrained in a self-supervised manner with ImageNet-1k, using [MAE](https://github.com/facebookresearch/mae), the weights provided with the codebase should be used.
 + For encoders pretrained in a self-supervised manner with [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using [MAE](https://github.com/facebookresearch/mae), the codebase should be used for pretraining. The code should first be modified to allow pretraining with Hyperkvasir-unabelled (remove `'/train'` from data path) and the guidance in the respective codebase for running the pretraining should then be followed with any arguments adjusted for your given hardware as needed.
 
-### 2.2 Finetuning
+### Finetuning
 
 The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `SSL4GIE/Classification/Trained models` if you wish to evaluate or make predictions with an already finetuned model.
 
@@ -66,7 +62,7 @@ For all finetuning runs, the following optional arguments are also available:
 
 Please also note that, when using MAE, code from the [MAE](https://github.com/facebookresearch/mae) repository is used, which is released under a CC BY-NC 4.0 license. Any results from such runs are therefore covered by a CC BY-NC 4.0 license.
 
-### 2.3 Evaluation
+### Evaluation
 
 Ensure that the weights for the desired model are located in `SSL4GIE/Classification/Trained models`. This will have been done automatically if finetuning was run. Additionally, download the required data and change directory accordingly.
 
@@ -96,15 +92,15 @@ python eval_classification.py \
 
 In addition to printing the results of the evaluation in the output space, the results will also be saved to `SSL4GIE/eval_results.txt`.
 
-### 2.4 Prediction
+### Prediction
 
 Prediction utilities are not implemented for classification models.
 
-## 3. License
+## License
 
 This repository is released under the Apache 2.0 license as found in the [LICENSE](https://github.com/ESandML/SSL4GIE/blob/main/LICENSE) file. Please however note that when using MAE, code from the [MAE](https://github.com/facebookresearch/mae) repository is used, which is released under a CC BY-NC 4.0 license, and any results from such runs are therefore covered by a CC BY-NC 4.0 license.
 
-## 4. Citation
+## Citation
 
 If you use this work, please consider citing us:
 ```bibtex
@@ -120,11 +116,11 @@ If you use this work, please consider citing us:
 }
 ```
 
-## 5. Commercial use
+## Commercial use
 
 We allow commercial use of this work, as permitted by the [LICENSE](https://github.com/ESandML/SSL4GIE/blob/main/LICENSE). However, where possible, please inform us of this use for the facilitation of our impact case studies.
 
-## 6. Acknowledgements
+## Acknowledgements
 
 This work was supported by the Science and Technology Facilities Council [grant number ST/S005404/1].
 
@@ -132,7 +128,7 @@ This work makes use of:
 + The [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/) dataset.
 + The [MAE](https://github.com/facebookresearch/mae) codebase. In addition to using this codebase for pretraining, as well as the weights provided, we also include the [MAE](https://github.com/facebookresearch/mae) repository in `SSL4GIE/Models`, with modifications made for version compatibility.
 
-## 7. Additional information
+## Additional information
 
 Links: [AIdDeCo Project](https://www.uclan.ac.uk/research/activity/machine-learning-cancer-detection), [CVML Group](https://www.uclan.ac.uk/research/activity/cvml)
 
