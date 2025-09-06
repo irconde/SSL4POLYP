@@ -127,7 +127,10 @@ def test(model, rank, test_loader, epoch, perf_fn, log_path):
 
 def build(args, rank):
 
-    if args.simple:
+    simple_layout = args.simple or not os.path.exists(
+        os.path.join(args.root, "labeled-images")
+    )
+    if simple_layout:
         class_dirs = sorted(glob.glob(os.path.join(args.root, "*/")))
         class_id = 0
         input_paths = []
@@ -392,7 +395,13 @@ def get_args():
         type=str,
         required=True,
     )
-    parser.add_argument("--simple-dataset", action="store_true", default=False, dest="simple")
+    parser.add_argument(
+        "--simple-dataset",
+        action="store_true",
+        default=False,
+        dest="simple",
+        help="assume data_root/class_x/*.jpg structure; inferred if 'labeled-images' missing",
+    )
     parser.add_argument("--data-root", type=str, required=True, dest="root")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)

@@ -86,8 +86,9 @@ python train_classification.py \
 * Replace `[batch-size]` with desired batch size.
 
 The script expects the HyperKvasir directory structure by default. For datasets
-organised more simply as `data-root/class_x/*.jpg`, pass `--simple-dataset` and
-lay out the images like:
+organised more simply as `data-root/class_x/*.jpg`, either pass `--simple-dataset`
+or point `--data-root` to the top-level directory and the script will infer this
+layout automatically. Arrange images as:
 
 ```
 data-root/
