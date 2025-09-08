@@ -127,6 +127,7 @@ def get_args_parser():
     parser.add_argument('--dist_on_itp', action='store_true')
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
+    parser.add_argument('--precision', choices=['amp', 'fp32'], default='amp')
 
     return parser
 
@@ -207,7 +208,7 @@ def main(args):
     param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
     print(optimizer)
-    loss_scaler = NativeScaler()
+    loss_scaler = NativeScaler(enabled=(args.precision == 'amp'))
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
