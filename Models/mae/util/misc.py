@@ -254,6 +254,16 @@ class NativeScalerWithGradNormCount:
     def __init__(self):
         self._scaler = torch.cuda.amp.GradScaler()
 
+    # Expose underlying GradScaler methods for explicit gradient accumulation
+    def scale(self, loss):
+        return self._scaler.scale(loss)
+
+    def step(self, optimizer):
+        self._scaler.step(optimizer)
+
+    def update(self):
+        self._scaler.update()
+
     def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):
         self._scaler.scale(loss).backward(create_graph=create_graph)
         if update_grad:

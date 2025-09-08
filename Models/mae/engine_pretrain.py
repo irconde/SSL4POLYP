@@ -31,7 +31,7 @@ def train_one_epoch(model: torch.nn.Module,
 
     accum_iter = args.accum_iter
 
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
 
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
@@ -54,10 +54,11 @@ def train_one_epoch(model: torch.nn.Module,
             sys.exit(1)
 
         loss /= accum_iter
-        loss_scaler(loss, optimizer, parameters=model.parameters(),
-                    update_grad=(data_iter_step + 1) % accum_iter == 0)
+        loss_scaler.scale(loss).backward()
         if (data_iter_step + 1) % accum_iter == 0:
-            optimizer.zero_grad()
+            loss_scaler.step(optimizer)
+            loss_scaler.update()
+            optimizer.zero_grad(set_to_none=True)
 
         torch.cuda.synchronize()
 
