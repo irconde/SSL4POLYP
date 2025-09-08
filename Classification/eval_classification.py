@@ -93,7 +93,14 @@ def build(args):
         n_class = class_id
         args.n_class = n_class
 
-    test_dataloader = dataloaders.get_test_dataloader(input_paths, targets)
+    test_dataloader = dataloaders.get_test_dataloader(
+        input_paths,
+        targets,
+        workers=args.workers,
+        prefetch_factor=args.prefetch_factor,
+        pin_memory=args.pin_memory,
+        persistent_workers=args.persistent_workers,
+    )
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
         model = utils.get_MAE_backbone(None, True, n_class, False, None)
@@ -151,6 +158,10 @@ def get_args():
         choices=["Hyperkvasir_pathological", "Hyperkvasir_anatomical"],
     )
     parser.add_argument("--data-root", type=str, required=True, dest="root")
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--prefetch-factor", type=int, default=2)
+    parser.add_argument("--pin-memory", action="store_true", default=True)
+    parser.add_argument("--persistent-workers", action="store_true", default=True)
 
     return parser.parse_args()
 

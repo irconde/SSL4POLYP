@@ -184,8 +184,12 @@ def build(args, rank):
         rank,
         args.world_size,
         input_paths,
-        targets,
+       targets,
         batch_size=args.batch_size // args.world_size,
+        workers=args.workers,
+        prefetch_factor=args.prefetch_factor,
+        pin_memory=args.pin_memory,
+        persistent_workers=args.persistent_workers,
     )
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
@@ -411,6 +415,14 @@ def get_args():
     )
     parser.add_argument(
         "--learning-rate-scheduler-minimum", type=float, default=1e-6, dest="lrs_min"
+    )
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--prefetch-factor", type=int, default=2)
+    parser.add_argument(
+        "--pin-memory", action="store_true", default=True
+    )
+    parser.add_argument(
+        "--persistent-workers", action="store_true", default=True
     )
 
     return parser.parse_args()
