@@ -7,10 +7,17 @@ frames are laid out as ``<root>/<video_id>/<frame>.jpg``.
 """
 
 import argparse
+import glob
 import os
 import subprocess
 import sys
 from typing import List
+
+
+def _latest_ckpt(out_dir: str):
+    ckpt_dir = os.path.join(out_dir, "ckpts")
+    paths = sorted(glob.glob(os.path.join(ckpt_dir, "checkpoint-*.pth")))
+    return paths[-1] if paths else None
 
 
 def run(cmd: List[str]) -> None:
@@ -50,9 +57,37 @@ def main() -> None:
         default="",
         help="Additional arguments forwarded to main_pretrain.py",
     )
+    parser.add_argument(
+        "--auto-resume",
+        action="store_true",
+        help="If set, resume from latest checkpoint in --output-dir/ckpts if present.",
+    )
+    parser.add_argument(
+        "--save-freq-epochs",
+        type=int,
+        default=None,
+        help="Forward to main_pretrain.py: save every N epochs.",
+    )
+    parser.add_argument(
+        "--save-freq-mins",
+        type=int,
+        default=None,
+        help="Forward to main_pretrain.py: also save every N minutes.",
+    )
     args = parser.parse_args()
 
     script = os.path.join(os.path.dirname(__file__), "main_pretrain.py")
+    extra = args.extra_args or ""
+    if args.auto_resume:
+        ckpt = _latest_ckpt(args.output_dir)
+        if ckpt:
+            extra = (extra + f" --resume {ckpt}").strip()
+
+    if args.save_freq_epochs is not None:
+        extra = (extra + f" --save-freq-epochs {args.save_freq_epochs}").strip()
+    if args.save_freq_mins is not None:
+        extra = (extra + f" --save-freq-mins {args.save_freq_mins}").strip()
+
     cmd = [
         sys.executable,
         script,
@@ -69,7 +104,7 @@ def main() -> None:
         "--epochs",
         str(args.epochs),
         "--no_train_dir",
-    ] + args.extra_args.split()
+    ] + extra.split()
     run(cmd)
 
 
