@@ -5,6 +5,9 @@ import time
 import numpy as np
 import glob
 import random
+import subprocess
+
+import yaml
 
 import torch
 import torch.nn as nn
@@ -12,6 +15,7 @@ import torchvision
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.tensorboard import SummaryWriter
 
 from Data import dataloaders
 from Metrics import performance
@@ -32,6 +36,9 @@ def train_epoch(
     log_path,
     scaler,
     use_amp,
+    writer,
+    log_interval,
+    global_step,
 ):
     t = time.time()
     model.train()
@@ -50,6 +57,10 @@ def train_epoch(
         loss /= world_size
         loss_accumulator.append(loss.item())
         if rank == 0:
+            if writer is not None and global_step % log_interval == 0:
+                lr = optimizer.param_groups[0]["lr"]
+                writer.add_scalar("loss", loss.item(), global_step)
+                writer.add_scalar("lr", lr, global_step)
             if batch_idx + 1 < len(train_loader):
                 print(
                     "\rTrain Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}\tTime: {:.6f}".format(
@@ -76,8 +87,9 @@ def train_epoch(
                     f.write(printout)
                     f.write("\n")
         dist.barrier()
+        global_step += 1
 
-    return np.mean(loss_accumulator)
+    return np.mean(loss_accumulator), global_step
 
 
 @torch.no_grad()
@@ -206,12 +218,12 @@ def build(args, rank):
         model = utils.get_ImageNet_or_random_ViT(
             True, n_class, args.frozen, None, ImageNet_weights=False
         )
+    base_name = f"{args.arch}-{args.pretraining}"
     if args.ss_framework:
-        ckpt_path = f"Trained models/{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(args.frozen)}-dataset_{args.dataset}.pth"
-        log_path = f"Trained models/{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(args.frozen)}-dataset_{args.dataset}.txt"
-    else:
-        ckpt_path = f"Trained models/{args.arch}-{args.pretraining}_init-frozen_{str(args.frozen)}-dataset_{args.dataset}.pth"
-        log_path = f"Trained models/{args.arch}-{args.pretraining}_init-frozen_{str(args.frozen)}-dataset_{args.dataset}.txt"
+        base_name += f"_{args.ss_framework}"
+    base_name += f"_init-frozen_{str(args.frozen)}-dataset_{args.dataset}"
+    ckpt_path = os.path.join(args.output_dir, base_name + ".pth")
+    log_path = os.path.join(args.output_dir, base_name + ".txt")
 
     if os.path.exists(ckpt_path):
         main_dict = torch.load(ckpt_path, map_location="cpu")
@@ -264,8 +276,7 @@ def train(rank, args):
     print(f"Rank {rank + 1}/{args.world_size} process initialized.\n")
 
     if rank == 0:
-        if not os.path.exists("./Trained models"):
-            os.makedirs("./Trained models")
+        os.makedirs(args.output_dir, exist_ok=True)
 
     (
         train_dataloader,
@@ -285,11 +296,13 @@ def train(rank, args):
 
     loss_fn = nn.CrossEntropyLoss(torch.tensor(class_weights).cuda(rank))
     perf_fn = performance.meanF1Score(n_class=len(class_weights))
-
     if rank == 0:
+        writer = SummaryWriter(os.path.join(args.output_dir, "tb"))
         with open(log_path, "a") as f:
             f.write(str(args))
             f.write("\n")
+    else:
+        writer = None
     dist.barrier()
 
     if args.lrs:
@@ -310,9 +323,10 @@ def train(rank, args):
             sched_dict["_last_lr"] = [lr]
             scheduler.load_state_dict(sched_dict)
 
+    global_step = 0
     for epoch in range(start_epoch, args.epochs + 1):
         try:
-            loss = train_epoch(
+            loss, global_step = train_epoch(
                 model,
                 rank,
                 args.world_size,
@@ -324,6 +338,9 @@ def train(rank, args):
                 log_path,
                 scaler,
                 use_amp,
+                writer,
+                args.log_interval,
+                global_step,
             )
             if rank == 0:
                 val_perf = test(
@@ -375,6 +392,8 @@ def train(rank, args):
                 )
                 prev_best_test = val_perf
         dist.barrier()
+    if writer is not None:
+        writer.close()
     dist.destroy_process_group()
 
 
@@ -429,15 +448,32 @@ def get_args():
         "--persistent-workers", action="store_true", default=True
     )
     parser.add_argument("--precision", choices=["amp", "fp32"], default="amp")
+    parser.add_argument("--log-interval", type=int, default=10)
+    parser.add_argument("--output-dir", type=str, default="Trained models", dest="output_dir")
+    parser.add_argument("--seed", type=int, default=42)
 
     return parser.parse_args()
 
 
 def main():
-    random.seed(42)
-    torch.manual_seed(42)
-    np.random.seed(42)
     args = get_args()
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    print(f"Setting Python, NumPy and Torch seeds to {args.seed}")
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, "tb"), exist_ok=True)
+    config = vars(args).copy()
+    try:
+        commit = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+        )
+    except Exception:
+        commit = None
+    config["git_commit"] = commit
+    with open(os.path.join(args.output_dir, "config.yaml"), "w") as f:
+        yaml.safe_dump(config, f)
     args.world_size = torch.cuda.device_count()
     assert args.batch_size % args.world_size == 0
     mp.spawn(train, nprocs=args.world_size, args=(args,), join=True)
