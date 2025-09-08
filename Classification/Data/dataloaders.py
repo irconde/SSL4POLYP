@@ -57,7 +57,17 @@ def split_ids(len_ids):
     return train_indices, test_indices, val_indices
 
 
-def get_dataloaders(rank, world_size, input_paths, targets, batch_size):
+def get_dataloaders(
+    rank,
+    world_size,
+    input_paths,
+    targets,
+    batch_size,
+    workers=8,
+    prefetch_factor=2,
+    pin_memory=True,
+    persistent_workers=True,
+):
 
     transform_input4train = transforms.Compose(
         [
@@ -92,7 +102,10 @@ def get_dataloaders(rank, world_size, input_paths, targets, batch_size):
         batch_size=batch_size,
         sampler=train_sampler,
         drop_last=True,
-        num_workers=8,
+        num_workers=workers,
+        prefetch_factor=prefetch_factor,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
     )
 
     if rank == 0:
@@ -121,11 +134,23 @@ def get_dataloaders(rank, world_size, input_paths, targets, batch_size):
         test_dataset = data.Subset(test_dataset, test_indices)
 
         test_dataloader = MultiEpochsDataLoader(
-            dataset=test_dataset, batch_size=batch_size, shuffle=False, num_workers=8
+            dataset=test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=workers,
+            prefetch_factor=prefetch_factor,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
         )
 
         val_dataloader = MultiEpochsDataLoader(
-            dataset=val_dataset, batch_size=batch_size, shuffle=False, num_workers=8
+            dataset=val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=workers,
+            prefetch_factor=prefetch_factor,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
         )
     else:
         test_dataloader = None
@@ -134,7 +159,14 @@ def get_dataloaders(rank, world_size, input_paths, targets, batch_size):
     return train_dataloader, test_dataloader, val_dataloader, train_sampler
 
 
-def get_test_dataloader(input_paths, targets):
+def get_test_dataloader(
+    input_paths,
+    targets,
+    workers=8,
+    prefetch_factor=2,
+    pin_memory=True,
+    persistent_workers=True,
+):
 
     _, test_indices, _ = split_ids(len(input_paths))
 
@@ -152,7 +184,13 @@ def get_test_dataloader(input_paths, targets):
     test_dataset = data.Subset(test_dataset, test_indices)
 
     test_dataloader = MultiEpochsDataLoader(
-        dataset=test_dataset, batch_size=1, shuffle=False, num_workers=8
+        dataset=test_dataset,
+        batch_size=1,
+        shuffle=False,
+        num_workers=workers,
+        prefetch_factor=prefetch_factor,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
     )
 
     return test_dataloader
