@@ -14,6 +14,7 @@ import json
 import numpy as np
 import os
 import time
+import glob
 from pathlib import Path
 
 import torch
@@ -100,6 +101,15 @@ def get_args_parser():
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
                         help='resume from checkpoint')
+
+    parser.add_argument('--save-freq-epochs', type=int, default=20,
+                        help='save a checkpoint every N epochs (0 = disable)')
+    parser.add_argument('--save-freq-mins', type=int, default=0,
+                        help='also save every N minutes (0 = disable)')
+    parser.add_argument('--keep-last', type=int, default=5,
+                        help='keep last K checkpoints; delete older non-milestone ones')
+    parser.add_argument('--keep-every-n-epochs', type=int, default=50,
+                        help='always keep checkpoints at multiples of N epochs')
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
@@ -201,6 +211,35 @@ def main(args):
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     print(f"Start training for {args.epochs} epochs")
+
+    last_time_save = time.time()
+    time_save_sec = args.save_freq_mins * 60
+    ckpt_dir = os.path.join(args.output_dir, "ckpts")
+    os.makedirs(ckpt_dir, exist_ok=True)
+
+    def _is_milestone(ep):
+        n = args.keep_every_n_epochs
+        return n > 0 and ((ep + 1) % n == 0 or (ep + 1) == args.epochs)
+
+    def _cleanup_checkpoints():
+        # keep last K, keep milestones; delete older plain checkpoints
+        paths = sorted(glob.glob(os.path.join(ckpt_dir, "checkpoint-*.pth")))
+        if not paths:
+            return
+        survivors = set(paths[-args.keep_last:]) if args.keep_last > 0 else set()
+        for p in paths:
+            try:
+                ep = int(os.path.basename(p).split('-')[1].split('.')[0])
+            except Exception:
+                ep = -1
+            if p in survivors or _is_milestone(ep):
+                continue
+            if p not in survivors:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -211,10 +250,30 @@ def main(args):
             log_writer=log_writer,
             args=args
         )
-        if args.output_dir and (epoch % 20 == 0 or epoch + 1 == args.epochs):
+        do_epoch_save = (args.save_freq_epochs > 0 and ((epoch + 1) % args.save_freq_epochs == 0)) \
+                        or ((epoch + 1) == args.epochs)
+
+        do_time_save = False
+        if args.save_freq_mins > 0 and (time.time() - last_time_save) >= time_save_sec:
+            do_time_save = True
+            last_time_save = time.time()
+
+        if args.output_dir and (do_epoch_save or do_time_save):
+            orig_output_dir = args.output_dir
+            args.output_dir = ckpt_dir
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
+            args.output_dir = orig_output_dir
+            try:
+                tgt = os.path.join(ckpt_dir, f"checkpoint-{epoch}.pth")
+                last_link = os.path.join(ckpt_dir, "last.pth")
+                if os.path.islink(last_link) or os.path.exists(last_link):
+                    os.remove(last_link)
+                os.symlink(os.path.basename(tgt), last_link)
+            except Exception:
+                pass
+            _cleanup_checkpoints()
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                         'epoch': epoch,}
