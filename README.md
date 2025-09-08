@@ -16,12 +16,30 @@ paper:
 
 - `Models/mae/run_hyperkvasir_pretraining.py` – wraps MAE pretraining on the
   Hyperkvasir-unlabelled dataset with the settings used in the paper. The
-  script exposes `--batch-size`, `--epochs` and `--extra-args` so you can tweak
-  the training run or forward additional options to `main_pretrain.py`.
+  script exposes `--batch-size`, `--epochs`, `--extra-args`, `--auto-resume`,
+  `--save-freq-epochs` and `--save-freq-mins` so you can tweak the training run
+  or forward additional options to `main_pretrain.py`.
 - `Classification/run_all_pretrainings.py` – sequentially fine-tunes ViT-B/16
   under all three pretraining schemes (SUP-imnet, SSL-imnet and SSL-colon).
   Customise the architecture and batch size with `--arch` and `--batch-size`,
   and pass further arguments to `train_classification.py` via `--extra-args`.
+
+### Script improvements
+
+Recent updates enhance reproducibility and robustness across training and
+finetuning:
+
+- Runs now accept a `--seed` flag and dump their full configuration (including
+  the Git commit) to `config.yaml` in the output directory.
+- TensorBoard logs are written to `tb/` under the chosen `--output-dir`.
+- Checkpoints are consistently stored and a `last.pth` symlink tracks the most
+  recent save.
+- Mixed precision can be toggled via `--precision {amp, fp32}`.
+- Data loading behaviour is configurable with `--workers`, `--prefetch-factor`,
+  `--pin-memory` and `--persistent-workers`.
+- MAE pretraining exposes `--accum_iter` for gradient accumulation and can
+  automatically resume, save checkpoints on a time or epoch basis, retain only
+  recent checkpoints and handle termination signals gracefully.
 
 The following sections describe how to invoke these utilities.
 
