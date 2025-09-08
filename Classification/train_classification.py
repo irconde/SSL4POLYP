@@ -31,6 +31,7 @@ def train_epoch(
     loss_fn,
     log_path,
     scaler,
+    use_amp,
 ):
     t = time.time()
     model.train()
@@ -39,7 +40,7 @@ def train_epoch(
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.cuda(rank), target.cuda(rank)
         optimizer.zero_grad()
-        with torch.cuda.amp.autocast():
+        with torch.cuda.amp.autocast(enabled=use_amp):
             output = model(data)
             loss = loss_fn(output, target)
         scaler.scale(loss).backward()
@@ -229,7 +230,8 @@ def build(args, rank):
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model = DDP(model, device_ids=[rank])
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    scaler = torch.cuda.amp.GradScaler()
+    use_amp = args.precision == "amp"
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     if prev_best_test is not None:
         optimizer.load_state_dict(main_dict["optimizer_state_dict"])
         scaler.load_state_dict(main_dict["scaler_state_dict"])
@@ -279,6 +281,7 @@ def train(rank, args):
         class_weights,
         scaler,
     ) = build(args, rank)
+    use_amp = args.precision == "amp"
 
     loss_fn = nn.CrossEntropyLoss(torch.tensor(class_weights).cuda(rank))
     perf_fn = performance.meanF1Score(n_class=len(class_weights))
@@ -320,6 +323,7 @@ def train(rank, args):
                 loss_fn,
                 log_path,
                 scaler,
+                use_amp,
             )
             if rank == 0:
                 val_perf = test(
@@ -424,6 +428,7 @@ def get_args():
     parser.add_argument(
         "--persistent-workers", action="store_true", default=True
     )
+    parser.add_argument("--precision", choices=["amp", "fp32"], default="amp")
 
     return parser.parse_args()
 

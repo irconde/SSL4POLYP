@@ -251,8 +251,8 @@ def init_distributed_mode(args):
 class NativeScalerWithGradNormCount:
     state_dict_key = "amp_scaler"
 
-    def __init__(self):
-        self._scaler = torch.cuda.amp.GradScaler()
+    def __init__(self, enabled: bool = True):
+        self._scaler = torch.cuda.amp.GradScaler(enabled=enabled)
 
     # Expose underlying GradScaler methods for explicit gradient accumulation
     def scale(self, loss):
