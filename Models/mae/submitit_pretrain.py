@@ -63,7 +63,7 @@ class Trainer(object):
         import submitit
 
         self.args.dist_url = get_init_file().as_uri()
-        checkpoint_file = os.path.join(self.args.output_dir, "checkpoint.pth")
+        checkpoint_file = os.path.join(self.args.output_dir, "ckpts", "last.pth")
         if os.path.exists(checkpoint_file):
             self.args.resume = checkpoint_file
         print("Requeuing ", self.args)
@@ -76,7 +76,7 @@ class Trainer(object):
 
         job_env = submitit.JobEnvironment()
         self.args.output_dir = Path(str(self.args.output_dir).replace("%j", str(job_env.job_id)))
-        self.args.log_dir = self.args.output_dir
+        self.args.log_dir = self.args.output_dir / "tb"
         self.args.gpu = job_env.local_rank
         self.args.rank = job_env.global_rank
         self.args.world_size = job_env.num_tasks

@@ -304,22 +304,34 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
 
 def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler):
     output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     epoch_name = str(epoch)
+    checkpoint_path = output_dir / f"checkpoint-{epoch_name}.pth"
     if loss_scaler is not None:
-        checkpoint_paths = [output_dir / ('checkpoint-%s.pth' % epoch_name)]
-        for checkpoint_path in checkpoint_paths:
-            to_save = {
-                'model': model_without_ddp.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'epoch': epoch,
-                'scaler': loss_scaler.state_dict(),
-                'args': args,
-            }
-
-            save_on_master(to_save, checkpoint_path)
+        to_save = {
+            "model": model_without_ddp.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "epoch": epoch,
+            "scaler": loss_scaler.state_dict(),
+            "args": args,
+        }
+        save_on_master(to_save, checkpoint_path)
     else:
-        client_state = {'epoch': epoch}
-        model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint-%s" % epoch_name, client_state=client_state)
+        client_state = {"epoch": epoch}
+        model.save_checkpoint(
+            save_dir=args.output_dir,
+            tag=f"checkpoint-{epoch_name}",
+            client_state=client_state,
+        )
+
+    if is_main_process() and checkpoint_path.exists():
+        last_symlink = output_dir / "last.pth"
+        try:
+            if last_symlink.is_symlink() or last_symlink.exists():
+                last_symlink.unlink()
+            last_symlink.symlink_to(checkpoint_path.name)
+        except OSError:
+            pass
 
 
 def load_model(args, model_without_ddp, optimizer, loss_scaler):
