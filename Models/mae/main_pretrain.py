@@ -16,6 +16,7 @@ import os
 import time
 import glob
 from pathlib import Path
+import signal
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -216,6 +217,24 @@ def main(args):
     time_save_sec = args.save_freq_mins * 60
     ckpt_dir = os.path.join(args.output_dir, "ckpts")
     os.makedirs(ckpt_dir, exist_ok=True)
+
+    epoch = args.start_epoch
+
+    def _term_handler(signum, frame):
+        try:
+            misc.save_model(
+                args=args,
+                model=model,
+                model_without_ddp=model_without_ddp,
+                optimizer=optimizer,
+                loss_scaler=loss_scaler,
+                epoch=epoch,
+            )
+        finally:
+            os._exit(0)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, _term_handler)
 
     def _is_milestone(ep):
         n = args.keep_every_n_epochs
