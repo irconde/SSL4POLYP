@@ -93,9 +93,9 @@ def get_args_parser():
         help='Do not append /train to data_path (e.g. Hyperkvasir-unlabelled)',
     )
 
-    parser.add_argument('--output_dir', default='./output_dir',
+    parser.add_argument('--output_dir', default='out',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='./output_dir',
+    parser.add_argument('--log_dir', default='out/tb',
                         help='path where to tensorboard log')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -285,14 +285,6 @@ def main(args):
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
             args.output_dir = orig_output_dir
-            try:
-                tgt = os.path.join(ckpt_dir, f"checkpoint-{epoch}.pth")
-                last_link = os.path.join(ckpt_dir, "last.pth")
-                if os.path.islink(last_link) or os.path.exists(last_link):
-                    os.remove(last_link)
-                os.symlink(os.path.basename(tgt), last_link)
-            except Exception:
-                pass
             _cleanup_checkpoints()
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},

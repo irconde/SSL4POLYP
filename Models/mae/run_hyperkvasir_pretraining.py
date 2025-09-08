@@ -98,7 +98,7 @@ def main() -> None:
         "--output_dir",
         args.output_dir,
         "--log_dir",
-        args.output_dir,
+        os.path.join(args.output_dir, "tb"),
         "--batch_size",
         str(args.batch_size),
         "--epochs",

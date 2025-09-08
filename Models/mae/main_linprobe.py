@@ -80,9 +80,9 @@ def get_args_parser():
     parser.add_argument('--nb_classes', default=1000, type=int,
                         help='number of the classification types')
 
-    parser.add_argument('--output_dir', default='./output_dir',
+    parser.add_argument('--output_dir', default='out',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='./output_dir',
+    parser.add_argument('--log_dir', default='out/tb',
                         help='path where to tensorboard log')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -261,6 +261,12 @@ def main(args):
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
+    if args.output_dir:
+        ckpt_dir = os.path.join(args.output_dir, "ckpts")
+        os.makedirs(ckpt_dir, exist_ok=True)
+    else:
+        ckpt_dir = None
+
     if args.eval:
         test_stats = evaluate(data_loader_val, model, device, use_amp=use_amp)
         print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
@@ -280,9 +286,12 @@ def main(args):
             args=args
         )
         if args.output_dir:
+            orig_output_dir = args.output_dir
+            args.output_dir = ckpt_dir
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
+            args.output_dir = orig_output_dir
 
         test_stats = evaluate(data_loader_val, model, device, use_amp=use_amp)
         print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
