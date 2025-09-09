@@ -224,7 +224,13 @@ def main(args):
     epoch = args.start_epoch
 
     def _term_handler(signum, frame):
+        """Save a checkpoint under <output_dir>/ckpts on termination.
+
+        Matches the location used for periodic checkpointing.
+        """
         try:
+            orig_output_dir = args.output_dir
+            args.output_dir = ckpt_dir
             misc.save_model(
                 args=args,
                 model=model,
@@ -233,6 +239,7 @@ def main(args):
                 loss_scaler=loss_scaler,
                 epoch=epoch,
             )
+            args.output_dir = orig_output_dir
         finally:
             os._exit(0)
 
@@ -297,6 +304,16 @@ def main(args):
                 log_writer.flush()
             with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
+
+    # Extra safeguard: ensure a final checkpoint is saved under <output_dir>/ckpts
+    if args.output_dir:
+        orig_output_dir = args.output_dir
+        args.output_dir = ckpt_dir
+        misc.save_model(
+            args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+            loss_scaler=loss_scaler, epoch=epoch)
+        args.output_dir = orig_output_dir
+        _cleanup_checkpoints()
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
