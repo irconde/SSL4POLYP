@@ -24,16 +24,17 @@ from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
-import types
-import collections
-import sys
-
-if "torch._six" not in sys.modules:
-    module = types.ModuleType("torch._six")
-    module.container_abcs = collections.abc
-    module.inf = float("inf")
-    module.nan = float("nan")
-    sys.modules["torch._six"] = module
+# --- compat shim: make timm==0.3.2 work with newer Torch ---
+import sys, types
+try:
+    import torch._six as _six
+    _ = _six.container_abcs  # already present → OK
+except Exception:
+    from collections import abc as _abc
+    _six = sys.modules.get("torch._six") or types.ModuleType("torch._six")
+    _six.container_abcs = _abc
+    sys.modules["torch._six"] = _six
+# --- end shim ---
 
 import timm
 
