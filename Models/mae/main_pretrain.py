@@ -216,35 +216,10 @@ def main(args):
 
     print(f"Start training for {args.epochs} epochs")
 
-    last_time_save = time.time()
+    last_time_save = [time.time()]
     time_save_sec = args.save_freq_mins * 60
     ckpt_dir = os.path.join(args.output_dir, "ckpts")
     os.makedirs(ckpt_dir, exist_ok=True)
-
-    epoch = args.start_epoch
-
-    def _term_handler(signum, frame):
-        """Save a checkpoint under <output_dir>/ckpts on termination.
-
-        Matches the location used for periodic checkpointing.
-        """
-        try:
-            orig_output_dir = args.output_dir
-            args.output_dir = ckpt_dir
-            misc.save_model(
-                args=args,
-                model=model,
-                model_without_ddp=model_without_ddp,
-                optimizer=optimizer,
-                loss_scaler=loss_scaler,
-                epoch=epoch,
-            )
-            args.output_dir = orig_output_dir
-        finally:
-            os._exit(0)
-
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, _term_handler)
 
     def _is_milestone(ep):
         n = args.keep_every_n_epochs
@@ -269,6 +244,35 @@ def main(args):
                 except OSError:
                     pass
 
+    def _save_checkpoint(ep):
+        orig_output_dir = args.output_dir
+        args.output_dir = ckpt_dir
+        misc.save_model(
+            args=args,
+            model=model,
+            model_without_ddp=model_without_ddp,
+            optimizer=optimizer,
+            loss_scaler=loss_scaler,
+            epoch=ep,
+        )
+        args.output_dir = orig_output_dir
+        _cleanup_checkpoints()
+
+    epoch = args.start_epoch
+
+    def _term_handler(signum, frame):
+        """Save a checkpoint under <output_dir>/ckpts on termination.
+
+        Matches the location used for periodic checkpointing.
+        """
+        try:
+            _save_checkpoint(epoch)
+        finally:
+            os._exit(0)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, _term_handler)
+
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -277,24 +281,17 @@ def main(args):
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler,
             log_writer=log_writer,
-            args=args
+            args=args,
+            save_ckpt_fn=_save_checkpoint,
+            last_time_save=last_time_save,
+            time_save_sec=time_save_sec,
         )
         do_epoch_save = (args.save_freq_epochs > 0 and ((epoch + 1) % args.save_freq_epochs == 0)) \
                         or ((epoch + 1) == args.epochs)
 
-        do_time_save = False
-        if args.save_freq_mins > 0 and (time.time() - last_time_save) >= time_save_sec:
-            do_time_save = True
-            last_time_save = time.time()
-
-        if args.output_dir and (do_epoch_save or do_time_save):
-            orig_output_dir = args.output_dir
-            args.output_dir = ckpt_dir
-            misc.save_model(
-                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                loss_scaler=loss_scaler, epoch=epoch)
-            args.output_dir = orig_output_dir
-            _cleanup_checkpoints()
+        if args.output_dir and do_epoch_save:
+            _save_checkpoint(epoch)
+            last_time_save[0] = time.time()
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                         'epoch': epoch,}

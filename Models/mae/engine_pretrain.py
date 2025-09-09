@@ -10,6 +10,7 @@
 # --------------------------------------------------------
 import math
 import sys
+import time
 from typing import Iterable
 
 import torch
@@ -22,7 +23,10 @@ def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler,
                     log_writer=None,
-                    args=None):
+                    args=None,
+                    save_ckpt_fn=None,
+                    last_time_save=None,
+                    time_save_sec=None):
     model.train(True)
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
@@ -75,6 +79,11 @@ def train_one_epoch(model: torch.nn.Module,
             epoch_1000x = int((data_iter_step / len(data_loader) + epoch) * 1000)
             log_writer.add_scalar('train_loss', loss_value_reduce, epoch_1000x)
             log_writer.add_scalar('lr', lr, epoch_1000x)
+
+        if save_ckpt_fn is not None and last_time_save is not None and time_save_sec:
+            if (time.time() - last_time_save[0]) >= time_save_sec:
+                save_ckpt_fn(epoch)
+                last_time_save[0] = time.time()
 
 
     # gather the stats from all processes
