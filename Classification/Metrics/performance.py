@@ -1,4 +1,6 @@
+import torch
 import torch.nn as nn
+from sklearn.metrics import roc_auc_score
 
 
 class meanF1Score(nn.Module):
@@ -54,4 +56,34 @@ class meanRecall(nn.Module):
 
             score += (intersection.sum() + self.smooth) / (m2.sum() + self.smooth)
         return score / self.n_class
+
+
+class meanAUROC(nn.Module):
+    """Compute macro-averaged AUROC for multi-class predictions."""
+
+    def __init__(self, n_class):
+        super(meanAUROC, self).__init__()
+        self.n_class = n_class
+
+    def forward(self, preds, targets):
+        """Compute AUROC using one-vs-rest averaging.
+
+        Args:
+            preds: Tensor of shape (N, n_class) with class probabilities or
+                logits for each sample.
+            targets: Tensor of shape (N,) with integer class labels.
+
+        Returns:
+            torch.Tensor: scalar tensor containing the macro AUROC.
+        """
+
+        preds_np = preds.detach().cpu().numpy()
+        targets_np = targets.detach().cpu().numpy()
+        if self.n_class == 2:
+            score = roc_auc_score(targets_np, preds_np[:, 1])
+        else:
+            score = roc_auc_score(
+                targets_np, preds_np, multi_class="ovr", average="macro"
+            )
+        return torch.tensor(score)
 
