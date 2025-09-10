@@ -188,6 +188,22 @@ def build(args, rank):
             N_total += len(contents)
         n_class = class_id
         class_weights = [1 / N * N_total / n_class for N in N_in_class]
+    train_paths = None
+    val_paths = None
+    test_paths = None
+    if args.train_dir:
+        train_paths = sorted(glob.glob(os.path.join(args.train_dir, "*.jpg")))
+    if args.val_dir:
+        val_paths = sorted(glob.glob(os.path.join(args.val_dir, "*.jpg")))
+    if args.test_dir:
+        test_paths = sorted(glob.glob(os.path.join(args.test_dir, "*.jpg")))
+    if args.train_paths is not None:
+        train_paths = args.train_paths
+    if args.val_paths is not None:
+        val_paths = args.val_paths
+    if args.test_paths is not None:
+        test_paths = args.test_paths
+
     (
         train_dataloader,
         test_dataloader,
@@ -197,12 +213,15 @@ def build(args, rank):
         rank,
         args.world_size,
         input_paths,
-       targets,
+        targets,
         batch_size=args.batch_size // args.world_size,
         workers=args.workers,
         prefetch_factor=args.prefetch_factor,
         pin_memory=args.pin_memory,
         persistent_workers=args.persistent_workers,
+        train_paths=train_paths,
+        val_paths=val_paths,
+        test_paths=test_paths,
     )
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
@@ -430,6 +449,12 @@ def get_args():
         help="assume data_root/class_x/*.jpg structure; inferred if 'labeled-images' missing",
     )
     parser.add_argument("--data-root", type=str, required=True, dest="root")
+    parser.add_argument("--train-dir", type=str, help="directory for training images")
+    parser.add_argument("--val-dir", type=str, help="directory for validation images")
+    parser.add_argument("--test-dir", type=str, help="directory for test images")
+    parser.add_argument("--train-paths", nargs="*", help="explicit training image paths")
+    parser.add_argument("--val-paths", nargs="*", help="explicit validation image paths")
+    parser.add_argument("--test-paths", nargs="*", help="explicit test image paths")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr")

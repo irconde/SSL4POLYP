@@ -1,3 +1,5 @@
+import os
+import glob
 import numpy as np
 
 from sklearn.model_selection import train_test_split
@@ -67,6 +69,9 @@ def get_dataloaders(
     prefetch_factor=2,
     pin_memory=True,
     persistent_workers=True,
+    train_paths=None,
+    val_paths=None,
+    test_paths=None,
 ):
 
     transform_input4train = transforms.Compose(
@@ -82,6 +87,95 @@ def get_dataloaders(
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
+
+    def _normalize_paths(paths):
+        if paths is None:
+            return None
+        if isinstance(paths, str) and os.path.isdir(paths):
+            return sorted(glob.glob(os.path.join(paths, "*.jpg")))
+        return paths
+
+    train_paths = _normalize_paths(train_paths)
+    val_paths = _normalize_paths(val_paths)
+    test_paths = _normalize_paths(test_paths)
+
+    if train_paths is not None and val_paths is not None and test_paths is not None:
+        path_to_target = {p: t for p, t in zip(input_paths, targets)}
+
+        train_targets = [path_to_target[p] for p in train_paths]
+        val_targets = [path_to_target[p] for p in val_paths]
+        test_targets = [path_to_target[p] for p in test_paths]
+
+        train_dataset = Dataset(
+            input_paths=train_paths,
+            targets=train_targets,
+            transform_input=transform_input4train,
+        )
+
+        train_sampler = DistributedSampler(
+            train_dataset,
+            rank=rank,
+            num_replicas=world_size,
+            shuffle=True,
+            drop_last=True,
+        )
+
+        train_dataloader = MultiEpochsDataLoader(
+            dataset=train_dataset,
+            batch_size=batch_size,
+            sampler=train_sampler,
+            drop_last=True,
+            num_workers=workers,
+            prefetch_factor=prefetch_factor,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+        )
+
+        if rank == 0:
+            transform_input4test = transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize(
+                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                    ),
+                ]
+            )
+
+            val_dataset = Dataset(
+                input_paths=val_paths,
+                targets=val_targets,
+                transform_input=transform_input4test,
+            )
+            test_dataset = Dataset(
+                input_paths=test_paths,
+                targets=test_targets,
+                transform_input=transform_input4test,
+            )
+
+            val_dataloader = MultiEpochsDataLoader(
+                dataset=val_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=workers,
+                prefetch_factor=prefetch_factor,
+                pin_memory=pin_memory,
+                persistent_workers=persistent_workers,
+            )
+
+            test_dataloader = MultiEpochsDataLoader(
+                dataset=test_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=workers,
+                prefetch_factor=prefetch_factor,
+                pin_memory=pin_memory,
+                persistent_workers=persistent_workers,
+            )
+        else:
+            test_dataloader = None
+            val_dataloader = None
+
+        return train_dataloader, test_dataloader, val_dataloader, train_sampler
 
     train_indices, test_indices, val_indices = split_ids(len(input_paths))
 
