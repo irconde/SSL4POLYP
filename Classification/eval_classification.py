@@ -22,16 +22,20 @@ def test(model, device, test_loader, args):
     mf1 = performance.meanF1Score(n_class=args.n_class)
     mprec = performance.meanPrecision(n_class=args.n_class)
     mrec = performance.meanRecall(n_class=args.n_class)
+    mauroc = performance.meanAUROC(n_class=args.n_class)
     for i, (data, target) in enumerate(test_loader):
         data = data.to(device)
         target = target.to(device)
         output = model(data)
+        probs = torch.softmax(output, dim=1)
         if i == 0:
             pred = torch.argmax(output, 1)
             targ = target
+            prob = probs
         else:
             pred = torch.cat((pred, torch.argmax(output, 1)), 0)
             targ = torch.cat((targ, target), 0)
+            prob = torch.cat((prob, probs), 0)
 
     if args.ss_framework:
         name = f"{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(False)}-dataset_{args.dataset}"
@@ -41,11 +45,13 @@ def test(model, device, test_loader, args):
     print_mf1 = f"mF1: {mf1(pred, targ).item()}"
     print_mprec = f"mPrecision: {mprec(pred, targ).item()}"
     print_mrec = f"mRecall: {mrec(pred, targ).item()}"
+    print_mauroc = f"mAUROC: {mauroc(prob, targ).item()}"
     print_acc = f"Accuracy: {(pred==targ).sum().item()/len(pred)}"
     print(print_title)
     print(print_mf1)
     print(print_mprec)
     print(print_mrec)
+    print(print_mauroc)
     print(print_acc)
     with open("../eval_results.txt", "a") as f:
         f.write(print_title)
@@ -55,6 +61,8 @@ def test(model, device, test_loader, args):
         f.write(print_mprec)
         f.write("\n")
         f.write(print_mrec)
+        f.write("\n")
+        f.write(print_mauroc)
         f.write("\n")
         f.write(print_acc)
         f.write("\n")
