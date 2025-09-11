@@ -188,6 +188,10 @@ def build(args, rank):
             N_total += len(contents)
         n_class = class_id
         class_weights = [1 / N * N_total / n_class for N in N_in_class]
+    # Override automatically computed class weights if provided by the user
+    if args.class_weights is not None:
+        class_weights = [float(w) for w in args.class_weights.split(",")]
+        assert len(class_weights) == n_class, "Number of class weights must match number of classes"
     train_paths = None
     val_paths = None
     test_paths = None
@@ -313,7 +317,7 @@ def train(rank, args):
     ) = build(args, rank)
     use_amp = args.precision == "amp"
 
-    loss_fn = nn.CrossEntropyLoss(torch.tensor(class_weights).cuda(rank))
+    loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(class_weights).cuda(rank))
     perf_fn = performance.meanF1Score(n_class=len(class_weights))
     if rank == 0:
         writer = SummaryWriter(os.path.join(args.output_dir, "tb"))
@@ -455,6 +459,12 @@ def get_args():
     parser.add_argument("--train-paths", nargs="*", help="explicit training image paths")
     parser.add_argument("--val-paths", nargs="*", help="explicit validation image paths")
     parser.add_argument("--test-paths", nargs="*", help="explicit test image paths")
+    parser.add_argument(
+        "--class-weights",
+        type=str,
+        default=None,
+        help="Comma-separated list of class weights to override automatic computation",
+    )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr")
