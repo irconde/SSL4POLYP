@@ -8,6 +8,7 @@ import random
 import subprocess
 from pathlib import Path
 import warnings
+import json
 
 import yaml
 
@@ -569,6 +570,12 @@ def get_args():
         "--manifest", type=str, dest="manifest_yaml", help="YAML manifest describing dataset pack"
     )
     parser.add_argument(
+        "--roots",
+        type=str,
+        default=None,
+        help="JSON file mapping manifest root identifiers to directories",
+    )
+    parser.add_argument(
         "--class-weights",
         type=str,
         default=None,
@@ -601,6 +608,10 @@ def get_args():
 
 def main():
     args = get_args()
+    roots_map = None
+    if args.roots:
+        with open(args.roots) as f:
+            roots_map = json.load(f)
     manifest_style = any(
         [args.train_csv, args.val_csv, args.test_csv, args.manifest_yaml]
     )
@@ -622,6 +633,8 @@ def main():
             manifest_yaml=Path(args.manifest_yaml)
             if args.manifest_yaml
             else None,
+            roots_map=roots_map,
+            snapshot_dir=Path(args.output_dir),
         )
         (
             args.train_paths,
