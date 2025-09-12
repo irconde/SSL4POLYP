@@ -146,8 +146,10 @@ def main(args):
     seed = args.seed + misc.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
-
-    cudnn.benchmark = True
+    cudnn.benchmark = False
+    cudnn.deterministic = True
+    # warn_only=True logs when ops fall back to non-deterministic versions
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
     # simple augmentation
     transform_train = transforms.Compose([
@@ -163,7 +165,11 @@ def main(args):
         num_tasks = misc.get_world_size()
         global_rank = misc.get_rank()
         sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+            dataset_train,
+            num_replicas=num_tasks,
+            rank=global_rank,
+            shuffle=True,
+            seed=args.seed,
         )
         print("Sampler_train = %s" % str(sampler_train))
     else:
@@ -276,7 +282,7 @@ def main(args):
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
-            data_loader_train.sampler.set_epoch(epoch)
+            data_loader_train.sampler.set_epoch(args.seed + epoch)
         train_stats = train_one_epoch(
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler,

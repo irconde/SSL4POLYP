@@ -27,6 +27,22 @@ import utils
 from manifests import load_pack
 
 
+def set_determinism(seed: int) -> None:
+    """Configure deterministic behavior for reproducibility.
+
+    warn_only=True ensures operations without deterministic implementations
+    raise a warning but continue running non-deterministically.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    print(f"Setting deterministic mode with seed {seed}")
+
+
 def train_epoch(
     model,
     rank,
@@ -42,10 +58,11 @@ def train_epoch(
     writer,
     log_interval,
     global_step,
+    seed,
 ):
     t = time.time()
     model.train()
-    train_sampler.set_epoch(epoch - 1)
+    train_sampler.set_epoch(seed + epoch - 1)
     loss_accumulator = []
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.cuda(rank), target.cuda(rank)
@@ -269,6 +286,7 @@ def build(
         prefetch_factor=args.prefetch_factor,
         pin_memory=args.pin_memory,
         persistent_workers=args.persistent_workers,
+        seed=args.seed,
         train_paths=train_paths,
         train_labels=train_labels,
         train_meta=train_meta,
@@ -428,6 +446,7 @@ def train(rank, args):
                 writer,
                 args.log_interval,
                 global_step,
+                args.seed,
             )
             if rank == 0:
                 val_perf = test(
@@ -628,11 +647,7 @@ def main():
             "Directory/path-based dataset flags are deprecated; use manifest-based flags instead.",
             FutureWarning,
         )
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    print(f"Setting Python, NumPy and Torch seeds to {args.seed}")
+    set_determinism(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(os.path.join(args.output_dir, "tb"), exist_ok=True)
     config = vars(args).copy()
