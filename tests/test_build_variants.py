@@ -7,7 +7,9 @@ import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-import cv2
+import pytest
+
+cv2 = pytest.importorskip("cv2")
 import numpy as np
 
 from polypdb.robustness.build_variants import (
