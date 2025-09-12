@@ -23,6 +23,8 @@ paper:
   under all three pretraining schemes (SUP-imnet, SSL-imnet and SSL-colon).
   Customise the architecture and batch size with `--arch` and `--batch-size`,
   and pass further arguments to `train_classification.py` via `--extra-args`.
+- `scripts/run_exps.sh` – iterates over manifest-defined classification experiments,
+  verifying referenced files and launching each run with a shared roots mapping.
 
 ### Script improvements
 
@@ -40,6 +42,15 @@ finetuning:
 - MAE pretraining exposes `--accum_iter` for gradient accumulation and can
   automatically resume, save checkpoints on a time or epoch basis, retain only
   recent checkpoints and handle termination signals gracefully.
+- Dataset splits can be provided via CSV manifests (`--train-csv`, `--val-csv`,
+  `--test-csv`) or a consolidated `--manifest` file together with a `--roots`
+  mapping. The training script snapshots these inputs and environment details
+  for reproducibility.
+- Class imbalance can be addressed with `--class-weights` to override automatic
+  weighting.
+- Evaluation reports mean AUROC in addition to the existing metrics, and
+  `Classification/eval_outputs.py` offers a utility to persist logits and
+  metadata for later analysis.
 
 The following sections describe how to invoke these utilities.
 
@@ -72,6 +83,8 @@ The finetuning scripts currently support frame-level classification. Pretrained 
 Prior to running finetuning, download the required data and change directory:
 
 + For classification, download [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/) and change directory to `SSL4GIE/Classification`.
+
+Datasets can also be described via CSV manifests rather than directory structures; see [Experiment definition with manifests](#experiment-definition-with-manifests) for details.
 
 For finetuning models pretrained in a self-supervised manner, run the following:
 ```
@@ -130,10 +143,59 @@ Optionally use `--arch` to choose a backbone (default `vit_b`) and `--batch-size
 to set the batch size for each run. Any additional options supported by
 `train_classification.py` can be appended via `--extra-args`.
 
+#### Experiment definition with manifests
+
+1. **Prepare split CSVs** containing at least `frame_path` and `label` columns for
+   `train`, `val` and `test`.
+2. **Create a manifest** that references those CSVs and optionally records SHA256
+   hashes and root identifiers:
+
+   ```yaml
+   train:
+     csv: train.csv
+   val:
+     csv: val.csv
+   test:
+     csv: test.csv
+   roots:
+     data_root: /data/hyperkvasir
+   ```
+3. **Provide a roots mapping** in `roots.json` so identifiers resolve to absolute
+   paths:
+
+   ```json
+   {
+     "data_root": "/absolute/path/to/images"
+   }
+   ```
+4. **Verify paths** with `scripts/check_paths.py`:
+
+   ```bash
+   python scripts/check_paths.py train.csv roots.json
+   ```
+5. **Launch training** with the manifest and roots mapping:
+
+   ```bash
+   python Classification/train_classification.py \
+       --manifest path/to/exp.yaml \
+       --roots roots.json \
+       --output-dir runs/exp1
+   ```
+
+   To execute a batch of manifests `exp1.yaml`..`exp5.yaml` use:
+
+   ```bash
+   scripts/run_exps.sh MANIFEST_DIR roots.json runs/
+   ```
+
+   The training script snapshots the manifest files, roots mapping and
+   environment details inside the chosen output directory for reproducibility.
+
 For all finetuning runs, the following optional arguments are also available:
 + `--frozen` - to freeze the pretrained encoder and only train the decoder. We did not use this in our experiments.
 + `--epochs [epochs]` - to set the number of epochs as desired (replace `[epochs]`). We did not use this in our experiments.
 + `--learning-rate-scheduler` - to use a learning rate scheduler that halves the learning rate when the performance on the validation set does not improve for 10 epochs. We did use this in our experiments.
++ `--class-weights w1,w2,...` - comma-separated list of weights to override the automatically computed class weights.
 
 Please also note that, when using MAE, code from the [MAE](https://github.com/facebookresearch/mae) repository is used, which is released under a CC BY-NC 4.0 license. Any results from such runs are therefore covered by a CC BY-NC 4.0 license.
 
@@ -165,7 +227,7 @@ python eval_classification.py \
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 
-In addition to printing the results of the evaluation in the output space, the results will also be saved to `SSL4GIE/eval_results.txt`.
+In addition to printing the results (mean F1, precision, recall, AUROC and accuracy) the evaluation script also writes them to `SSL4GIE/eval_results.txt`. For further analysis, `Classification/eval_outputs.py` provides a `write_outputs` helper to persist logits and metadata.
 
 ### Prediction
 
