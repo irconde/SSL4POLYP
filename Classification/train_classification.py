@@ -6,6 +6,8 @@ import numpy as np
 import glob
 import random
 import subprocess
+from pathlib import Path
+import warnings
 
 import yaml
 
@@ -22,6 +24,7 @@ from Metrics import performance
 
 sys.path.append("..")
 import utils
+from manifests import load_pack
 
 
 def train_epoch(
@@ -151,6 +154,24 @@ def build(
     test_labels=None,
     test_meta=None,
 ):
+
+    if (
+        (train_paths is not None or val_paths is not None or test_paths is not None)
+        and any(
+            getattr(args, name, None)
+            for name in [
+                "train_dir",
+                "val_dir",
+                "test_dir",
+                "train_paths",
+                "val_paths",
+                "test_paths",
+            ]
+        )
+    ):
+        warnings.warn(
+            "Both manifest-based and directory/path-based dataset arguments provided; using manifest-based data.",
+        )
 
     if train_paths is not None and train_labels is not None:
         train_labels = [int(l) for l in train_labels]
@@ -345,7 +366,19 @@ def train(rank, args):
         prev_best_test,
         class_weights,
         scaler,
-    ) = build(args, rank)
+    ) = build(
+        args,
+        rank,
+        getattr(args, "train_paths", None),
+        getattr(args, "train_labels", None),
+        getattr(args, "train_meta", None),
+        getattr(args, "val_paths", None),
+        getattr(args, "val_labels", None),
+        getattr(args, "val_meta", None),
+        getattr(args, "test_paths", None),
+        getattr(args, "test_labels", None),
+        getattr(args, "test_meta", None),
+    )
     use_amp = args.precision == "amp"
 
     loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(class_weights).cuda(rank))
@@ -484,12 +517,38 @@ def get_args():
         help="assume data_root/class_x/*.jpg structure; inferred if 'labeled-images' missing",
     )
     parser.add_argument("--data-root", type=str, required=True, dest="root")
-    parser.add_argument("--train-dir", type=str, help="directory for training images")
-    parser.add_argument("--val-dir", type=str, help="directory for validation images")
-    parser.add_argument("--test-dir", type=str, help="directory for test images")
-    parser.add_argument("--train-paths", nargs="*", help="explicit training image paths")
-    parser.add_argument("--val-paths", nargs="*", help="explicit validation image paths")
-    parser.add_argument("--test-paths", nargs="*", help="explicit test image paths")
+    parser.add_argument(
+        "--train-dir",
+        type=str,
+        help="(deprecated) directory for training images",
+    )
+    parser.add_argument(
+        "--val-dir", type=str, help="(deprecated) directory for validation images"
+    )
+    parser.add_argument(
+        "--test-dir", type=str, help="(deprecated) directory for test images"
+    )
+    parser.add_argument(
+        "--train-paths", nargs="*", help="(deprecated) explicit training image paths"
+    )
+    parser.add_argument(
+        "--val-paths", nargs="*", help="(deprecated) explicit validation image paths"
+    )
+    parser.add_argument(
+        "--test-paths", nargs="*", help="(deprecated) explicit test image paths"
+    )
+    parser.add_argument(
+        "--train-csv", type=str, dest="train_csv", help="CSV manifest for training split"
+    )
+    parser.add_argument(
+        "--val-csv", type=str, dest="val_csv", help="CSV manifest for validation split"
+    )
+    parser.add_argument(
+        "--test-csv", type=str, dest="test_csv", help="CSV manifest for test split"
+    )
+    parser.add_argument(
+        "--manifest", type=str, dest="manifest_yaml", help="YAML manifest describing dataset pack"
+    )
     parser.add_argument(
         "--class-weights",
         type=str,
@@ -523,6 +582,52 @@ def get_args():
 
 def main():
     args = get_args()
+    manifest_style = any(
+        [args.train_csv, args.val_csv, args.test_csv, args.manifest_yaml]
+    )
+    old_style = any(
+        [
+            args.train_dir,
+            args.val_dir,
+            args.test_dir,
+            args.train_paths,
+            args.val_paths,
+            args.test_paths,
+        ]
+    )
+    if manifest_style:
+        pack = load_pack(
+            train=Path(args.train_csv) if args.train_csv else None,
+            val=Path(args.val_csv) if args.val_csv else None,
+            test=Path(args.test_csv) if args.test_csv else None,
+            manifest_yaml=Path(args.manifest_yaml)
+            if args.manifest_yaml
+            else None,
+        )
+        (
+            args.train_paths,
+            args.train_labels,
+            args.train_meta,
+        ) = pack.get("train", (None, None, None))
+        (
+            args.val_paths,
+            args.val_labels,
+            args.val_meta,
+        ) = pack.get("val", (None, None, None))
+        (
+            args.test_paths,
+            args.test_labels,
+            args.test_meta,
+        ) = pack.get("test", (None, None, None))
+        if old_style:
+            warnings.warn(
+                "Both manifest-based and directory/path-based dataset arguments provided; using manifest-based data and ignoring others."
+            )
+    elif old_style:
+        warnings.warn(
+            "Directory/path-based dataset flags are deprecated; use manifest-based flags instead.",
+            FutureWarning,
+        )
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
