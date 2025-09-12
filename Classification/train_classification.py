@@ -138,75 +138,100 @@ def test(model, rank, test_loader, epoch, perf_fn, log_path):
     return perf
 
 
-def build(args, rank):
+def build(
+    args,
+    rank,
+    train_paths=None,
+    train_labels=None,
+    train_meta=None,
+    val_paths=None,
+    val_labels=None,
+    val_meta=None,
+    test_paths=None,
+    test_labels=None,
+    test_meta=None,
+):
 
-    simple_layout = args.simple or not os.path.exists(
-        os.path.join(args.root, "labeled-images")
-    )
-    if simple_layout:
-        class_dirs = sorted(glob.glob(os.path.join(args.root, "*/")))
-        class_id = 0
-        input_paths = []
-        targets = []
-        N_in_class = []
-        N_total = 0
-        for cd in class_dirs:
-            contents = sorted(glob.glob(cd + "*.jpg"))
-            cd_targets = [class_id for _ in range(len(contents))]
-            input_paths += contents
-            targets += cd_targets
-            class_id += 1
-            N_in_class.append(len(contents))
-            N_total += len(contents)
-        n_class = class_id
-        class_weights = [1 / N * N_total / n_class for N in N_in_class]
-    elif args.dataset.startswith("Hyperkvasir"):
-        if args.dataset.endswith("pathological"):
-            class_type = "pathological-findings/"
-        elif args.dataset.endswith("anatomical"):
-            class_type = "anatomical-landmarks/"
-        base_folders = sorted(glob.glob(args.root + "/labeled-images/*/"))
-        sub_folders = []
-        for bf in base_folders:
-            sub_folders += sorted(glob.glob(bf + "*/"))
-        subsub_folders = []
-        for sf in sub_folders:
-            if sf.endswith(class_type):
-                subsub_folders += sorted(glob.glob(sf + "*/"))
-        class_id = 0
-        input_paths = []
-        targets = []
-        N_in_class = []
-        N_total = 0
-        for ssf in subsub_folders:
-            contents = sorted(glob.glob(ssf + "*.jpg"))
-            ssf_targets = [class_id for _ in range(len(contents))]
-            input_paths += contents
-            targets += ssf_targets
-            class_id += 1
-            N_in_class.append(len(contents))
-            N_total += len(contents)
-        n_class = class_id
-        class_weights = [1 / N * N_total / n_class for N in N_in_class]
+    if train_paths is not None and train_labels is not None:
+        train_labels = [int(l) for l in train_labels]
+        val_labels = [int(l) for l in val_labels] if val_labels is not None else None
+        test_labels = [int(l) for l in test_labels] if test_labels is not None else None
+        all_labels = train_labels + (val_labels or []) + (test_labels or [])
+        n_class = len(set(all_labels))
+        counts = np.bincount(train_labels, minlength=n_class)
+        N_total = len(train_labels)
+        class_weights = [1 / N * N_total / n_class if N > 0 else 0 for N in counts]
+        input_paths = None
+        targets = None
+    else:
+        simple_layout = args.simple or not os.path.exists(
+            os.path.join(args.root, "labeled-images")
+        )
+        if simple_layout:
+            class_dirs = sorted(glob.glob(os.path.join(args.root, "*/")))
+            class_id = 0
+            input_paths = []
+            targets = []
+            N_in_class = []
+            N_total = 0
+            for cd in class_dirs:
+                contents = sorted(glob.glob(cd + "*.jpg"))
+                cd_targets = [class_id for _ in range(len(contents))]
+                input_paths += contents
+                targets += cd_targets
+                class_id += 1
+                N_in_class.append(len(contents))
+                N_total += len(contents)
+            n_class = class_id
+            class_weights = [1 / N * N_total / n_class for N in N_in_class]
+        elif args.dataset.startswith("Hyperkvasir"):
+            if args.dataset.endswith("pathological"):
+                class_type = "pathological-findings/"
+            elif args.dataset.endswith("anatomical"):
+                class_type = "anatomical-landmarks/"
+            base_folders = sorted(glob.glob(args.root + "/labeled-images/*/"))
+            sub_folders = []
+            for bf in base_folders:
+                sub_folders += sorted(glob.glob(bf + "*/"))
+            subsub_folders = []
+            for sf in sub_folders:
+                if sf.endswith(class_type):
+                    subsub_folders += sorted(glob.glob(sf + "*/"))
+            class_id = 0
+            input_paths = []
+            targets = []
+            N_in_class = []
+            N_total = 0
+            for ssf in subsub_folders:
+                contents = sorted(glob.glob(ssf + "*.jpg"))
+                ssf_targets = [class_id for _ in range(len(contents))]
+                input_paths += contents
+                targets += ssf_targets
+                class_id += 1
+                N_in_class.append(len(contents))
+                N_total += len(contents)
+            n_class = class_id
+            class_weights = [1 / N * N_total / n_class for N in N_in_class]
+        train_paths = None
+        val_paths = None
+        test_paths = None
+        if args.train_dir:
+            train_paths = sorted(glob.glob(os.path.join(args.train_dir, "*.jpg")))
+        if args.val_dir:
+            val_paths = sorted(glob.glob(os.path.join(args.val_dir, "*.jpg")))
+        if args.test_dir:
+            test_paths = sorted(glob.glob(os.path.join(args.test_dir, "*.jpg")))
+        if args.train_paths is not None:
+            train_paths = args.train_paths
+        if args.val_paths is not None:
+            val_paths = args.val_paths
+        if args.test_paths is not None:
+            test_paths = args.test_paths
+
     # Override automatically computed class weights if provided by the user
     if args.class_weights is not None:
         class_weights = [float(w) for w in args.class_weights.split(",")]
         assert len(class_weights) == n_class, "Number of class weights must match number of classes"
-    train_paths = None
-    val_paths = None
-    test_paths = None
-    if args.train_dir:
-        train_paths = sorted(glob.glob(os.path.join(args.train_dir, "*.jpg")))
-    if args.val_dir:
-        val_paths = sorted(glob.glob(os.path.join(args.val_dir, "*.jpg")))
-    if args.test_dir:
-        test_paths = sorted(glob.glob(os.path.join(args.test_dir, "*.jpg")))
-    if args.train_paths is not None:
-        train_paths = args.train_paths
-    if args.val_paths is not None:
-        val_paths = args.val_paths
-    if args.test_paths is not None:
-        test_paths = args.test_paths
 
     (
         train_dataloader,
@@ -224,8 +249,14 @@ def build(args, rank):
         pin_memory=args.pin_memory,
         persistent_workers=args.persistent_workers,
         train_paths=train_paths,
+        train_labels=train_labels,
+        train_meta=train_meta,
         val_paths=val_paths,
+        val_labels=val_labels,
+        val_meta=val_meta,
         test_paths=test_paths,
+        test_labels=test_labels,
+        test_meta=test_meta,
     )
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:

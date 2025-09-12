@@ -9,6 +9,7 @@ from torch.utils import data
 from torch.utils.data.distributed import DistributedSampler
 
 from Data.dataset import Dataset
+from Data.manifest_dataset import ManifestDataset
 
 
 class MultiEpochsDataLoader(data.DataLoader):
@@ -62,16 +63,22 @@ def split_ids(len_ids):
 def get_dataloaders(
     rank,
     world_size,
-    input_paths,
-    targets,
-    batch_size,
+    input_paths=None,
+    targets=None,
+    batch_size=1,
     workers=8,
     prefetch_factor=2,
     pin_memory=True,
     persistent_workers=True,
     train_paths=None,
+    train_labels=None,
+    train_meta=None,
     val_paths=None,
+    val_labels=None,
+    val_meta=None,
     test_paths=None,
+    test_labels=None,
+    test_meta=None,
 ):
 
     transform_input4train = transforms.Compose(
@@ -99,16 +106,18 @@ def get_dataloaders(
     val_paths = _normalize_paths(val_paths)
     test_paths = _normalize_paths(test_paths)
 
-    if train_paths is not None and val_paths is not None and test_paths is not None:
-        path_to_target = {p: t for p, t in zip(input_paths, targets)}
-
-        train_targets = [path_to_target[p] for p in train_paths]
-        val_targets = [path_to_target[p] for p in val_paths]
-        test_targets = [path_to_target[p] for p in test_paths]
-
-        train_dataset = Dataset(
-            input_paths=train_paths,
-            targets=train_targets,
+    if (
+        train_paths is not None
+        and val_paths is not None
+        and test_paths is not None
+        and train_labels is not None
+        and val_labels is not None
+        and test_labels is not None
+    ):
+        train_dataset = ManifestDataset(
+            train_paths,
+            train_labels,
+            train_meta,
             transform_input=transform_input4train,
         )
 
@@ -141,14 +150,16 @@ def get_dataloaders(
                 ]
             )
 
-            val_dataset = Dataset(
-                input_paths=val_paths,
-                targets=val_targets,
+            val_dataset = ManifestDataset(
+                val_paths,
+                val_labels,
+                val_meta,
                 transform_input=transform_input4test,
             )
-            test_dataset = Dataset(
-                input_paths=test_paths,
-                targets=test_targets,
+            test_dataset = ManifestDataset(
+                test_paths,
+                test_labels,
+                test_meta,
                 transform_input=transform_input4test,
             )
 
@@ -255,14 +266,14 @@ def get_dataloaders(
 
 def get_test_dataloader(
     input_paths,
-    targets,
+    targets=None,
+    meta=None,
     workers=8,
     prefetch_factor=2,
     pin_memory=True,
     persistent_workers=True,
+    batch_size=1,
 ):
-
-    _, test_indices, _ = split_ids(len(input_paths))
 
     transform_input4test = transforms.Compose(
         [
@@ -271,15 +282,17 @@ def get_test_dataloader(
         ]
     )
 
-    test_dataset = Dataset(
-        input_paths=input_paths, targets=targets, transform_input=transform_input4test
+    test_dataset = ManifestDataset(
+        input_paths,
+        targets,
+        meta,
+        transform_input=transform_input4test,
+        return_meta=meta is not None,
     )
-
-    test_dataset = data.Subset(test_dataset, test_indices)
 
     test_dataloader = MultiEpochsDataLoader(
         dataset=test_dataset,
-        batch_size=1,
+        batch_size=batch_size,
         shuffle=False,
         num_workers=workers,
         prefetch_factor=prefetch_factor,
