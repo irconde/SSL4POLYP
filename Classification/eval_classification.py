@@ -2,6 +2,7 @@ import sys
 import os
 import argparse
 import glob
+import csv
 
 from datetime import datetime
 
@@ -17,55 +18,80 @@ import utils
 
 
 @torch.no_grad()
-def test(model, device, test_loader, args):
+def test(model, device, test_loader, args, save_preds=None):
     model.eval()
     mf1 = performance.meanF1Score(n_class=args.n_class)
     mprec = performance.meanPrecision(n_class=args.n_class)
     mrec = performance.meanRecall(n_class=args.n_class)
     mauroc = performance.meanAUROC(n_class=args.n_class)
-    for i, (data, target) in enumerate(test_loader):
+    frame_ids = []
+    preds_list = []
+    for i, batch in enumerate(test_loader):
+        if len(batch) == 3:
+            data, target, meta = batch
+            frame_ids.extend([m.get("frame_id") for m in meta])
+        elif len(batch) == 2 and isinstance(batch[1], dict):
+            data, meta = batch
+            target = None
+            frame_ids.append(meta.get("frame_id"))
+        else:
+            data, target = batch
+            meta = None
         data = data.to(device)
-        target = target.to(device)
+        if target is not None:
+            target = target.to(device)
         output = model(data)
         probs = torch.softmax(output, dim=1)
+        pred_batch = torch.argmax(output, 1)
+        preds_list.extend(pred_batch.cpu().tolist())
         if i == 0:
-            pred = torch.argmax(output, 1)
-            targ = target
+            pred = pred_batch
             prob = probs
+            if target is not None:
+                targ = target
         else:
-            pred = torch.cat((pred, torch.argmax(output, 1)), 0)
-            targ = torch.cat((targ, target), 0)
+            pred = torch.cat((pred, pred_batch), 0)
             prob = torch.cat((prob, probs), 0)
+            if target is not None:
+                targ = torch.cat((targ, target), 0)
 
-    if args.ss_framework:
-        name = f"{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(False)}-dataset_{args.dataset}"
-    else:
-        name = f"{args.arch}-{args.pretraining}_init-frozen_{str(False)}-dataset_{args.dataset}"
-    print_title = f"Classification results for {name} @ {datetime.now()}"
-    print_mf1 = f"mF1: {mf1(pred, targ).item()}"
-    print_mprec = f"mPrecision: {mprec(pred, targ).item()}"
-    print_mrec = f"mRecall: {mrec(pred, targ).item()}"
-    print_mauroc = f"mAUROC: {mauroc(prob, targ).item()}"
-    print_acc = f"Accuracy: {(pred==targ).sum().item()/len(pred)}"
-    print(print_title)
-    print(print_mf1)
-    print(print_mprec)
-    print(print_mrec)
-    print(print_mauroc)
-    print(print_acc)
-    with open("../eval_results.txt", "a") as f:
-        f.write(print_title)
-        f.write("\n")
-        f.write(print_mf1)
-        f.write("\n")
-        f.write(print_mprec)
-        f.write("\n")
-        f.write(print_mrec)
-        f.write("\n")
-        f.write(print_mauroc)
-        f.write("\n")
-        f.write(print_acc)
-        f.write("\n")
+    if save_preds is not None and frame_ids:
+        with open(save_preds, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["frame_id", "prediction"])
+            for fid, p in zip(frame_ids, preds_list):
+                writer.writerow([fid, p])
+
+    if 'targ' in locals():
+        if args.ss_framework:
+            name = f"{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(False)}-dataset_{args.dataset}"
+        else:
+            name = f"{args.arch}-{args.pretraining}_init-frozen_{str(False)}-dataset_{args.dataset}"
+        print_title = f"Classification results for {name} @ {datetime.now()}"
+        print_mf1 = f"mF1: {mf1(pred, targ).item()}"
+        print_mprec = f"mPrecision: {mprec(pred, targ).item()}"
+        print_mrec = f"mRecall: {mrec(pred, targ).item()}"
+        print_mauroc = f"mAUROC: {mauroc(prob, targ).item()}"
+        print_acc = f"Accuracy: {(pred==targ).sum().item()/len(pred)}"
+        print(print_title)
+        print(print_mf1)
+        print(print_mprec)
+        print(print_mrec)
+        print(print_mauroc)
+        print(print_acc)
+        with open("../eval_results.txt", "a") as f:
+            f.write(print_title)
+            f.write("\n")
+            f.write(print_mf1)
+            f.write("\n")
+            f.write(print_mprec)
+            f.write("\n")
+            f.write(print_mrec)
+            f.write("\n")
+            f.write(print_mauroc)
+            f.write("\n")
+            f.write(print_acc)
+            f.write("\n")
 
 
 def build(args):
@@ -138,7 +164,7 @@ def evaluate(args):
     if not os.path.exists("../eval_results.txt"):
         open("../eval_results.txt", "w")
 
-    test(model, device, test_dataloader, args)
+    test(model, device, test_dataloader, args, save_preds=args.predictions)
 
 
 def get_args():
@@ -170,6 +196,12 @@ def get_args():
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument("--pin-memory", action="store_true", default=True)
     parser.add_argument("--persistent-workers", action="store_true", default=True)
+    parser.add_argument(
+        "--predictions",
+        type=str,
+        default=None,
+        help="Path to CSV file where predictions with frame_id will be saved",
+    )
 
     return parser.parse_args()
 
