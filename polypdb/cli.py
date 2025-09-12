@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 import yaml
 
@@ -29,6 +31,13 @@ def main(argv: list[str] | None = None) -> None:
             spec = yaml.safe_load(f)
         with open(args.roots) as f:
             roots = json.load(f)
+        # Verify that all paths referenced in the test CSV exist before processing
+        check_script = Path(__file__).resolve().parents[1] / "scripts" / "check_paths.py"
+        test_csv = args.pack / "test.csv"
+        subprocess.run(
+            [sys.executable, str(check_script), str(test_csv), str(args.roots)],
+            check=True,
+        )
         build_sun_test_corruptions(args.pack, spec, roots, args.out)
     else:
         parser.print_help()

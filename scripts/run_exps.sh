@@ -28,6 +28,25 @@ for EXP in 1 2 3 4 5; do
 
   echo "${EXP},${MANIFEST_PATH},${OUT_DIR}" >> "$CSV"
 
+  # Extract CSV paths from the manifest and ensure all referenced files exist
+  mapfile -t CSV_FILES < <(
+    python - "$MANIFEST_PATH" <<'PY'
+import sys, yaml, pathlib
+manifest = pathlib.Path(sys.argv[1])
+with open(manifest) as f:
+    data = yaml.safe_load(f) or {}
+for entry in data.values():
+    if isinstance(entry, dict) and "csv" in entry:
+        p = pathlib.Path(entry["csv"])
+        if not p.is_absolute():
+            p = manifest.parent / p
+        print(p)
+PY
+  )
+  for CSV_FILE in "${CSV_FILES[@]}"; do
+    python scripts/check_paths.py "$CSV_FILE" "$ROOTS_JSON"
+  done
+
   python Classification/train_classification.py \
     --manifest "$MANIFEST_PATH" \
     --roots "$ROOTS_JSON" \
