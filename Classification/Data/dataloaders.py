@@ -70,6 +70,7 @@ def get_dataloaders(
     prefetch_factor=2,
     pin_memory=True,
     persistent_workers=True,
+    seed=0,
     train_paths=None,
     train_labels=None,
     train_meta=None,
@@ -127,6 +128,7 @@ def get_dataloaders(
             num_replicas=world_size,
             shuffle=True,
             drop_last=True,
+            seed=seed,
         )
 
         train_dataloader = MultiEpochsDataLoader(
