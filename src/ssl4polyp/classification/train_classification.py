@@ -10,7 +10,7 @@ import math
 
 import yaml
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 
 import torch
 import torch.nn as nn
@@ -32,6 +32,33 @@ from ssl4polyp.configs.layered import (
 import numpy as np
 
 
+def _normalize_seeds(raw: Any) -> list[int]:
+    """Normalize ``raw`` seed specifications into a list of integers."""
+
+    if raw is None:
+        return []
+    if isinstance(raw, int):
+        return [int(raw)]
+    if isinstance(raw, str):
+        raw = raw.replace(",", " ")
+        entries = [item for item in raw.split() if item]
+    elif isinstance(raw, Iterable):
+        entries = list(raw)
+    else:
+        raise TypeError(f"Unsupported seed specification: {raw!r}")
+
+    seeds: list[int] = []
+    for entry in entries:
+        if entry is None:
+            continue
+        if isinstance(entry, str):
+            entry = entry.strip()
+            if not entry:
+                continue
+        seeds.append(int(entry))
+    return seeds
+
+
 def set_determinism(seed: int) -> None:
     """Configure deterministic behavior for reproducibility.
 
@@ -46,6 +73,27 @@ def set_determinism(seed: int) -> None:
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True, warn_only=True)
     print(f"Setting deterministic mode with seed {seed}")
+
+
+def _prepare_metric_export(
+    metrics: Dict[str, Any], drop: Optional[Iterable[str]] = None
+) -> Dict[str, float]:
+    """Convert ``metrics`` into a JSON-serialisable mapping of floats."""
+
+    drop = set(drop or [])
+    export: Dict[str, float] = {}
+    for key, value in metrics.items():
+        if key in drop:
+            continue
+        if isinstance(value, torch.Tensor):
+            if value.numel() != 1:
+                continue
+            value = value.item()
+        if isinstance(value, np.generic):
+            value = float(value)
+        if isinstance(value, (float, int)):
+            export[key] = float(value)
+    return export
 
 
 def create_scheduler(optimizer, args):
@@ -147,6 +195,11 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
 
     if "optimizer" in experiment_cfg and experiment_cfg["optimizer"].lower() != "adamw":
         raise ValueError("Only AdamW optimizer is currently supported")
+
+    config_seeds = _normalize_seeds(experiment_cfg.get("seeds"))
+    if config_seeds:
+        args.seeds = config_seeds
+        args.seed = config_seeds[0]
 
     args.lr = experiment_cfg.get("lr", args.lr)
     args.weight_decay = experiment_cfg.get("weight_decay", getattr(args, "weight_decay", 0.05))
@@ -638,6 +691,10 @@ def train(rank, args):
                     metric_fns=aux_metric_fns,
                     split_name="Test",
                 )
+                val_metrics_export = _prepare_metric_export(
+                    val_metrics, drop={"logits", "probabilities", "targets"}
+                )
+                test_metrics_export = _prepare_metric_export(test_metrics)
                 val_logits = val_metrics.pop("logits", None)
                 val_metrics.pop("probabilities", None)
                 val_targets = val_metrics.pop("targets", None)
@@ -714,6 +771,16 @@ def train(rank, args):
                 if updated_thresholds:
                     payload["thresholds"] = updated_thresholds
                 torch.save(payload, ckpt_path)
+                metrics_payload = {
+                    "seed": int(args.seed),
+                    "epoch": int(epoch),
+                    "train_loss": float(loss),
+                    "val": val_metrics_export,
+                    "test": test_metrics_export,
+                }
+                metrics_path = Path(args.output_dir) / "metrics.json"
+                with open(metrics_path, "w") as f:
+                    json.dump(metrics_payload, f, indent=2)
                 best_val_perf = val_perf
                 thresholds_map = updated_thresholds
                 no_improve_epochs = 0
@@ -883,12 +950,22 @@ def get_args():
         help="Directory for checkpoints, logs and config snapshots",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Collection of seeds to evaluate; the first seed is used for the current run",
+    )
 
     return parser.parse_args()
 
 
 def main():
     args = get_args()
+    args.seeds = _normalize_seeds(getattr(args, "seeds", None))
+    if args.seeds:
+        args.seed = args.seeds[0]
     experiment_cfg = None
     dataset_cfg = None
     dataset_resolved = None
