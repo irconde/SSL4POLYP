@@ -29,6 +29,8 @@ def test(
     mprec = performance.meanPrecision(n_class=args.n_class)
     mrec = performance.meanRecall(n_class=args.n_class)
     mauroc = performance.meanAUROC(n_class=args.n_class)
+    mbalanced = performance.meanBalancedAccuracy(n_class=args.n_class)
+    mauprc = performance.meanAUPRC(n_class=args.n_class)
     frame_ids = []
     preds_list = []
     apply_tau = tau is not None and args.n_class == 2
@@ -68,6 +70,7 @@ def test(
             for fid, p in zip(frame_ids, preds_list):
                 writer.writerow([fid, p])
 
+    metrics: dict[str, float] = {}
     if len(frame_ids) > 0:
         if args.ss_framework:
             name = (
@@ -80,16 +83,29 @@ def test(
                 f"init-frozen_{str(False)}-dataset_{args.dataset}"
             )
         print_title = f"Classification results for {name} @ {datetime.now()}"
-        print_mf1 = f"mF1: {mf1(pred, targ).item()}"
-        print_mprec = f"mPrecision: {mprec(pred, targ).item()}"
-        print_mrec = f"mRecall: {mrec(pred, targ).item()}"
-        print_mauroc = f"mAUROC: {mauroc(prob, targ).item()}"
-        print_acc = f"Accuracy: {(pred == targ).sum().item() / len(pred)}"
+        metrics["balanced_accuracy"] = mbalanced(
+            prob, targ, tau=tau if apply_tau else None
+        ).item()
+        metrics["mF1"] = mf1(pred, targ).item()
+        metrics["mPrecision"] = mprec(pred, targ).item()
+        metrics["mRecall"] = mrec(pred, targ).item()
+        metrics["mAUROC"] = mauroc(prob, targ).item()
+        metrics["mAUPRC"] = mauprc(prob, targ).item()
+        metrics["accuracy"] = (pred == targ).sum().item() / len(pred)
+        print_balanced = f"Balanced accuracy: {metrics['balanced_accuracy']}"
+        print_mf1 = f"mF1: {metrics['mF1']}"
+        print_mprec = f"mPrecision: {metrics['mPrecision']}"
+        print_mrec = f"mRecall: {metrics['mRecall']}"
+        print_mauroc = f"mAUROC: {metrics['mAUROC']}"
+        print_mauprc = f"mAUPRC: {metrics['mAUPRC']}"
+        print_acc = f"Accuracy: {metrics['accuracy']}"
         print(print_title)
+        print(print_balanced)
         print(print_mf1)
         print(print_mprec)
         print(print_mrec)
         print(print_mauroc)
+        print(print_mauprc)
         print(print_acc)
         if tau is not None and args.n_class == 2:
             tau_label = tau_source or "tau"
@@ -99,21 +115,24 @@ def test(
         results_path.parent.mkdir(parents=True, exist_ok=True)
         with open(results_path, "a") as f:
             f.write(print_title + "\n")
+            f.write(print_balanced + "\n")
             f.write(print_mf1 + "\n")
             f.write(print_mprec + "\n")
             f.write(print_mrec + "\n")
             f.write(print_mauroc + "\n")
+            f.write(print_mauprc + "\n")
             f.write(print_acc + "\n")
             if tau is not None and args.n_class == 2:
                 f.write(f"{tau_label}: {tau:.6f}\n")
 
+    result: dict[str, object] = {"metrics": metrics}
     if tau is not None:
-        return {
+        result.update({
             "tau": tau,
             "tau_source": tau_source,
-        }
+        })
 
-    return {}
+    return result
 
 
 def build(args):
@@ -266,7 +285,7 @@ def evaluate(args):
     ) = build(args)
     tau, tau_source = _resolve_tau(args, model, device, threshold_loader, thresholds_map)
     Path(args.results_file).parent.mkdir(parents=True, exist_ok=True)
-    test(
+    return test(
         model,
         device,
         test_dataloader,
