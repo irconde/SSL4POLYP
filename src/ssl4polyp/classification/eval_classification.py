@@ -218,6 +218,31 @@ def build(args):
         except Exception as exc:  # pragma: no cover - defensive
             print(f"Warning: failed to load thresholds from {tau_json}: {exc}")
 
+    threshold_files = checkpoint.get("threshold_files") or {}
+    if isinstance(threshold_files, dict) and threshold_files:
+        thresholds_root = checkpoint.get("thresholds_root")
+        if thresholds_root:
+            base_root = Path(thresholds_root).expanduser().parent
+        else:
+            base_root = ckpt_path.parent
+        for key, rel_path in threshold_files.items():
+            candidate = Path(rel_path)
+            if not candidate.is_absolute():
+                candidate = base_root / rel_path
+            if not candidate.exists():
+                print(
+                    f"Warning: threshold file referenced for {key!r} missing at {candidate}"
+                )
+                continue
+            try:
+                loaded = threshold_utils.load_thresholds(candidate)
+            except Exception as exc:  # pragma: no cover - defensive
+                print(
+                    f"Warning: failed to load thresholds from {candidate}: {exc}"
+                )
+                continue
+            thresholds_map.update(loaded)
+
     return test_dataloader, threshold_loader, model, device, thresholds_map, ckpt_path
 
 
