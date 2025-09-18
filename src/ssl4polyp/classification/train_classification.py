@@ -1086,6 +1086,9 @@ def train(rank, args):
 
     print(f"Rank {rank + 1}/{args.world_size} process initialized.\n")
 
+    seed = int(getattr(args, "seed", 0)) + int(rank)
+    set_determinism(seed)
+
     if rank == 0:
         os.makedirs(args.output_dir, exist_ok=True)
 
