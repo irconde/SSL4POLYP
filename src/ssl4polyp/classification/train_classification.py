@@ -20,12 +20,10 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 
-from Data import dataloaders
-from Metrics import performance
-
-sys.path.append("..")
-import utils
-from manifests import load_pack
+from ssl4polyp import utils
+from ssl4polyp.classification.data import dataloaders
+from ssl4polyp.classification.manifests import load_pack
+from ssl4polyp.classification.metrics import performance
 
 
 def set_determinism(seed: int) -> None:

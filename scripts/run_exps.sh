@@ -47,7 +47,7 @@ PY
     python scripts/check_paths.py "$CSV_FILE" "$ROOTS_JSON"
   done
 
-  python Classification/train_classification.py \
+  python -m ssl4polyp.classification.train_classification \
     --manifest "$MANIFEST_PATH" \
     --roots "$ROOTS_JSON" \
     --output-dir "$OUT_DIR"

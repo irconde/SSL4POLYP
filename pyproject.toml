@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssl4polyp"
+version = "0.1.0"
+description = "Research code for SSL4POLYP experiments and utilities"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Ivan Rodriguez-Conde"},
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: BSD License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "numpy>=1.22",
+  "opencv-python>=4.5",
+  "Pillow>=9.1",
+  "scikit-learn>=1.0",
+  "timm>=0.6.12",
+  "torch>=1.9",
+  "torchmetrics>=1.1",
+  "torchvision>=0.10",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+ssl4polyp-train = "ssl4polyp.classification.train_classification:main"
+polypdb = "ssl4polyp.polypdb.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

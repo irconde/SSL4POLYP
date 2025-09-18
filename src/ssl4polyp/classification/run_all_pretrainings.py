@@ -10,7 +10,7 @@ three pretraining modes used in the paper:
 
 Checkpoints for the self-supervised options must be supplied via the
 command line. Fine-tuned models are stored in
-``Classification/Trained models`` as usual.
+``Trained models/`` as usual.
 """
 
 import argparse
