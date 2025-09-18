@@ -26,6 +26,10 @@ import yaml
 
 from . import data_packs_root, resolve_config_path, resolve_data_pack_path
 
+
+if not hasattr(Path, "read"):
+    Path.read = Path.read_text  # type: ignore[attr-defined]
+
 # Type aliases for clarity
 Row = MutableMapping[str, str]
 Paths = List[Path]

@@ -1,12 +1,15 @@
 import sys
 import os
 import argparse
-import time
-import random
-import subprocess
-from pathlib import Path
+import hashlib
 import json
 import math
+import random
+import re
+import shutil
+import subprocess
+import time
+from pathlib import Path
 
 import yaml
 
@@ -94,6 +97,315 @@ def _prepare_metric_export(
         if isinstance(value, (float, int)):
             export[key] = float(value)
     return export
+
+
+_TOKEN_OVERRIDES = {
+    "sun": "SUN",
+    "sup": "SUP",
+    "ssl": "SSL",
+    "imnet": "ImNet",
+    "imagenet": "ImageNet",
+    "colon": "Colon",
+    "hyperkvasir": "HyperKvasir",
+    "mae": "MAE",
+    "vit": "ViT",
+    "polypgen": "PolypGen",
+    "fewshot": "FewShot",
+    "subsets": "Subset",
+    "subset": "Subset",
+    "full": "Full",
+    "morphology": "Morph",
+    "test": "Test",
+    "perturbations": "Perturb",
+    "clean": "Clean",
+    "baseline": "Baseline",
+    "baselines": "Baseline",
+    "random": "Random",
+}
+
+
+def _canonicalize_tag(raw: Any) -> str:
+    tokens = [t for t in re.split(r"[^0-9A-Za-z]+", str(raw)) if t]
+    if not tokens:
+        return "run"
+    parts: list[str] = []
+    for idx, token in enumerate(tokens):
+        lower = token.lower()
+        if lower in _TOKEN_OVERRIDES:
+            piece = _TOKEN_OVERRIDES[lower]
+        elif token.isupper():
+            piece = token
+        elif idx == 0:
+            piece = token.capitalize()
+        else:
+            piece = token.capitalize()
+        parts.append(piece)
+    return "".join(parts)
+
+
+def _as_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_int(pattern: str, text: Optional[str]) -> Optional[int]:
+    if not text:
+        return None
+    match = re.search(pattern, text)
+    if match:
+        try:
+            return int(match.group(1))
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            return None
+    return None
+
+
+def _resolve_dataset_layout(
+    args,
+    dataset_cfg: Optional[Dict[str, Any]],
+    dataset_resolved: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    dataset_cfg = dataset_cfg or {}
+    dataset_resolved = dataset_resolved or {}
+    dataset_name = dataset_cfg.get("name") or getattr(args, "dataset", None) or "dataset"
+    dataset_name = str(dataset_name)
+    dataset_key = dataset_name.lower()
+
+    percent = _as_int(dataset_cfg.get("percent"))
+    dataset_seed = _as_int(dataset_cfg.get("seed"))
+    size = _as_int(dataset_cfg.get("size"))
+    train_pack = dataset_resolved.get("train_pack") if dataset_resolved else None
+    if not train_pack:
+        train_pack = getattr(args, "train_pack", None)
+    train_pack = str(train_pack) if train_pack is not None else None
+
+    if dataset_key == "sun_subsets":
+        if percent is None:
+            percent = _extract_int(r"p(\d+)", train_pack)
+        if dataset_seed is None:
+            dataset_seed = _extract_int(r"seed(\d+)", train_pack)
+    elif dataset_key == "polypgen_fewshot":
+        if size is None:
+            size = _extract_int(r"_s(\d+)", train_pack)
+        if dataset_seed is None:
+            dataset_seed = _extract_int(r"seed(\d+)", train_pack)
+
+    segments: list[str] = []
+    data_tag = _canonicalize_tag(dataset_name)
+    default_parent_tag: Optional[str] = None
+    default_parent_seed: Optional[int] = None
+
+    if dataset_key == "sun_full":
+        segments = ["sun_baselines"]
+        data_tag = "SUNFull"
+    elif dataset_key == "sun_morphology":
+        segments = ["sun_morphology"]
+        data_tag = "SUNMorph"
+    elif dataset_key == "sun_subsets":
+        segments = ["sun_subsets"]
+        if percent is not None:
+            segments.append(f"p{int(percent):02d}")
+            data_tag = f"SUNP{int(percent):02d}"
+        else:
+            data_tag = "SUNSubset"
+        if dataset_seed is not None:
+            segments.append(f"seed{int(dataset_seed)}")
+    elif dataset_key == "polypgen_fewshot":
+        segments = ["polypgen_fewshot"]
+        if size is not None:
+            segments.append(f"s{int(size)}")
+            data_tag = f"PolypGenFew{int(size)}"
+        else:
+            data_tag = "PolypGenFewShot"
+        if dataset_seed is not None:
+            segments.append(f"seed{int(dataset_seed)}")
+        default_parent_tag = "SUN"
+        default_parent_seed = dataset_seed
+    elif dataset_key == "polypgen_clean_test":
+        segments = ["polypgen_clean_test"]
+        data_tag = "PolypGenClean"
+    elif dataset_key == "sun_test_perturbations":
+        segments = ["sun_test_perturbations"]
+        data_tag = "SUNPerturb"
+    else:
+        sanitized = re.sub(r"[^0-9A-Za-z]+", "_", dataset_key).strip("_")
+        segments = [sanitized or "dataset"]
+
+    return {
+        "name": dataset_key,
+        "segments": tuple(segments),
+        "data_tag": data_tag,
+        "dataset_seed": dataset_seed,
+        "percent": percent,
+        "size": size,
+        "default_parent_tag": default_parent_tag,
+        "default_parent_seed": default_parent_seed,
+    }
+
+
+def _resolve_model_tag(args, selected_model: Optional[Dict[str, Any]]) -> str:
+    raw: Optional[str] = None
+    if selected_model:
+        for key in ("key", "name"):
+            candidate = selected_model.get(key)
+            if candidate:
+                raw = str(candidate)
+                break
+    if not raw:
+        raw = getattr(args, "model_key", None)
+    if not raw:
+        arch = getattr(args, "arch", None)
+        pretraining = getattr(args, "pretraining", None)
+        parts = [str(part) for part in (arch, pretraining) if part]
+        raw = "_".join(parts)
+    if not raw:
+        raw = "model"
+    return _canonicalize_tag(raw)
+
+
+def _normalise_lineage_tag(tag: str) -> str:
+    if tag.lower() == "sunfull":
+        return "SUN"
+    return tag
+
+
+def _compose_lineage(tag: Optional[str], seed: Optional[int]) -> Optional[str]:
+    if not tag:
+        return None
+    canonical = _canonicalize_tag(tag)
+    canonical = _normalise_lineage_tag(canonical)
+    qualifier = f"from{canonical}"
+    if seed is not None:
+        qualifier += f"_s{int(seed)}"
+    return qualifier
+
+
+def _extract_parent_metadata(reference: str) -> tuple[Optional[str], Optional[int]]:
+    stem = Path(reference).stem
+    seed_match = re.search(r"_s(\d+)$", stem)
+    seed = int(seed_match.group(1)) if seed_match else None
+    data_match = re.search(r"__(.+)_s\d+$", stem)
+    if data_match:
+        data_segment = data_match.group(1)
+        data_tag = data_segment.split("_")[0]
+        return data_tag, seed
+    return None, seed
+
+
+def _resolve_lineage_qualifiers(
+    args,
+    dataset_layout: Dict[str, Any],
+    experiment_cfg: Optional[Dict[str, Any]],
+) -> list[str]:
+    qualifiers: list[str] = []
+    parent_reference = getattr(args, "parent_checkpoint", None)
+    if parent_reference:
+        parent_tag, parent_seed = _extract_parent_metadata(parent_reference)
+        qualifier = _compose_lineage(parent_tag, parent_seed)
+        if qualifier:
+            qualifiers.append(qualifier)
+    else:
+        protocol_cfg = (experiment_cfg or {}).get("protocol") or {}
+        default_tag = dataset_layout.get("default_parent_tag")
+        if default_tag and protocol_cfg.get("init_from"):
+            qualifier = _compose_lineage(
+                default_tag, dataset_layout.get("default_parent_seed")
+            )
+            if qualifier:
+                qualifiers.append(qualifier)
+    return qualifiers
+
+
+def _compose_stem(
+    model_tag: str, data_tag: str, qualifiers: Iterable[str], seed: int
+) -> str:
+    seed_value = _as_int(seed) or 0
+    qualifier_list = [q for q in qualifiers if q]
+    qualifier_part = f"_{'_'.join(qualifier_list)}" if qualifier_list else ""
+    return f"{model_tag}__{data_tag}{qualifier_part}_s{seed_value}"
+
+
+def _resolve_run_layout(
+    args,
+    selected_model: Optional[Dict[str, Any]] = None,
+    dataset_cfg: Optional[Dict[str, Any]] = None,
+    dataset_resolved: Optional[Dict[str, Any]] = None,
+    experiment_cfg: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    dataset_layout = _resolve_dataset_layout(args, dataset_cfg, dataset_resolved)
+    base_dir = Path(getattr(args, "output_dir", "checkpoints")).expanduser()
+    output_dir = base_dir.joinpath(*dataset_layout["segments"])
+    model_tag = _resolve_model_tag(args, selected_model)
+    data_tag = dataset_layout["data_tag"]
+    qualifiers = _resolve_lineage_qualifiers(args, dataset_layout, experiment_cfg)
+    stem = _compose_stem(model_tag, data_tag, qualifiers, getattr(args, "seed", 0))
+    checkpoint_path = output_dir / f"{stem}.pth"
+    log_path = output_dir / f"{stem}.log"
+    metrics_path = output_dir / f"{stem}.metrics.json"
+    tb_dir = output_dir / "tb" / stem
+    return {
+        "output_dir": output_dir,
+        "stem": stem,
+        "checkpoint_path": checkpoint_path,
+        "log_path": log_path,
+        "metrics_path": metrics_path,
+        "tb_dir": tb_dir,
+        "dataset_layout": dataset_layout,
+    }
+
+
+def _format_selection_tag(monitor: Optional[str]) -> str:
+    if not monitor:
+        return "best"
+    tokens = [t for t in re.split(r"[^0-9A-Za-z]+", monitor) if t]
+    if not tokens:
+        return "best"
+    formatted: list[str] = []
+    for idx, token in enumerate(tokens):
+        lower = token.lower()
+        if lower == "auroc":
+            piece = "AUROC"
+        elif lower == "auc":
+            piece = "AUC"
+        elif lower == "auprc":
+            piece = "AUPRC"
+        elif lower == "loss":
+            piece = "loss" if idx == 0 else "Loss"
+        elif idx == 0:
+            piece = token.lower()
+        else:
+            piece = token.capitalize()
+        formatted.append(piece)
+    return "".join(formatted)
+
+
+def _find_existing_checkpoint(stem_path: Path) -> tuple[Optional[Path], bool]:
+    pointer = stem_path.with_suffix(".pth")
+    if pointer.exists() or pointer.is_symlink():
+        return pointer, True
+    parent = stem_path.parent
+    if not parent.exists():
+        return None, False
+    pattern = f"{stem_path.name}_e*_*.pth"
+    candidates = sorted(parent.glob(pattern))
+    if candidates:
+        return candidates[-1], False
+    return None, False
+
+
+def _update_checkpoint_pointer(pointer_path: Path, target_path: Path) -> None:
+    pointer_dir = pointer_path.parent
+    pointer_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        if pointer_path.is_symlink() or pointer_path.exists():
+            pointer_path.unlink()
+        pointer_path.symlink_to(target_path.name)
+    except OSError:
+        shutil.copy2(target_path, pointer_path)
 
 
 def create_scheduler(optimizer, args):
@@ -505,16 +817,19 @@ def build(args, rank):
         model = utils.get_ImageNet_or_random_ViT(
             True, n_class, args.frozen, None, ImageNet_weights=False
         )
-    base_name = f"{args.arch}-{args.pretraining}"
-    if args.ss_framework:
-        base_name += f"_{args.ss_framework}"
-    base_name += f"_init-frozen_{str(args.frozen)}-dataset_{args.dataset}"
-    ckpt_path = os.path.join(args.output_dir, base_name + ".pth")
-    log_path = os.path.join(args.output_dir, base_name + ".txt")
+    stem = getattr(args, "run_stem", None)
+    if not stem:
+        layout = _resolve_run_layout(args)
+        stem = layout["stem"]
+        args.run_stem = stem
+    stem_path = Path(args.output_dir) / stem
+    ckpt_path = stem_path.with_suffix(".pth")
+    log_path = stem_path.with_suffix(".log")
 
-    thresholds_map = {}
-    if os.path.exists(ckpt_path):
-        main_dict = torch.load(ckpt_path, map_location="cpu")
+    thresholds_map: Dict[str, Any] = {}
+    existing_ckpt, pointer_valid = _find_existing_checkpoint(stem_path)
+    if existing_ckpt is not None:
+        main_dict = torch.load(existing_ckpt, map_location="cpu")
         model.load_state_dict(main_dict["model_state_dict"])
         start_epoch = main_dict["epoch"] + 1
         best_val_perf = main_dict.get("val_perf")
@@ -522,11 +837,13 @@ def build(args, rank):
         np.random.set_state(main_dict["np_state"])
         torch.set_rng_state(main_dict["torch_state"])
         thresholds_map = dict(main_dict.get("thresholds", {}) or {})
+        if not pointer_valid:
+            _update_checkpoint_pointer(ckpt_path, Path(existing_ckpt))
     else:
         start_epoch = 1
         best_val_perf = None
-        open(log_path, "w")
-        thresholds_map = {}
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.touch()
 
     model.cuda(rank)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -636,7 +953,8 @@ def train(rank, args):
         "recall": performance.meanRecall(n_class=len(class_weights)),
     }
     if rank == 0:
-        writer = SummaryWriter(os.path.join(args.output_dir, "tb"))
+        tb_dir = getattr(args, "tensorboard_dir", None)
+        writer = SummaryWriter(str(tb_dir) if tb_dir else os.path.join(args.output_dir, "tb"))
         with open(log_path, "a") as f:
             f.write(str(args))
             f.write("\n")
@@ -770,7 +1088,31 @@ def train(rank, args):
                     payload["scheduler_state_dict"] = scheduler.state_dict()
                 if updated_thresholds:
                     payload["thresholds"] = updated_thresholds
-                torch.save(payload, ckpt_path)
+                ckpt_pointer = Path(ckpt_path)
+                ckpt_stem = ckpt_pointer.with_suffix("")
+                selection_tag = _format_selection_tag(
+                    getattr(args, "early_stop_monitor", None)
+                )
+                candidate_name = (
+                    f"{ckpt_stem.name}_e{epoch:02d}_{selection_tag}.pth"
+                )
+                final_path = ckpt_stem.parent / candidate_name
+                if final_path.exists():
+                    digest_payload = {
+                        "epoch": int(epoch),
+                        "seed": int(args.seed),
+                        "val": float(val_perf),
+                        "test": float(test_perf),
+                    }
+                    digest = hashlib.sha1(
+                        json.dumps(digest_payload, sort_keys=True).encode("utf-8")
+                    ).hexdigest()[:8]
+                    candidate_name = (
+                        f"{ckpt_stem.name}_e{epoch:02d}_{selection_tag}+{digest}.pth"
+                    )
+                    final_path = ckpt_stem.parent / candidate_name
+                torch.save(payload, final_path)
+                _update_checkpoint_pointer(ckpt_pointer, final_path)
                 metrics_payload = {
                     "seed": int(args.seed),
                     "epoch": int(epoch),
@@ -778,7 +1120,7 @@ def train(rank, args):
                     "val": val_metrics_export,
                     "test": test_metrics_export,
                 }
-                metrics_path = Path(args.output_dir) / "metrics.json"
+                metrics_path = ckpt_stem.with_suffix(".metrics.json")
                 with open(metrics_path, "w") as f:
                     json.dump(metrics_payload, f, indent=2)
                 best_val_perf = val_perf
@@ -835,6 +1177,13 @@ def get_args():
     )
     parser.add_argument("--ss-framework", type=str, choices=["mae"])
     parser.add_argument("--checkpoint", type=str, dest="ckpt", default=None)
+    parser.add_argument(
+        "--parent-checkpoint",
+        type=str,
+        dest="parent_checkpoint",
+        default=None,
+        help="Path to the checkpoint of a parent run when fine-tuning hierarchically.",
+    )
     parser.add_argument("--frozen", action="store_true", default=False)
     parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument(
@@ -999,9 +1348,22 @@ def main():
         roots_map = json.load(f)
     args.roots_map = roots_map
 
+    layout = _resolve_run_layout(
+        args,
+        selected_model=selected_model,
+        dataset_cfg=dataset_cfg,
+        dataset_resolved=dataset_resolved,
+        experiment_cfg=experiment_cfg,
+    )
+    args.run_stem = layout["stem"]
+    args.output_dir = str(layout["output_dir"])
+    args.tensorboard_dir = str(layout["tb_dir"])
+    args.metrics_path = str(layout["metrics_path"])
+
     set_determinism(args.seed)
-    os.makedirs(args.output_dir, exist_ok=True)
-    os.makedirs(os.path.join(args.output_dir, "tb"), exist_ok=True)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    Path(args.tensorboard_dir).mkdir(parents=True, exist_ok=True)
 
     def _serialize(value):
         if isinstance(value, dict):
@@ -1031,7 +1393,8 @@ def main():
     except Exception:
         commit = None
     run_config["git_commit"] = commit
-    with open(os.path.join(args.output_dir, "config.yaml"), "w") as f:
+    config_path = output_dir / "config.yaml"
+    with open(config_path, "w") as f:
         yaml.safe_dump(run_config, f)
     args.world_size = torch.cuda.device_count()
     assert args.batch_size % args.world_size == 0
