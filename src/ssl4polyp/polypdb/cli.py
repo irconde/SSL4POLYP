@@ -30,8 +30,18 @@ def main(argv: list[str] | None = None) -> None:
     corrupt_parser = sun_sub.add_parser("corrupt")
     corrupt_parser.add_argument("--pack", type=Path, required=True)
     corrupt_parser.add_argument("--spec", type=Path, required=True)
-    corrupt_parser.add_argument("--roots", type=Path, required=True)
-    corrupt_parser.add_argument("--out", type=Path, required=True)
+    corrupt_parser.add_argument(
+        "--roots",
+        type=Path,
+        default=Path("data") / "roots.json",
+        help="JSON mapping of dataset roots (default: data/roots.json)",
+    )
+    corrupt_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("results") / "polypdb" / "sun_corruptions",
+        help="Directory to export corrupted packs (default: results/polypdb/sun_corruptions)",
+    )
 
     args = parser.parse_args(argv)
 

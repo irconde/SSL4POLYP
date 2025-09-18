@@ -598,8 +598,11 @@ def get_args():
     parser.add_argument(
         "--roots",
         type=str,
-        default=None,
-        help="JSON file mapping manifest root identifiers to directories",
+        default=str(Path("data") / "roots.json"),
+        help=(
+            "JSON file mapping manifest root identifiers to directories. "
+            "Defaults to data/roots.json"
+        ),
     )
     parser.add_argument(
         "--class-weights",
@@ -626,7 +629,13 @@ def get_args():
     )
     parser.add_argument("--precision", choices=["amp", "fp32"], default="amp")
     parser.add_argument("--log-interval", type=int, default=10)
-    parser.add_argument("--output-dir", type=str, default="Trained models", dest="output_dir")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=str(Path("checkpoints") / "classification"),
+        dest="output_dir",
+        help="Directory for checkpoints, logs and config snapshots",
+    )
     parser.add_argument("--seed", type=int, default=42)
 
     return parser.parse_args()
@@ -634,10 +643,7 @@ def get_args():
 
 def main():
     args = get_args()
-    roots_map = None
-    if args.roots:
-        with open(args.roots) as f:
-            roots_map = json.load(f)
+    roots_path = Path(args.roots) if args.roots else None
     manifest_style = any(
         [args.train_csv, args.val_csv, args.test_csv, args.manifest_yaml]
     )
@@ -651,6 +657,25 @@ def main():
             args.test_paths,
         ]
     )
+    roots_map = None
+    if manifest_style:
+        if roots_path is None or not roots_path.exists():
+            missing_path = roots_path or (Path("data") / "roots.json")
+            raise FileNotFoundError(
+                f"Roots mapping not found at {missing_path}. "
+                "Copy data/roots.example.json to data/roots.json or "
+                "pass --roots explicitly."
+            )
+        with open(roots_path) as f:
+            roots_map = json.load(f)
+    elif roots_path and roots_path.exists():
+        with open(roots_path) as f:
+            roots_map = json.load(f)
+    elif roots_path:
+        warnings.warn(
+            "Roots mapping path provided but file does not exist; continuing without it.",
+            RuntimeWarning,
+        )
     if manifest_style:
         manifest_path = _resolve_optional_manifest_path(args.manifest_yaml)
         train_csv = _resolve_optional_pack_path(args.train_csv)

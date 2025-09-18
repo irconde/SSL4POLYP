@@ -122,10 +122,16 @@ def get_args_parser():
     parser.add_argument('--nb_classes', default=1000, type=int,
                         help='number of the classification types')
 
-    parser.add_argument('--output_dir', default='out',
-                        help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='out/tb',
-                        help='path where to tensorboard log')
+    parser.add_argument(
+        '--output_dir',
+        default=str(Path('checkpoints') / 'mae' / 'finetune'),
+        help='path where to save, empty for no saving'
+    )
+    parser.add_argument(
+        '--log_dir',
+        default=str(Path('outputs') / 'mae' / 'finetune'),
+        help='path where to tensorboard log'
+    )
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)

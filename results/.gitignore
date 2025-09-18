@@ -1,0 +1,4 @@
+# Ignore evaluation exports and analysis artefacts.
+*
+!/README.md
+!/.gitignore

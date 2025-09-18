@@ -64,6 +64,20 @@ data_packs/
 └─ … dataset packs containing `manifest.yaml`, CSV splits and auxiliary files
 ```
 
+In addition, the repository seeds git-ignored directories that act as default
+targets for local assets:
+
+```
+data/
+checkpoints/
+outputs/
+results/
+```
+
+Each ships with a short README describing the expected sub-structure. Command
+line interfaces default to these folders for datasets, weights, logs and
+evaluation exports while still letting you override the destinations.
+
 Command-line interfaces resolve relative paths against these directories by
 default.  For example, providing `--manifest classification/hyperkvasir.yaml` to
 `train_classification.py` looks for the file at `config/classification/
@@ -88,18 +102,21 @@ Follow the guidance in this section for obtaining the weights for pretrained mod
   [MAE](https://github.com/facebookresearch/mae), use the helper script
   `ssl4polyp/models/mae/run_hyperkvasir_pretraining.py` to generate the checkpoint. You can
   override the default `--batch-size` and `--epochs` values and pass additional
-  options to `main_pretrain.py` via `--extra-args`. Example:
+  options to `main_pretrain.py` via `--extra-args`. By default the script writes
+  checkpoints to `checkpoints/mae/hyperkvasir_pretrain/` and TensorBoard logs to
+  `outputs/mae/hyperkvasir_pretrain/`, but both can be customised. Example:
 
 ```bash
 python -m ssl4polyp.models.mae.run_hyperkvasir_pretraining \
     --data-root /path/to/hyperkvasir-unlabelled \
-    --output-dir /path/to/save \
+    --output-dir checkpoints/mae/hyperkvasir_pretrain \
+    --log-dir outputs/mae/hyperkvasir_pretrain \
     --batch-size 64 --epochs 400
 ```
 
 ### Finetuning
 
-The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `Trained models/` if you wish to evaluate or make predictions with an already finetuned model.
+The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `checkpoints/` if you wish to evaluate or make predictions with an already finetuned model.
 
 Prior to running finetuning, download the required data and change directory:
 
@@ -183,8 +200,8 @@ to set the batch size for each run. Any additional options supported by
    roots:
      data_root: /data/hyperkvasir
    ```
-3. **Provide a roots mapping** (e.g. `config/roots.json`) so identifiers resolve
-   to absolute paths:
+3. **Provide a roots mapping** (e.g. `data/roots.json`) so identifiers resolve
+   to absolute paths. A template is provided at `data/roots.example.json`:
 
    ```json
    {
@@ -194,7 +211,7 @@ to set the batch size for each run. Any additional options supported by
 4. **Verify paths** with `scripts/check_paths.py`:
 
    ```bash
-   python scripts/check_paths.py train.csv roots.json
+   python scripts/check_paths.py train.csv data/roots.json
    ```
 5. **Launch training** with the manifest and roots mapping.  Paths that are not
    absolute are resolved against `config/` and `data_packs/` automatically:
@@ -202,18 +219,20 @@ to set the batch size for each run. Any additional options supported by
    ```bash
    python -m ssl4polyp.classification.train_classification \
        --manifest classification/exp.yaml \
-       --roots roots.json \
-       --output-dir runs/exp1
+       --roots data/roots.json \
+       --output-dir checkpoints/classification/exp1
    ```
 
    To execute a batch of manifests `exp1.yaml`..`exp5.yaml` use:
 
    ```bash
-   scripts/run_exps.sh MANIFEST_DIR roots.json runs/
+   scripts/run_exps.sh MANIFEST_DIR data/roots.json checkpoints/classification
    ```
 
    The training script snapshots the manifest files, roots mapping and
    environment details inside the chosen output directory for reproducibility.
+   Omitting the optional arguments uses the default `data/roots.json` mapping
+   and writes outputs under `checkpoints/classification/`.
    When `MANIFEST_DIR` or `roots.json` are provided as relative paths they are
    interpreted with respect to `config/`.
 
@@ -227,7 +246,7 @@ Please also note that, when using MAE, code from the [MAE](https://github.com/fa
 
 ### Evaluation
 
-Ensure that the weights for the desired model are located in `Trained models/` relative to your working directory. This will have been done automatically if finetuning was run. Additionally, download the required data and change directory accordingly.
+Ensure that the weights for the desired model are located in `checkpoints/` relative to your working directory (or pass `--checkpoint-dir` to override). This will have been done automatically if finetuning was run. Additionally, download the required data and change directory accordingly.
 
 For evaluating classification models pretrained in a self-supervised manner, run the following:
 ```

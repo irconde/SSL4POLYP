@@ -1,1 +1,24 @@
+# Experiment artefacts (allow documentation of layout)
 /checkpoints/*
+!/checkpoints/.gitignore
+!/checkpoints/README.md
+
+/data/*
+!/data/.gitignore
+!/data/README.md
+!/data/roots.example.json
+
+/outputs/*
+!/outputs/.gitignore
+!/outputs/README.md
+
+/results/*
+!/results/.gitignore
+!/results/README.md
+
+# Python cache and virtual environment files
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env/
