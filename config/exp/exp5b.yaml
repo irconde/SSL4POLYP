@@ -1,0 +1,13 @@
+defaults:
+  - base
+  - data/sun_test_perturbations
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+protocol:
+  init_from: canonical_sun_models
+  finetune: none
+  eval_split: test
+  perturbations:
+    policy: manifest_defined

@@ -1,0 +1,8 @@
+model:
+  key: ssl_colon
+  name: SSL-colon
+  arch: vit_b
+  pretraining: Hyperkvasir
+  checkpoint: checkpoints/pretrained/mae_hyperkvasir_vitb.pth
+  frozen: false
+  ss_framework: mae

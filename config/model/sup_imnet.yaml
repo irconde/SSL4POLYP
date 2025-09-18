@@ -1,0 +1,6 @@
+model:
+  key: sup_imnet
+  name: SUP-imnet
+  arch: vit_b
+  pretraining: ImageNet_class
+  frozen: false

@@ -1,0 +1,25 @@
+dataset:
+  name: sun_morphology
+  pack: sun_morphology
+  splits:
+    train: train
+    val: val
+    test: test
+  frames_per_case: 33
+  manifest: sun_morphology/manifest.yaml
+  assertions:
+    no_case_leakage: true
+    hash:
+      train: 58cf1ab768d1ac0943eabfbc5e1f15ef5e1eb7553e5847581e4fb2046004e5c7
+      val: 899e4a398731f30a3618e8aa0467a688c2baee185dccc9fd4171f4416c8ef9f8
+      test: 84951612405cae3f06c67d20aef75eb02fe2c2c004bd42e13248d47704fc3f36
+    morphology_counts:
+      train:
+        flat_cases: 24
+        polypoid_cases: 46
+      val:
+        flat_cases: 5
+        polypoid_cases: 10
+      test:
+        flat_cases: 5
+        polypoid_cases: 10

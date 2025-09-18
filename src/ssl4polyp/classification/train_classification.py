@@ -6,8 +6,11 @@ import random
 import subprocess
 from pathlib import Path
 import json
+import math
 
 import yaml
+
+from typing import Any, Dict
 
 import torch
 import torch.nn as nn
@@ -20,6 +23,11 @@ from ssl4polyp import utils
 from ssl4polyp.classification.data import create_classification_dataloaders
 from ssl4polyp.classification.metrics import performance
 from ssl4polyp.configs import data_packs_root
+from ssl4polyp.configs.layered import (
+    extract_dataset_config,
+    load_layered_config,
+    resolve_model_entries,
+)
 
 import numpy as np
 
@@ -39,6 +47,173 @@ def set_determinism(seed: int) -> None:
     torch.use_deterministic_algorithms(True, warn_only=True)
     print(f"Setting deterministic mode with seed {seed}")
 
+
+def create_scheduler(optimizer, args):
+    name = getattr(args, "scheduler", "none")
+    if name is None:
+        name = "none"
+    name = name.lower()
+    if name == "cosine":
+        total_epochs = args.epochs
+        warmup_epochs = getattr(args, "warmup_epochs", 0)
+
+        def lr_lambda(epoch: int) -> float:
+            if warmup_epochs > 0 and epoch < warmup_epochs:
+                return float(epoch + 1) / float(max(1, warmup_epochs))
+            progress = (epoch - warmup_epochs) / float(max(1, total_epochs - warmup_epochs))
+            progress = min(max(progress, 0.0), 1.0)
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
+
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    if name == "plateau":
+        min_lr = getattr(args, "min_lr", 1e-6)
+        patience = getattr(args, "scheduler_patience", 2)
+        factor = getattr(args, "scheduler_factor", 0.5)
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="max",
+            factor=factor,
+            patience=patience,
+            min_lr=min_lr,
+        )
+    return None
+
+
+def _select_model_config(models, desired_key: str | None):
+    if not models:
+        raise ValueError("Experiment configuration does not define any models")
+    if desired_key:
+        for model in models:
+            key = model.get("key") or model.get("name")
+            if key == desired_key or model.get("name") == desired_key:
+                return model
+        raise ValueError(
+            f"Model key '{desired_key}' not found in experiment configuration. Available: {[m.get('key') or m.get('name') for m in models]}"
+        )
+    if len(models) == 1:
+        return models[0]
+    raise ValueError(
+        "Experiment configuration defines multiple models; specify one with --model-key"
+    )
+
+
+def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
+    splits = dataset_cfg.get("splits", {})
+    train_split = splits.get("train", "train")
+    val_split = splits.get("val")
+    test_split = splits.get("test")
+
+    base_pack = dataset_cfg.get("pack")
+    train_pack = dataset_cfg.get("train_pack", base_pack)
+    val_pack = dataset_cfg.get("val_pack", dataset_cfg.get("base_pack", base_pack))
+    test_pack = dataset_cfg.get("test_pack", dataset_cfg.get("base_pack", base_pack))
+
+    if "train_pattern" in dataset_cfg:
+        percent = dataset_cfg.get("percent")
+        seed = dataset_cfg.get("seed")
+        if percent is None or seed is None:
+            raise ValueError(
+                "Dataset configuration requires 'percent' and 'seed' values to resolve train_pattern"
+            )
+        train_pack = dataset_cfg["train_pattern"].format(percent=percent, seed=seed)
+
+    if "pack_pattern" in dataset_cfg:
+        size = dataset_cfg.get("size")
+        seed = dataset_cfg.get("seed")
+        if size is None or seed is None:
+            raise ValueError(
+                "Dataset configuration requires 'size' and 'seed' values to resolve pack_pattern"
+            )
+        resolved_pack = dataset_cfg["pack_pattern"].format(size=size, seed=seed)
+        train_pack = dataset_cfg.get("train_pack", resolved_pack)
+        if test_pack is None:
+            test_pack = resolved_pack
+        dataset_cfg.setdefault("pack", resolved_pack)
+
+    return {
+        "train_pack": train_pack,
+        "val_pack": val_pack,
+        "test_pack": test_pack,
+        "train_split": train_split,
+        "val_split": val_split,
+        "test_split": test_split,
+    }
+
+
+def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
+    dataset_cfg = extract_dataset_config(experiment_cfg)
+    model_cfgs = resolve_model_entries(experiment_cfg.get("models", []))
+    selected_model = _select_model_config(model_cfgs, getattr(args, "model_key", None))
+
+    if "optimizer" in experiment_cfg and experiment_cfg["optimizer"].lower() != "adamw":
+        raise ValueError("Only AdamW optimizer is currently supported")
+
+    args.lr = experiment_cfg.get("lr", args.lr)
+    args.weight_decay = experiment_cfg.get("weight_decay", getattr(args, "weight_decay", 0.05))
+    args.batch_size = experiment_cfg.get("batch_size", args.batch_size)
+    args.epochs = experiment_cfg.get("epochs", args.epochs)
+    args.seed = experiment_cfg.get("seed", args.seed)
+    args.image_size = experiment_cfg.get("image_size", args.image_size)
+    args.workers = experiment_cfg.get("num_workers", args.workers)
+    args.prefetch_factor = experiment_cfg.get("prefetch_factor", args.prefetch_factor)
+    args.pin_memory = experiment_cfg.get("pin_memory", args.pin_memory)
+    args.persistent_workers = experiment_cfg.get("persistent_workers", args.persistent_workers)
+    args.log_interval = experiment_cfg.get("log_interval", args.log_interval)
+
+    scheduler_cfg = experiment_cfg.get("scheduler")
+    if isinstance(scheduler_cfg, str):
+        args.scheduler = scheduler_cfg
+        args.warmup_epochs = 0
+    elif isinstance(scheduler_cfg, dict):
+        args.scheduler = scheduler_cfg.get("name", getattr(args, "scheduler", "none"))
+        args.warmup_epochs = scheduler_cfg.get("warmup_epochs", getattr(args, "warmup_epochs", 0))
+        args.min_lr = scheduler_cfg.get("min_lr", getattr(args, "min_lr", 1e-6))
+        args.scheduler_patience = scheduler_cfg.get(
+            "patience", getattr(args, "scheduler_patience", 2)
+        )
+        args.scheduler_factor = scheduler_cfg.get(
+            "factor", getattr(args, "scheduler_factor", 0.5)
+        )
+
+    early_cfg = experiment_cfg.get("early_stop", {}) or {}
+    args.early_stop_monitor = early_cfg.get("monitor", getattr(args, "early_stop_monitor", "val_f1"))
+    args.early_stop_patience = early_cfg.get(
+        "patience", getattr(args, "early_stop_patience", 0)
+    )
+
+    args.threshold_policy = experiment_cfg.get(
+        "threshold_policy", getattr(args, "threshold_policy", None)
+    )
+
+    amp_enabled = experiment_cfg.get("amp")
+    if amp_enabled is not None:
+        args.precision = "amp" if amp_enabled else "fp32"
+
+    if "output_dir" in experiment_cfg:
+        args.output_dir = str(experiment_cfg["output_dir"])
+
+    args.arch = selected_model.get("arch", args.arch)
+    args.pretraining = selected_model.get("pretraining", args.pretraining)
+    args.ckpt = selected_model.get("checkpoint", args.ckpt)
+    args.frozen = selected_model.get("frozen", args.frozen)
+    args.ss_framework = selected_model.get("ss_framework", args.ss_framework)
+    args.dataset = dataset_cfg.get("name", args.dataset)
+
+    dataset_resolved = _resolve_dataset_specs(dataset_cfg)
+    args.train_pack = (
+        str(dataset_resolved["train_pack"]) if dataset_resolved["train_pack"] else None
+    )
+    args.val_pack = (
+        str(dataset_resolved["val_pack"]) if dataset_resolved["val_pack"] else None
+    )
+    args.test_pack = (
+        str(dataset_resolved["test_pack"]) if dataset_resolved["test_pack"] else None
+    )
+    args.train_split = dataset_resolved["train_split"] or args.train_split
+    args.val_split = dataset_resolved["val_split"] or args.val_split
+    args.test_split = dataset_resolved["test_split"] or args.test_split
+
+    return selected_model, dataset_cfg, dataset_resolved
 
 def train_epoch(
     model,
@@ -250,24 +425,29 @@ def build(args, rank):
         main_dict = torch.load(ckpt_path, map_location="cpu")
         model.load_state_dict(main_dict["model_state_dict"])
         start_epoch = main_dict["epoch"] + 1
-        prev_best_test = main_dict["val_perf"]
+        best_val_perf = main_dict.get("val_perf")
         random.setstate(main_dict["py_state"])
         np.random.set_state(main_dict["np_state"])
         torch.set_rng_state(main_dict["torch_state"])
     else:
         start_epoch = 1
-        prev_best_test = None
+        best_val_perf = None
         open(log_path, "w")
 
     model.cuda(rank)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model = DDP(model, device_ids=[rank])
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=getattr(args, "weight_decay", 0.0)
+    )
     use_amp = args.precision == "amp"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
-    if prev_best_test is not None:
+    scheduler = create_scheduler(optimizer, args)
+    if best_val_perf is not None:
         optimizer.load_state_dict(main_dict["optimizer_state_dict"])
         scaler.load_state_dict(main_dict["scaler_state_dict"])
+        if scheduler is not None and "scheduler_state_dict" in main_dict:
+            scheduler.load_state_dict(main_dict["scheduler_state_dict"])
 
     return (
         train_dataloader,
@@ -279,9 +459,10 @@ def build(args, rank):
         ckpt_path,
         log_path,
         start_epoch,
-        prev_best_test,
+        best_val_perf,
         class_weights,
         scaler,
+        scheduler,
     )
 
 
@@ -309,9 +490,10 @@ def train(rank, args):
         ckpt_path,
         log_path,
         start_epoch,
-        prev_best_test,
+        best_val_perf,
         class_weights,
         scaler,
+        scheduler,
     ) = build(args, rank)
     use_amp = args.precision == "amp"
 
@@ -326,25 +508,12 @@ def train(rank, args):
         writer = None
     dist.barrier()
 
-    if args.lrs:
-        val_perf_ = torch.tensor(0).cuda(rank)
-        if args.lrs_min > 0:
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, mode="max", factor=0.5, min_lr=args.lrs_min
-            )
-        else:
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, mode="max", factor=0.5
-            )
-        lr = optimizer.state_dict()["param_groups"][0]["lr"]
-        if prev_best_test is not None:
-            sched_dict = scheduler.state_dict()
-            sched_dict["best"] = prev_best_test
-            sched_dict["last_epoch"] = start_epoch - 1
-            sched_dict["_last_lr"] = [lr]
-            scheduler.load_state_dict(sched_dict)
-
     global_step = 0
+    no_improve_epochs = 0
+    scheduler_name = getattr(args, "scheduler", "none").lower()
+    early_patience = getattr(args, "early_stop_patience", 0) or 0
+    device = torch.device("cuda", rank)
+
     for epoch in range(start_epoch, args.epochs + 1):
         try:
             loss, global_step = train_epoch(
@@ -368,51 +537,63 @@ def train(rank, args):
                 val_perf = test(
                     model.module, rank, val_dataloader, epoch, perf_fn, log_path
                 )
-                if args.lrs:
-                    val_perf_ = torch.tensor(val_perf).cuda(rank)
                 test_perf = test(
                     model.module, rank, test_dataloader, epoch, perf_fn, log_path
                 )
+            else:
+                val_perf = 0.0
+                test_perf = 0.0
+
+            if scheduler is not None:
+                if scheduler_name == "plateau":
+                    metric_tensor = torch.tensor([val_perf if rank == 0 else 0.0], device=device)
+                    dist.broadcast(metric_tensor, src=0)
+                    scheduler.step(metric_tensor.item())
+                else:
+                    scheduler.step()
             dist.barrier()
         except KeyboardInterrupt:
             print("Training interrupted by user")
             sys.exit(0)
-        if args.lrs:
-            torch.distributed.broadcast(val_perf_, 0)
-            scheduler.step(val_perf_)
-            if rank == 0:
-                if lr != optimizer.state_dict()["param_groups"][0]["lr"]:
-                    lr = optimizer.state_dict()["param_groups"][0]["lr"]
-                    with open(log_path, "a") as f:
-                        printout = "Epoch    {}: reducing learning rate of group 0 to {}.".format(
-                            epoch, lr
-                        )
-                        print(printout)
-                        f.write(printout)
-                        f.write("\n")
-        if rank == 0:
 
-            if prev_best_test == None or val_perf > prev_best_test:
+        if rank == 0:
+            improved = best_val_perf is None or val_perf > best_val_perf
+            if improved:
                 print("Saving...")
                 with open(log_path, "a") as f:
                     f.write("Saving...")
                     f.write("\n")
-                torch.save(
-                    {
-                        "epoch": epoch,
-                        "model_state_dict": model.module.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "scaler_state_dict": scaler.state_dict(),
-                        "loss": loss,
-                        "val_perf": val_perf,
-                        "test_perf": test_perf,
-                        "py_state": random.getstate(),
-                        "np_state": np.random.get_state(),
-                        "torch_state": torch.get_rng_state(),
-                    },
-                    ckpt_path,
-                )
-                prev_best_test = val_perf
+                payload = {
+                    "epoch": epoch,
+                    "model_state_dict": model.module.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scaler_state_dict": scaler.state_dict(),
+                    "loss": loss,
+                    "val_perf": val_perf,
+                    "test_perf": test_perf,
+                    "py_state": random.getstate(),
+                    "np_state": np.random.get_state(),
+                    "torch_state": torch.get_rng_state(),
+                }
+                if scheduler is not None:
+                    payload["scheduler_state_dict"] = scheduler.state_dict()
+                torch.save(payload, ckpt_path)
+                best_val_perf = val_perf
+                no_improve_epochs = 0
+            else:
+                no_improve_epochs += 1
+
+        if early_patience > 0:
+            stop_tensor = torch.tensor(
+                [1 if (rank == 0 and no_improve_epochs >= early_patience) else 0],
+                device=device,
+            )
+            dist.broadcast(stop_tensor, src=0)
+            if stop_tensor.item():
+                if rank == 0:
+                    print("Early stopping triggered after reaching patience limit.")
+                break
+
         dist.barrier()
     if writer is not None:
         writer.close()
@@ -424,6 +605,18 @@ def get_args():
         description="Fine-tune pretrained model for classification"
     )
     parser.add_argument(
+        "--exp-config",
+        type=str,
+        dest="exp_config",
+        help="Experiment configuration reference (relative to configs/ or absolute path)",
+    )
+    parser.add_argument(
+        "--model-key",
+        type=str,
+        dest="model_key",
+        help="Model key to select when an experiment defines multiple models",
+    )
+    parser.add_argument(
         "--architecture",
         type=str,
         choices=["vit_b"],
@@ -433,17 +626,17 @@ def get_args():
     parser.add_argument(
         "--pretraining",
         type=str,
-        required=True,
+        default=None,
         choices=["Hyperkvasir", "ImageNet_class", "ImageNet_self", "random"],
     )
     parser.add_argument("--ss-framework", type=str, choices=["mae"])
-    parser.add_argument("--checkpoint", type=str, dest="ckpt")
+    parser.add_argument("--checkpoint", type=str, dest="ckpt", default=None)
     parser.add_argument("--frozen", action="store_true", default=False)
-    parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument(
         "--train-pack",
         type=str,
-        required=True,
+        default=None,
         help="Pack specification (name, directory or manifest) providing the training split",
     )
     parser.add_argument(
@@ -495,12 +688,20 @@ def get_args():
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr")
+    parser.add_argument("--weight-decay", type=float, default=0.05)
     parser.add_argument(
-        "--learning-rate-scheduler", action="store_true", default=False, dest="lrs"
+        "--scheduler",
+        type=str,
+        choices=["none", "cosine", "plateau"],
+        default="none",
     )
-    parser.add_argument(
-        "--learning-rate-scheduler-minimum", type=float, default=1e-6, dest="lrs_min"
-    )
+    parser.add_argument("--warmup-epochs", type=int, default=0)
+    parser.add_argument("--min-lr", type=float, default=1e-6)
+    parser.add_argument("--scheduler-patience", type=int, default=2)
+    parser.add_argument("--scheduler-factor", type=float, default=0.5)
+    parser.add_argument("--early-stop-monitor", type=str, default="val_f1")
+    parser.add_argument("--early-stop-patience", type=int, default=0)
+    parser.add_argument("--threshold-policy", type=str, default=None)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument(
@@ -545,6 +746,30 @@ def get_args():
 
 def main():
     args = get_args()
+    experiment_cfg = None
+    dataset_cfg = None
+    dataset_resolved = None
+    selected_model = None
+
+    if args.exp_config:
+        experiment_cfg = load_layered_config(args.exp_config)
+        selected_model, dataset_cfg, dataset_resolved = apply_experiment_config(args, experiment_cfg)
+
+    for required in ("pretraining", "dataset", "train_pack"):
+        if getattr(args, required) is None:
+            raise ValueError(
+                f"Missing required argument '{required}'. Provide it via --{required.replace('_', '-')} or the experiment config."
+            )
+
+    if not args.val_pack:
+        args.val_pack = args.train_pack
+    if not args.test_pack:
+        args.test_pack = args.val_pack
+
+    args.pack_root = str(Path(args.pack_root).expanduser()) if args.pack_root else str(data_packs_root())
+    args.perturbation_splits = [s.lower() for s in (args.perturbation_splits or [])]
+    args.scheduler = (args.scheduler or "none").lower()
+
     roots_path = Path(args.roots).expanduser()
     if not roots_path.exists():
         raise FileNotFoundError(
@@ -554,28 +779,40 @@ def main():
         roots_map = json.load(f)
     args.roots_map = roots_map
 
-    if not args.val_pack:
-        args.val_pack = args.train_pack
-    if not args.test_pack:
-        args.test_pack = args.val_pack
-
-    args.pack_root = str(Path(args.pack_root).expanduser()) if args.pack_root else str(data_packs_root())
-    args.perturbation_splits = [s.lower() for s in (args.perturbation_splits or [])]
-
     set_determinism(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(os.path.join(args.output_dir, "tb"), exist_ok=True)
-    config = vars(args).copy()
-    config.pop("roots_map", None)
+
+    def _serialize(value):
+        if isinstance(value, dict):
+            return {k: _serialize(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [_serialize(v) for v in value]
+        if isinstance(value, Path):
+            return str(value)
+        return value
+
+    run_config = {
+        "args": {k: _serialize(v) for k, v in vars(args).items() if k != "roots_map"},
+    }
+    if experiment_cfg is not None:
+        run_config["experiment"] = _serialize(experiment_cfg)
+    if dataset_cfg is not None and dataset_resolved is not None:
+        run_config["dataset"] = {
+            "configured": _serialize(dataset_cfg),
+            "resolved": _serialize(dataset_resolved),
+        }
+    if selected_model is not None:
+        run_config["model"] = _serialize(selected_model)
     try:
         commit = (
             subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
         )
     except Exception:
         commit = None
-    config["git_commit"] = commit
+    run_config["git_commit"] = commit
     with open(os.path.join(args.output_dir, "config.yaml"), "w") as f:
-        yaml.safe_dump(config, f)
+        yaml.safe_dump(run_config, f)
     args.world_size = torch.cuda.device_count()
     assert args.batch_size % args.world_size == 0
     mp.spawn(train, nprocs=args.world_size, args=(args,), join=True)

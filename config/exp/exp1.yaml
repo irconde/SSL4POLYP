@@ -1,0 +1,11 @@
+defaults:
+  - base
+  - data/sun_full
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+protocol:
+  finetune: full
+  eval_split: test
+  early_stop_split: val
+  thresholds: sun_val_youden

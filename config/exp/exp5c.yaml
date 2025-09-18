@@ -1,0 +1,18 @@
+defaults:
+  - base
+  - data/polypgen_fewshot
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+dataset:
+  size: 200
+  seed: 47
+protocol:
+  init_from: canonical_sun_models
+  finetune: head+2
+  lr: 5.0e-5
+  eval_split: test
+  thresholds:
+    primary: sun_val_youden
+    sensitivity: fewshot_val_youden

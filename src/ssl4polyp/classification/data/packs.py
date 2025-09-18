@@ -173,7 +173,7 @@ def _build_transforms(
             transforms_map[split] = overrides[split]
             continue
         stage = _normalise_stage(split)
-        enable_perturb = stage != "train" or split.lower() in perturbation_set
+        enable_perturb = split.lower() in perturbation_set if perturbation_set else False
         transforms_map[split] = ClassificationTransforms(
             stage=stage,
             image_size=image_size,

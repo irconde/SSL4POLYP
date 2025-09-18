@@ -1,0 +1,25 @@
+dataset:
+  name: sun_full
+  pack: sun_full
+  splits:
+    train: train
+    val: val
+    test: test
+  frames_per_case: 33
+  manifest: sun_full/manifest.yaml
+  assertions:
+    no_case_leakage: true
+    hash:
+      train: 1ddddab032549e0fd5207f2eca347dcfc4fa16c0531d92d7e95a37b726843006
+      val: 453e9ec4f95d373e5211119e7098750d74b585070ed25bdab127d9a3ad3cd704
+      test: 855d4a467e68b1cfbfb031e796d7c8a5ccb44a81f43542a5ffe7de016c5b5b97
+    cases_per_split:
+      train:
+        pos: 70
+        neg: 70
+      val:
+        pos: 15
+        neg: 15
+      test:
+        pos: 15
+        neg: 15

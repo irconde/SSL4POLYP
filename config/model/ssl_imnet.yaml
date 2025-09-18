@@ -1,0 +1,8 @@
+model:
+  key: ssl_imnet
+  name: SSL-imnet
+  arch: vit_b
+  pretraining: ImageNet_self
+  checkpoint: checkpoints/pretrained/mae_imagenet_vitb.pth
+  frozen: false
+  ss_framework: mae

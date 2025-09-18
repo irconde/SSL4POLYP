@@ -1,0 +1,14 @@
+dataset:
+  name: sun_test_perturbations
+  pack: sun_test_perturbations
+  splits:
+    test: test
+  manifest: sun_test_perturbations/manifest.yaml
+  perturbations:
+    master_seed: 47
+    policy: HMAC_SHA256
+  assertions:
+    hash:
+      test: 10e9d3e77a270d690ea2e0be9be8b0b5db114c79656dbfea1890cf12e35c9554
+    frames:
+      test: 15840

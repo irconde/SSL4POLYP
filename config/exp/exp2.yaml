@@ -1,0 +1,11 @@
+defaults:
+  - base
+  - data/sun_full
+models:
+  - model/ssl_imnet
+  - model/ssl_colon
+protocol:
+  finetune: full
+  eval_split: test
+  early_stop_split: val
+  comparison: domain_vs_generic

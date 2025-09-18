@@ -1,0 +1,15 @@
+defaults:
+  - base
+  - data/sun_subsets
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+dataset:
+  percent: 100
+  seed: 47
+protocol:
+  finetune: full
+  eval_split: test
+  subset_percents: [5, 10, 25, 50, 100]
+  subset_seeds: [13, 29, 47]

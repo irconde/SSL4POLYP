@@ -1,0 +1,11 @@
+defaults:
+  - base
+  - data/sun_morphology
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+protocol:
+  finetune: full
+  eval_split: test
+  morphology_eval: [flat, polypoid]

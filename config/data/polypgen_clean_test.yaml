@@ -1,0 +1,15 @@
+dataset:
+  name: polypgen_clean_test
+  pack: polypgen_clean_test
+  splits:
+    test: test
+  manifest: polypgen_clean_test/manifest.yaml
+  assertions:
+    hash:
+      test: ebd2b894b86b42480eeb1cd007a1abdfc0d052bb4d8ac4a58dfd07a472282b98
+    frames:
+      test: 1438
+    class_balance:
+      test:
+        pos: 1254
+        neg: 184
