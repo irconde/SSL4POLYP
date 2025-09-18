@@ -37,8 +37,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir",
-        required=True,
-        help="Directory to store checkpoints and logs",
+        default=os.path.join("checkpoints", "mae", "hyperkvasir_pretrain"),
+        help="Directory to store checkpoints",
     )
     parser.add_argument(
         "--batch-size",
@@ -56,6 +56,11 @@ def main() -> None:
         "--extra-args",
         default="",
         help="Additional arguments forwarded to main_pretrain.py",
+    )
+    parser.add_argument(
+        "--log-dir",
+        default=os.path.join("outputs", "mae", "hyperkvasir_pretrain"),
+        help="Directory to store TensorBoard logs",
     )
     parser.add_argument(
         "--auto-resume",
@@ -98,7 +103,7 @@ def main() -> None:
         "--output_dir",
         args.output_dir,
         "--log_dir",
-        os.path.join(args.output_dir, "tb"),
+        os.path.join(args.log_dir, "tb"),
         "--batch_size",
         str(args.batch_size),
         "--epochs",

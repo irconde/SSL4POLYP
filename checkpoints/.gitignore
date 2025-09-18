@@ -1,0 +1,4 @@
+# Ignore generated checkpoints and logs.
+*
+!/README.md
+!/.gitignore

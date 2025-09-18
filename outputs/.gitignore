@@ -1,0 +1,4 @@
+# Ignore experiment logs and intermediate artefacts.
+*
+!/README.md
+!/.gitignore

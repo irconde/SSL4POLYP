@@ -1,0 +1,5 @@
+# Ignore local datasets and manifest roots.
+*
+!/README.md
+!/.gitignore
+!/roots.example.json

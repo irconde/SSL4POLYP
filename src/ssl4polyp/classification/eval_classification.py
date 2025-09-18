@@ -2,6 +2,7 @@ import os
 import argparse
 import glob
 import csv
+from pathlib import Path
 
 from datetime import datetime
 
@@ -142,12 +143,25 @@ def build(args):
         model = utils.get_ImageNet_or_random_ViT(
             True, n_class, False, None, ImageNet_weights=False
         )
+    checkpoint_dir = Path(args.checkpoint_dir)
     if args.ss_framework:
-        ckpt_path = f"Trained models/{args.arch}-{args.pretraining}_{args.ss_framework}_init-frozen_{str(False)}-dataset_{args.dataset}.pth"
+        ckpt_name = (
+            f"{args.arch}-{args.pretraining}_{args.ss_framework}_"
+            f"init-frozen_{str(False)}-dataset_{args.dataset}.pth"
+        )
     else:
-        ckpt_path = f"Trained models/{args.arch}-{args.pretraining}_init-frozen_{str(False)}-dataset_{args.dataset}.pth"
+        ckpt_name = (
+            f"{args.arch}-{args.pretraining}_"
+            f"init-frozen_{str(False)}-dataset_{args.dataset}.pth"
+        )
+    ckpt_path = checkpoint_dir / ckpt_name
+    if not ckpt_path.exists():
+        raise FileNotFoundError(
+            f"Checkpoint not found at {ckpt_path}. "
+            "Adjust --checkpoint-dir or provide --checkpoint manually."
+        )
 
-    main_dict = torch.load(ckpt_path, map_location="cpu")
+    main_dict = torch.load(str(ckpt_path), map_location="cpu")
     model.load_state_dict(main_dict["model_state_dict"])
     model.to(device)
 
@@ -188,6 +202,12 @@ def get_args():
         choices=["Hyperkvasir_pathological", "Hyperkvasir_anatomical"],
     )
     parser.add_argument("--data-root", type=str, required=True, dest="root")
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default=str(Path("checkpoints")),
+        help="Directory containing fine-tuned classification checkpoints",
+    )
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument("--pin-memory", action="store_true", default=True)
