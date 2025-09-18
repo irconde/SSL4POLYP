@@ -1,0 +1,101 @@
+name: polypgen_fewshot_s100_seed47
+version: '0.0'
+policy:
+  unit_of_split: frame
+  selection: hmac_sha256(frame_id,47)
+  parent_pack: polypgen_clean_test_extended
+  target_train_size: 100
+  target_class_balance:
+    pos: 50
+    neg: 50
+  realized_train_size: 100
+  realized_train_counts:
+    pos: 50
+    neg: 50
+  balance_relaxed: false
+  neg_sampling:
+    strategy: pool_first_sequence_cap_single_pass
+    pool_first: true
+    max_frames_per_sequence: 5
+    sequence_level_disjointness: true
+    phase_counts:
+      base_pool: 50
+      sequence: 0
+    sequences_in_train: 0
+row_schema:
+  fields:
+  - name: dataset
+    type: string
+    desc: constant 'polypgen_clean'
+  - name: split
+    type: string
+    desc: train|test (frame-level)
+  - name: case_id
+    type: string
+  - name: frame_id
+    type: string
+  - name: frame_path
+    type: path
+  - name: label
+    type: int
+selection_keys:
+  train: hmac_sha256(frame_id,47)
+  test: complement of train within polypgen-clean-test-extended
+roots:
+  polypgen_clean: /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
+generator:
+  repo: polyp-db-analysis
+  git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
+  command: polypdb polypgen fewshot --pack /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/polypgen_clean_test_extended
+    --sizes 100 --seeds 47 --out /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/polypgen_fewshot
+  seed: 47
+generated_at: '2025-09-17T08:03:37.855804+00:00'
+hashes:
+  train: 1a563a0a4d7d5a6eff3d9f18c17a0b1b59b35e864e3af8cfc985ff77b94cfe41
+  test: 951c6cf99a36bcbb40326089679ee6100382fd032806ac9ab2fe574e41fd367c
+counts:
+  train:
+    frames: 100
+    pos: 50
+    neg: 50
+    pos_cases: 6
+    neg_cases: 5
+  test:
+    frames: 4528
+    pos: 1204
+    neg: 3324
+    pos_cases: 6
+    neg_cases: 7
+summary_by_split:
+- split: train
+  pos_cases: 6
+  neg_cases: 5
+  frames: 100
+  pos_frames: 50
+  neg_frames: 50
+  label_counts:
+    pos: 50
+    neg: 50
+- split: test
+  pos_cases: 6
+  neg_cases: 7
+  frames: 4528
+  pos_frames: 1204
+  neg_frames: 3324
+  label_counts:
+    pos: 1204
+    neg: 3324
+case_lengths:
+  28: 1
+  14: 1
+  15: 1
+  32: 1
+  9: 1
+  2: 1
+  240: 1
+  249: 1
+  421: 1
+  199: 1
+  170: 1
+  59: 1
+  3190: 1

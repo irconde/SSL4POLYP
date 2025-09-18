@@ -1,0 +1,187 @@
+name: sun_test_perturbations
+version: '0.0'
+generator:
+  repo: polyp-db-analysis
+  git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
+  command: polypdb sun perturbations --pack /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/sun_full
+    --out /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/sun_test_perturbations
+    --master-seed 47
+evaluation_runtime:
+  generate_perturbations_on_the_fly: true
+  rng_master_seed: 47
+  per_row_seed_rule: HMAC_SHA256(master_seed, f'{orig_frame_id}:{perturbation_id}')
+    -> uint32
+  occlusion_bbox_rule: seeded square bbox from per_row_seed
+policy:
+  unit_of_split: frame
+row_schema:
+  fields:
+  - name: dataset
+    type: string
+    desc: constant 'sun'
+  - name: split
+    type: string
+    desc: test (single logical split 'eval' in practice)
+  - name: case_id
+    type: string
+  - name: frame_id
+    type: string
+  - name: frame_path
+    type: path
+  - name: label
+    type: int
+  - name: orig_frame_id
+    type: string
+    desc: id of the clean source frame
+  - name: perturbation_id
+    type: string
+    enum:
+    - clean
+    - blur_sigma_0p5
+    - blur_sigma_1p0
+    - blur_sigma_1p5
+    - blur_sigma_2p0
+    - jpeg_q_95
+    - jpeg_q_75
+    - jpeg_q_50
+    - jpeg_q_30
+    - bc_b0p8_c0p8
+    - bc_b0p8_c0p6
+    - bc_b0p6_c0p8
+    - bc_b0p6_c0p6
+    - occ_a0p05
+    - occ_a0p10
+    - occ_a0p20
+  - name: rng_seed
+    type: uint32
+    desc: HMAC(master_seed, f'{orig_frame_id}:{perturbation_id}')
+  - name: render_in_pipeline
+    type: bool
+    desc: 'true'
+  - name: blur_sigma
+    type: float
+    nullable: true
+  - name: jpeg_q
+    type: int
+    nullable: true
+  - name: brightness
+    type: float
+    nullable: true
+  - name: contrast
+    type: float
+    nullable: true
+  - name: bbox_area_frac
+    type: float
+    nullable: true
+roots:
+  sun: /Users/irconde/Desktop/sssl-polyps/workspace/data/sun
+parent_pack:
+  name: sun_full
+  path: /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/sun_full
+perturbations:
+- id: clean
+  kind: clean
+- id: blur_sigma_0p5
+  kind: gaussian_blur
+  params:
+    sigma: 0.5
+- id: blur_sigma_1p0
+  kind: gaussian_blur
+  params:
+    sigma: 1.0
+- id: blur_sigma_1p5
+  kind: gaussian_blur
+  params:
+    sigma: 1.5
+- id: blur_sigma_2p0
+  kind: gaussian_blur
+  params:
+    sigma: 2.0
+- id: jpeg_q_95
+  kind: jpeg
+  params:
+    quality: 95
+- id: jpeg_q_75
+  kind: jpeg
+  params:
+    quality: 75
+- id: jpeg_q_50
+  kind: jpeg
+  params:
+    quality: 50
+- id: jpeg_q_30
+  kind: jpeg
+  params:
+    quality: 30
+- id: bc_b0p8_c0p8
+  kind: brightness_contrast
+  params:
+    brightness: 0.8
+    contrast: 0.8
+- id: bc_b0p8_c0p6
+  kind: brightness_contrast
+  params:
+    brightness: 0.8
+    contrast: 0.6
+- id: bc_b0p6_c0p8
+  kind: brightness_contrast
+  params:
+    brightness: 0.6
+    contrast: 0.8
+- id: bc_b0p6_c0p6
+  kind: brightness_contrast
+  params:
+    brightness: 0.6
+    contrast: 0.6
+- id: occ_a0p05
+  kind: occlusion_block
+  params:
+    area_frac: 0.05
+    mode: square
+- id: occ_a0p10
+  kind: occlusion_block
+  params:
+    area_frac: 0.1
+    mode: square
+- id: occ_a0p20
+  kind: occlusion_block
+  params:
+    area_frac: 0.2
+    mode: square
+assertions:
+  no_case_leakage_across_conditions: true
+  clean_condition_present: true
+  total_rows: 15840
+  per_condition_row_count: 990
+  conditions_len: 16
+  label_invariant_across_conditions: true
+  unique_key:
+  - orig_frame_id
+  - perturbation_id
+  base_clean_frames_match_parent_test: true
+  case_ids: []
+  parent_test_hash: 855d4a467e68b1cfbfb031e796d7c8a5ccb44a81f43542a5ffe7de016c5b5b97
+generated_at: '2025-09-17T08:03:06.780178+00:00'
+hashes:
+  test: 10e9d3e77a270d690ea2e0be9be8b0b5db114c79656dbfea1890cf12e35c9554
+counts:
+  test:
+    frames: 15840
+    pos: 7920
+    neg: 7920
+    pos_cases: 15
+    neg_cases: 15
+summary_by_split:
+- split: test
+  pos_cases: 15
+  neg_cases: 15
+  frames: 15840
+  pos_frames: 7920
+  neg_frames: 7920
+  label_counts:
+    pos: 7920
+    neg: 7920
+  flat_cases: 3
+  polypoid_cases: 12
+case_lengths:
+  528: 30

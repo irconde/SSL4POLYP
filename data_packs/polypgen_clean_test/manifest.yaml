@@ -1,0 +1,47 @@
+name: polypgen-clean-test
+version: '0.0'
+generator:
+  repo: polyp-db-analysis
+  git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
+  command: polypdb polypgen build --root /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
+    --out /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/polypgen_clean_test
+    --track clean
+policy:
+  unit_of_split: frame
+roots:
+  polypgen_clean: /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
+assertions:
+  class_presence:
+    pos: '>0'
+    neg: '>0'
+  label_counts:
+    pos: 1254
+    neg: 184
+  no_train_val_test_in_test_pack: true
+generated_at: '2025-09-17T08:03:34.727283+00:00'
+hashes:
+  test: ebd2b894b86b42480eeb1cd007a1abdfc0d052bb4d8ac4a58dfd07a472282b98
+counts:
+  test:
+    frames: 1438
+    pos: 1254
+    neg: 184
+    pos_cases: 6
+    neg_cases: 6
+summary_by_split:
+- split: test
+  pos_cases: 6
+  neg_cases: 6
+  frames: 1438
+  pos_frames: 1254
+  neg_frames: 184
+  label_counts:
+    pos: 1254
+    neg: 184
+case_lengths:
+  255: 1
+  263: 1
+  453: 1
+  227: 1
+  179: 1
+  61: 1

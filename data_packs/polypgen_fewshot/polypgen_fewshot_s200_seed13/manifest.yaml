@@ -1,0 +1,101 @@
+name: polypgen_fewshot_s200_seed13
+version: '0.0'
+policy:
+  unit_of_split: frame
+  selection: hmac_sha256(frame_id,13)
+  parent_pack: polypgen_clean_test_extended
+  target_train_size: 200
+  target_class_balance:
+    pos: 100
+    neg: 100
+  realized_train_size: 200
+  realized_train_counts:
+    pos: 100
+    neg: 100
+  balance_relaxed: false
+  neg_sampling:
+    strategy: pool_first_sequence_cap_single_pass
+    pool_first: true
+    max_frames_per_sequence: 5
+    sequence_level_disjointness: true
+    phase_counts:
+      base_pool: 100
+      sequence: 0
+    sequences_in_train: 0
+row_schema:
+  fields:
+  - name: dataset
+    type: string
+    desc: constant 'polypgen_clean'
+  - name: split
+    type: string
+    desc: train|test (frame-level)
+  - name: case_id
+    type: string
+  - name: frame_id
+    type: string
+  - name: frame_path
+    type: path
+  - name: label
+    type: int
+selection_keys:
+  train: hmac_sha256(frame_id,13)
+  test: complement of train within polypgen-clean-test-extended
+roots:
+  polypgen_clean: /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
+generator:
+  repo: polyp-db-analysis
+  git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
+  command: polypdb polypgen fewshot --pack /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/polypgen_clean_test_extended
+    --sizes 200 --seeds 13 --out /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/polypgen_fewshot
+  seed: 13
+generated_at: '2025-09-17T08:03:37.934351+00:00'
+hashes:
+  train: 5673def84c5f13110f9fadab278df1c04a7a395099f214381689d4ab4cf7b75d
+  test: 4993c843590267007ab899cb3131a543d129eecec028978ba8fc7ec81ffb040f
+counts:
+  train:
+    frames: 200
+    pos: 100
+    neg: 100
+    pos_cases: 6
+    neg_cases: 6
+  test:
+    frames: 4428
+    pos: 1154
+    neg: 3274
+    pos_cases: 6
+    neg_cases: 6
+summary_by_split:
+- split: train
+  pos_cases: 6
+  neg_cases: 6
+  frames: 200
+  pos_frames: 100
+  neg_frames: 100
+  label_counts:
+    pos: 100
+    neg: 100
+- split: test
+  pos_cases: 6
+  neg_cases: 6
+  frames: 4428
+  pos_frames: 1154
+  neg_frames: 3274
+  label_counts:
+    pos: 1154
+    neg: 3274
+case_lengths:
+  32: 1
+  65: 1
+  61: 1
+  10: 1
+  20: 1
+  12: 1
+  235: 1
+  231: 1
+  388: 1
+  166: 1
+  167: 1
+  51: 1
+  3190: 1
