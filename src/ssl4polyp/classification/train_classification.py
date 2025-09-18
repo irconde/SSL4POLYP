@@ -10,7 +10,7 @@ import math
 
 import yaml
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -176,7 +176,7 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
         )
 
     early_cfg = experiment_cfg.get("early_stop", {}) or {}
-    args.early_stop_monitor = early_cfg.get("monitor", getattr(args, "early_stop_monitor", "val_f1"))
+    args.early_stop_monitor = early_cfg.get("monitor", getattr(args, "early_stop_monitor", "val_auroc"))
     args.early_stop_patience = early_cfg.get(
         "patience", getattr(args, "early_stop_patience", 0)
     )
@@ -290,13 +290,25 @@ def train_epoch(
 
 
 @torch.no_grad()
-def test(model, rank, test_loader, epoch, perf_fn, log_path):
+def test(
+    model,
+    rank,
+    test_loader,
+    epoch,
+    perf_fn,
+    log_path,
+    metric_fns: Optional[Dict[str, Any]] = None,
+    split_name: str = "Test",
+    return_outputs: bool = False,
+):
     if test_loader is None:
         return float("nan")
     t = time.time()
     model.eval()
-    perf_accumulator = 0
+    metric_fns = metric_fns or {}
     N = 0
+    logits = None
+    targets = None
     for batch_idx, batch in enumerate(test_loader):
         if len(batch) == 3:
             data, target, _ = batch
@@ -306,33 +318,46 @@ def test(model, rank, test_loader, epoch, perf_fn, log_path):
             raise ValueError("Unexpected batch structure returned by dataloader")
         data, target = data.cuda(rank), target.cuda(rank)
         N += len(data)
-        output = model(data)
+        output = model(data).detach().cpu()
+        target_cpu = target.detach().cpu()
         if batch_idx == 0:
-            pred = torch.argmax(output, 1)
-            targ = target
+            logits = output
+            targets = target_cpu
         else:
-            pred = torch.cat((pred, torch.argmax(output, 1)), 0)
-            targ = torch.cat((targ, target), 0)
-        perf = perf_fn(pred, targ).item()
+            logits = torch.cat((logits, output), 0)
+            targets = torch.cat((targets, target_cpu), 0)
+
+        probs = torch.softmax(logits, dim=1)
+        primary_metric = perf_fn(probs, targets).item()
+        additional_metrics = {
+            name: fn(torch.argmax(probs, dim=1), targets).item()
+            for name, fn in metric_fns.items()
+        }
+        metrics_display = "\t".join(
+            [f"AUROC: {primary_metric:.6f}"]
+            + [f"{name.upper()}: {value:.6f}" for name, value in additional_metrics.items()]
+        )
         if batch_idx + 1 < len(test_loader):
             print(
-                "\rTest  Epoch: {} [{}/{} ({:.1f}%)]\tAverage performance: {:.6f}\tTime: {:.6f}".format(
+                "\r{}  Epoch: {} [{}/{} ({:.1f}%)]\t{}\tTime: {:.6f}".format(
+                    split_name,
                     epoch,
                     N,
                     len(test_loader.dataset),
                     100.0 * (batch_idx + 1) / len(test_loader),
-                    perf,
+                    metrics_display,
                     time.time() - t,
                 ),
                 end="",
             )
         else:
-            printout = "Test  Epoch: {} [{}/{} ({:.1f}%)]\tAverage performance: {:.6f}\tTime: {:.6f}".format(
+            printout = "{}  Epoch: {} [{}/{} ({:.1f}%)]\t{}\tTime: {:.6f}".format(
+                split_name,
                 epoch,
                 N,
                 len(test_loader.dataset),
                 100.0 * (batch_idx + 1) / len(test_loader),
-                perf,
+                metrics_display,
                 time.time() - t,
             )
 
@@ -340,7 +365,20 @@ def test(model, rank, test_loader, epoch, perf_fn, log_path):
             with open(log_path, "a") as f:
                 f.write(printout)
                 f.write("\n")
-    return perf
+    probs = torch.softmax(logits, dim=1)
+    results = {
+        "auroc": perf_fn(probs, targets).item(),
+    }
+    preds = torch.argmax(probs, dim=1)
+    for name, fn in metric_fns.items():
+        results[name] = fn(preds, targets).item()
+
+    if return_outputs:
+        results["logits"] = logits
+        results["probabilities"] = probs
+        results["targets"] = targets
+
+    return results
 
 
 def build(args, rank):
@@ -498,7 +536,12 @@ def train(rank, args):
     use_amp = args.precision == "amp"
 
     loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(class_weights).cuda(rank))
-    perf_fn = performance.meanF1Score(n_class=len(class_weights))
+    perf_fn = performance.meanAUROC(n_class=len(class_weights))
+    aux_metric_fns = {
+        "f1": performance.meanF1Score(n_class=len(class_weights)),
+        "precision": performance.meanPrecision(n_class=len(class_weights)),
+        "recall": performance.meanRecall(n_class=len(class_weights)),
+    }
     if rank == 0:
         writer = SummaryWriter(os.path.join(args.output_dir, "tb"))
         with open(log_path, "a") as f:
@@ -534,12 +577,37 @@ def train(rank, args):
                 args.seed,
             )
             if rank == 0:
-                val_perf = test(
-                    model.module, rank, val_dataloader, epoch, perf_fn, log_path
+                val_metrics = test(
+                    model.module,
+                    rank,
+                    val_dataloader,
+                    epoch,
+                    perf_fn,
+                    log_path,
+                    metric_fns=aux_metric_fns,
+                    split_name="Val",
                 )
-                test_perf = test(
-                    model.module, rank, test_dataloader, epoch, perf_fn, log_path
+                test_metrics = test(
+                    model.module,
+                    rank,
+                    test_dataloader,
+                    epoch,
+                    perf_fn,
+                    log_path,
+                    metric_fns=aux_metric_fns,
+                    split_name="Test",
                 )
+                val_perf = val_metrics["auroc"]
+                test_perf = test_metrics["auroc"]
+                if writer is not None:
+                    for name, value in val_metrics.items():
+                        if name in {"logits", "probabilities", "targets"}:
+                            continue
+                        writer.add_scalar(f"val/{name}", value, epoch)
+                    for name, value in test_metrics.items():
+                        if name in {"logits", "probabilities", "targets"}:
+                            continue
+                        writer.add_scalar(f"test/{name}", value, epoch)
             else:
                 val_perf = 0.0
                 test_perf = 0.0
@@ -570,7 +638,9 @@ def train(rank, args):
                     "scaler_state_dict": scaler.state_dict(),
                     "loss": loss,
                     "val_perf": val_perf,
+                    "val_auroc": val_perf,
                     "test_perf": test_perf,
+                    "test_auroc": test_perf,
                     "py_state": random.getstate(),
                     "np_state": np.random.get_state(),
                     "torch_state": torch.get_rng_state(),
@@ -699,7 +769,7 @@ def get_args():
     parser.add_argument("--min-lr", type=float, default=1e-6)
     parser.add_argument("--scheduler-patience", type=int, default=2)
     parser.add_argument("--scheduler-factor", type=float, default=0.5)
-    parser.add_argument("--early-stop-monitor", type=str, default="val_f1")
+    parser.add_argument("--early-stop-monitor", type=str, default="val_auroc")
     parser.add_argument("--early-stop-patience", type=int, default=0)
     parser.add_argument("--threshold-policy", type=str, default=None)
     parser.add_argument("--workers", type=int, default=8)
