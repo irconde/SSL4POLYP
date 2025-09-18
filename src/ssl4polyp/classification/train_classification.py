@@ -99,6 +99,168 @@ def _prepare_metric_export(
     return export
 
 
+def _sanitize_path_segment(raw: Any, *, default: str = "default") -> str:
+    """Return a filesystem-friendly representation of ``raw``."""
+
+    if raw is None:
+        return default
+    text = str(raw).strip()
+    if not text:
+        return default
+    text = text.strip("/ ")
+    if "/" in text:
+        text = text.split("/")[-1]
+    cleaned = re.sub(r"[^0-9A-Za-z._-]+", "_", text).strip("._-")
+    return cleaned.lower() if cleaned else default
+
+
+def _resolve_thresholds_subdir(args) -> str:
+    """Determine the sub-directory used to persist threshold metadata."""
+
+    dataset_layout = getattr(args, "dataset_layout", {}) or {}
+    val_pack = getattr(args, "val_pack", None)
+    if not val_pack:
+        resolved = getattr(args, "dataset_resolved", {}) or {}
+        val_pack = resolved.get("val_pack")
+    if not val_pack:
+        val_pack = getattr(args, "train_pack", None)
+    if val_pack:
+        segment = _sanitize_path_segment(val_pack)
+        if segment and segment != "default":
+            return segment
+
+    dataset_name = dataset_layout.get("name") or getattr(args, "dataset", None)
+    dataset_name = "sun" if dataset_name == "sun_full" else dataset_name
+    dataset_name = _sanitize_path_segment(dataset_name, default="dataset")
+    dataset_seed = dataset_layout.get("dataset_seed")
+    size = dataset_layout.get("size")
+    percent = dataset_layout.get("percent")
+
+    parts: list[str] = [dataset_name]
+    if dataset_name.startswith("polypgen_fewshot") and size:
+        parts.append(f"c{int(size)}")
+    elif dataset_name.startswith("sun_subsets") and percent:
+        parts.append(f"p{int(percent)}")
+    if dataset_seed is not None:
+        parts.append(f"s{int(dataset_seed)}")
+    if len(parts) == 1:
+        split = getattr(args, "val_split", None) or "val"
+        parts.append(_sanitize_path_segment(split, default="val"))
+    return "_".join(parts)
+
+
+def _compute_threshold_statistics(
+    logits: Optional[torch.Tensor], targets: Optional[torch.Tensor], tau: float
+) -> Dict[str, Optional[float]]:
+    """Compute confusion-derived metrics at threshold ``tau``."""
+
+    if logits is None or targets is None:
+        return {}
+    logits_cpu = logits.detach().cpu()
+    targets_cpu = targets.detach().cpu().to(dtype=torch.long)
+
+    if logits_cpu.ndim == 1:
+        scores = torch.sigmoid(logits_cpu)
+    elif logits_cpu.ndim == 2:
+        if logits_cpu.size(1) == 1:
+            scores = torch.sigmoid(logits_cpu.squeeze(1))
+        elif logits_cpu.size(1) == 2:
+            scores = torch.softmax(logits_cpu, dim=1)[:, 1]
+        else:
+            raise ValueError(
+                "Threshold computation is only supported for binary logits"
+            )
+    else:
+        raise ValueError(
+            "Threshold computation expects logits with 1 or 2 dimensions"
+        )
+
+    preds = (scores >= tau).to(dtype=torch.long)
+    targets_long = targets_cpu.to(dtype=torch.long)
+
+    tp = int(((preds == 1) & (targets_long == 1)).sum().item())
+    tn = int(((preds == 0) & (targets_long == 0)).sum().item())
+    fp = int(((preds == 1) & (targets_long == 0)).sum().item())
+    fn = int(((preds == 0) & (targets_long == 1)).sum().item())
+    total = tp + tn + fp + fn
+
+    def _safe_ratio(num: int, denom: int) -> Optional[float]:
+        if denom == 0:
+            return None
+        return float(num) / float(denom)
+
+    tpr = _safe_ratio(tp, tp + fn)
+    tnr = _safe_ratio(tn, tn + fp)
+
+    metrics: Dict[str, Optional[float]] = {
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "tpr": tpr,
+        "tnr": tnr,
+        "ppv": _safe_ratio(tp, tp + fp),
+        "npv": _safe_ratio(tn, tn + fn),
+        "accuracy": _safe_ratio(tp + tn, total),
+        "youden_j": None if tpr is None or tnr is None else tpr + tnr - 1.0,
+    }
+    return metrics
+
+
+def _build_threshold_payload(
+    args,
+    *,
+    threshold_key: Optional[str],
+    tau: float,
+    metrics_at_tau: Dict[str, Optional[float]],
+    val_metrics: Dict[str, float],
+    test_metrics: Dict[str, float],
+    val_perf: float,
+    test_perf: float,
+    model_tag: Optional[str] = None,
+    subdir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a structured payload capturing threshold metadata."""
+
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    val_pack = getattr(args, "val_pack", None)
+    if not val_pack:
+        resolved = getattr(args, "dataset_resolved", {}) or {}
+        val_pack = resolved.get("val_pack")
+    if not val_pack:
+        val_pack = getattr(args, "train_pack", None)
+
+    payload: Dict[str, Any] = {
+        "policy": getattr(args, "threshold_policy", None),
+        "selected_threshold": float(tau),
+        "split_used": getattr(args, "val_split", None) or "val",
+        "seed": int(getattr(args, "seed", 0)),
+        "metrics_at_threshold": metrics_at_tau,
+        "auc_val": float(val_perf),
+        "auc_test": float(test_perf),
+        "timestamp": timestamp,
+        "code_git_commit": getattr(args, "git_commit", None),
+        "data_pack": val_pack,
+        "notes": "",
+    }
+    if threshold_key:
+        payload["threshold_key"] = threshold_key
+    snapshot: Dict[str, Dict[str, float]] = {}
+    if val_metrics:
+        snapshot["val"] = val_metrics
+    if test_metrics:
+        snapshot["test"] = test_metrics
+    if snapshot:
+        payload["metrics_snapshot"] = snapshot
+    if threshold_key:
+        payload["thresholds"] = {threshold_key: float(tau)}
+    if model_tag:
+        payload["model_tag"] = model_tag
+    if subdir:
+        payload["directory"] = subdir
+    return payload
+
+
 _TOKEN_OVERRIDES = {
     "sun": "SUN",
     "sup": "SUP",
@@ -348,6 +510,7 @@ def _resolve_run_layout(
     metrics_path = output_dir / f"{stem}.metrics.json"
     tb_dir = output_dir / "tb" / stem
     return {
+        "base_dir": base_dir,
         "output_dir": output_dir,
         "stem": stem,
         "checkpoint_path": checkpoint_path,
@@ -355,6 +518,7 @@ def _resolve_run_layout(
         "metrics_path": metrics_path,
         "tb_dir": tb_dir,
         "dataset_layout": dataset_layout,
+        "model_tag": model_tag,
     }
 
 
@@ -1051,6 +1215,9 @@ def train(rank, args):
                     f.write("Saving...")
                     f.write("\n")
                 updated_thresholds = dict(thresholds_map)
+                threshold_file_relpath: Optional[str] = None
+                threshold_record: Optional[Dict[str, Any]] = None
+                thresholds_root_path: Optional[Path] = None
                 if (
                     compute_threshold
                     and threshold_key is not None
@@ -1067,9 +1234,47 @@ def train(rank, args):
                         )
                     else:
                         updated_thresholds[threshold_key] = tau
-                        tau_path = Path(ckpt_path).with_suffix(".thresholds.json")
-                        thresholds.save_thresholds(tau_path, updated_thresholds)
-                        print(f"Updated threshold {threshold_key} = {tau:.6f}")
+                        thresholds_root_path = Path(
+                            getattr(args, "thresholds_root", None)
+                            or (Path(args.output_dir).expanduser().parent / "thresholds")
+                        ).expanduser()
+                        subdir = _resolve_thresholds_subdir(args)
+                        model_tag = getattr(args, "model_tag", None)
+                        if not model_tag:
+                            stem = getattr(args, "run_stem", None)
+                            if not stem:
+                                stem = Path(ckpt_path).with_suffix("").name
+                            model_tag = stem.split("__", 1)[0] if "__" in stem else stem
+                        model_tag = _sanitize_path_segment(model_tag, default="model")
+                        threshold_dir = thresholds_root_path / subdir
+                        threshold_dir.mkdir(parents=True, exist_ok=True)
+                        threshold_file = threshold_dir / f"{model_tag}.json"
+                        metrics_at_tau = _compute_threshold_statistics(
+                            val_logits, val_targets, float(tau)
+                        )
+                        threshold_record = _build_threshold_payload(
+                            args,
+                            threshold_key=threshold_key,
+                            tau=float(tau),
+                            metrics_at_tau=metrics_at_tau,
+                            val_metrics=val_metrics_export,
+                            test_metrics=test_metrics_export,
+                            val_perf=val_perf,
+                            test_perf=test_perf,
+                            model_tag=model_tag,
+                            subdir=subdir,
+                        )
+                        with threshold_file.open("w", encoding="utf-8") as handle:
+                            json.dump(threshold_record, handle, indent=2)
+                        try:
+                            threshold_file_relpath = str(
+                                threshold_file.relative_to(thresholds_root_path.parent)
+                            )
+                        except ValueError:
+                            threshold_file_relpath = str(threshold_file)
+                        print(
+                            f"Updated threshold {threshold_key} = {tau:.6f} -> {threshold_file_relpath}"
+                        )
                 payload = {
                     "epoch": epoch,
                     "model_state_dict": model.module.state_dict(),
@@ -1088,6 +1293,16 @@ def train(rank, args):
                     payload["scheduler_state_dict"] = scheduler.state_dict()
                 if updated_thresholds:
                     payload["thresholds"] = updated_thresholds
+                if threshold_file_relpath:
+                    payload.setdefault("threshold_files", {})[
+                        threshold_key
+                    ] = threshold_file_relpath
+                    if threshold_record is not None:
+                        payload.setdefault("threshold_records", {})[
+                            threshold_key
+                        ] = threshold_record
+                if thresholds_root_path is not None:
+                    payload["thresholds_root"] = str(thresholds_root_path)
                 ckpt_pointer = Path(ckpt_path)
                 ckpt_stem = ckpt_pointer.with_suffix("")
                 selection_tag = _format_selection_tag(
@@ -1120,6 +1335,11 @@ def train(rank, args):
                     "val": val_metrics_export,
                     "test": test_metrics_export,
                 }
+                if threshold_file_relpath:
+                    metrics_payload["threshold_files"] = {
+                        threshold_key: threshold_file_relpath
+                    }
+                    metrics_payload["threshold_policy"] = args.threshold_policy
                 metrics_path = ckpt_stem.with_suffix(".metrics.json")
                 with open(metrics_path, "w") as f:
                     json.dump(metrics_payload, f, indent=2)
@@ -1359,6 +1579,11 @@ def main():
     args.output_dir = str(layout["output_dir"])
     args.tensorboard_dir = str(layout["tb_dir"])
     args.metrics_path = str(layout["metrics_path"])
+    args.dataset_layout = layout.get("dataset_layout")
+    args.dataset_resolved = dataset_resolved
+    args.model_tag = layout.get("model_tag")
+    thresholds_root = Path(layout.get("base_dir", "checkpoints")).expanduser()
+    args.thresholds_root = str(thresholds_root.parent / "thresholds")
 
     set_determinism(args.seed)
     output_dir = Path(args.output_dir)
@@ -1393,6 +1618,7 @@ def main():
     except Exception:
         commit = None
     run_config["git_commit"] = commit
+    args.git_commit = commit
     config_path = output_dir / "config.yaml"
     with open(config_path, "w") as f:
         yaml.safe_dump(run_config, f)
