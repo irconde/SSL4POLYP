@@ -9,6 +9,15 @@ import sys
 import yaml
 
 from .robustness.build_variants import build_sun_test_corruptions
+from ..configs import resolve_config_path, resolve_data_pack_path
+
+
+def _resolve_with_default(path: Path, resolver) -> Path:
+    """Resolve ``path`` relative to a repository directory when not absolute."""
+
+    if path.is_absolute() or path.exists():
+        return path
+    return resolver(path)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -27,17 +36,21 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.command == "sun" and args.sun_command == "corrupt":
-        with open(args.spec) as f:
+        pack_dir = _resolve_with_default(args.pack, resolve_data_pack_path)
+        spec_path = _resolve_with_default(args.spec, resolve_config_path)
+        roots_path = _resolve_with_default(args.roots, resolve_config_path)
+
+        with open(spec_path) as f:
             spec = yaml.safe_load(f)
-        with open(args.roots) as f:
+        with open(roots_path) as f:
             roots = json.load(f)
         # Verify that all paths referenced in the test CSV exist before processing
         check_script = Path(__file__).resolve().parents[1] / "scripts" / "check_paths.py"
-        test_csv = args.pack / "test.csv"
+        test_csv = pack_dir / "test.csv"
         subprocess.run(
-            [sys.executable, str(check_script), str(test_csv), str(args.roots)],
+            [sys.executable, str(check_script), str(test_csv), str(roots_path)],
             check=True,
         )
-        build_sun_test_corruptions(args.pack, spec, roots, args.out)
+        build_sun_test_corruptions(pack_dir, spec, roots, args.out)
     else:
         parser.print_help()

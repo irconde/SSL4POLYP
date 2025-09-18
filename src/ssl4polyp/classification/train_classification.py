@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 import warnings
 import json
+from typing import Optional
 
 import yaml
 
@@ -22,8 +23,13 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ssl4polyp import utils
 from ssl4polyp.classification.data import dataloaders
-from ssl4polyp.classification.manifests import load_pack
 from ssl4polyp.classification.metrics import performance
+from ssl4polyp.configs import data_packs_root
+from ssl4polyp.configs.manifests import (
+    load_pack,
+    resolve_manifest_path,
+    resolve_pack_asset,
+)
 
 
 def set_determinism(seed: int) -> None:
@@ -40,6 +46,28 @@ def set_determinism(seed: int) -> None:
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True, warn_only=True)
     print(f"Setting deterministic mode with seed {seed}")
+
+
+def _resolve_optional_pack_path(value: Optional[str]) -> Optional[Path]:
+    """Resolve ``value`` relative to the default data pack directory when needed."""
+
+    if value is None:
+        return None
+    candidate = Path(value)
+    if candidate.is_absolute() or candidate.exists():
+        return candidate
+    return resolve_pack_asset(value)
+
+
+def _resolve_optional_manifest_path(value: Optional[str]) -> Optional[Path]:
+    """Resolve manifest paths relative to the configuration directory when needed."""
+
+    if value is None:
+        return None
+    candidate = Path(value)
+    if candidate.is_absolute() or candidate.exists():
+        return candidate
+    return resolve_manifest_path(value)
 
 
 def train_epoch(
@@ -624,14 +652,17 @@ def main():
         ]
     )
     if manifest_style:
+        manifest_path = _resolve_optional_manifest_path(args.manifest_yaml)
+        train_csv = _resolve_optional_pack_path(args.train_csv)
+        val_csv = _resolve_optional_pack_path(args.val_csv)
+        test_csv = _resolve_optional_pack_path(args.test_csv)
         pack = load_pack(
-            train=Path(args.train_csv) if args.train_csv else None,
-            val=Path(args.val_csv) if args.val_csv else None,
-            test=Path(args.test_csv) if args.test_csv else None,
-            manifest_yaml=Path(args.manifest_yaml)
-            if args.manifest_yaml
-            else None,
+            train=train_csv,
+            val=val_csv,
+            test=test_csv,
+            manifest_yaml=manifest_path,
             roots_map=roots_map,
+            pack_root=data_packs_root(),
             snapshot_dir=Path(args.output_dir),
         )
         (

@@ -8,7 +8,7 @@ torch = pytest.importorskip("torch")
 import yaml
 
 from ssl4polyp.classification.eval_outputs import write_outputs
-from ssl4polyp.classification.manifests import load_pack
+from ssl4polyp.configs.manifests import load_pack
 
 
 def test_manifest_snapshot(tmp_path):
