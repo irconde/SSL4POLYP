@@ -2,34 +2,26 @@ import sys
 import os
 import argparse
 import time
-import numpy as np
-import glob
 import random
 import subprocess
 from pathlib import Path
-import warnings
 import json
-from typing import Optional
 
 import yaml
 
 import torch
 import torch.nn as nn
-import torchvision
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 
 from ssl4polyp import utils
-from ssl4polyp.classification.data import dataloaders
+from ssl4polyp.classification.data import create_classification_dataloaders
 from ssl4polyp.classification.metrics import performance
 from ssl4polyp.configs import data_packs_root
-from ssl4polyp.configs.manifests import (
-    load_pack,
-    resolve_manifest_path,
-    resolve_pack_asset,
-)
+
+import numpy as np
 
 
 def set_determinism(seed: int) -> None:
@@ -46,28 +38,6 @@ def set_determinism(seed: int) -> None:
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True, warn_only=True)
     print(f"Setting deterministic mode with seed {seed}")
-
-
-def _resolve_optional_pack_path(value: Optional[str]) -> Optional[Path]:
-    """Resolve ``value`` relative to the default data pack directory when needed."""
-
-    if value is None:
-        return None
-    candidate = Path(value)
-    if candidate.is_absolute() or candidate.exists():
-        return candidate
-    return resolve_pack_asset(value)
-
-
-def _resolve_optional_manifest_path(value: Optional[str]) -> Optional[Path]:
-    """Resolve manifest paths relative to the configuration directory when needed."""
-
-    if value is None:
-        return None
-    candidate = Path(value)
-    if candidate.is_absolute() or candidate.exists():
-        return candidate
-    return resolve_manifest_path(value)
 
 
 def train_epoch(
@@ -89,9 +59,14 @@ def train_epoch(
 ):
     t = time.time()
     model.train()
-    train_sampler.set_epoch(seed + epoch - 1)
+    if train_sampler is not None:
+        train_sampler.set_epoch(seed + epoch - 1)
     loss_accumulator = []
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, batch in enumerate(train_loader):
+        if len(batch) == 3:
+            data, target, _ = batch
+        else:
+            data, target = batch
         data, target = data.cuda(rank), target.cuda(rank)
         optimizer.zero_grad()
         with torch.cuda.amp.autocast(enabled=use_amp):
@@ -141,11 +116,19 @@ def train_epoch(
 
 @torch.no_grad()
 def test(model, rank, test_loader, epoch, perf_fn, log_path):
+    if test_loader is None:
+        return float("nan")
     t = time.time()
     model.eval()
     perf_accumulator = 0
     N = 0
-    for batch_idx, (data, target) in enumerate(test_loader):
+    for batch_idx, batch in enumerate(test_loader):
+        if len(batch) == 3:
+            data, target, _ = batch
+        elif len(batch) == 2:
+            raise ValueError("Test dataloader does not provide labels; enable metadata return with labels.")
+        else:  # pragma: no cover - defensive
+            raise ValueError("Unexpected batch structure returned by dataloader")
         data, target = data.cuda(rank), target.cuda(rank)
         N += len(data)
         output = model(data)
@@ -185,145 +168,63 @@ def test(model, rank, test_loader, epoch, perf_fn, log_path):
     return perf
 
 
-def build(
-    args,
-    rank,
-    train_paths=None,
-    train_labels=None,
-    train_meta=None,
-    val_paths=None,
-    val_labels=None,
-    val_meta=None,
-    test_paths=None,
-    test_labels=None,
-    test_meta=None,
-):
+def build(args, rank):
 
-    if (
-        (train_paths is not None or val_paths is not None or test_paths is not None)
-        and any(
-            getattr(args, name, None)
-            for name in [
-                "train_dir",
-                "val_dir",
-                "test_dir",
-                "train_paths",
-                "val_paths",
-                "test_paths",
-            ]
-        )
-    ):
-        warnings.warn(
-            "Both manifest-based and directory/path-based dataset arguments provided; using manifest-based data.",
-        )
+    pack_root = Path(args.pack_root).expanduser() if args.pack_root else None
+    val_spec = args.val_pack or args.train_pack
+    test_spec = args.test_pack or val_spec
 
-    if train_paths is not None and train_labels is not None:
-        train_labels = [int(l) for l in train_labels]
-        val_labels = [int(l) for l in val_labels] if val_labels is not None else None
-        test_labels = [int(l) for l in test_labels] if test_labels is not None else None
-        all_labels = train_labels + (val_labels or []) + (test_labels or [])
-        n_class = len(set(all_labels))
-        counts = np.bincount(train_labels, minlength=n_class)
-        N_total = len(train_labels)
-        class_weights = [1 / N * N_total / n_class if N > 0 else 0 for N in counts]
-        input_paths = None
-        targets = None
-    else:
-        simple_layout = args.simple or not os.path.exists(
-            os.path.join(args.root, "labeled-images")
-        )
-        if simple_layout:
-            class_dirs = sorted(glob.glob(os.path.join(args.root, "*/")))
-            class_id = 0
-            input_paths = []
-            targets = []
-            N_in_class = []
-            N_total = 0
-            for cd in class_dirs:
-                contents = sorted(glob.glob(cd + "*.jpg"))
-                cd_targets = [class_id for _ in range(len(contents))]
-                input_paths += contents
-                targets += cd_targets
-                class_id += 1
-                N_in_class.append(len(contents))
-                N_total += len(contents)
-            n_class = class_id
-            class_weights = [1 / N * N_total / n_class for N in N_in_class]
-        elif args.dataset.startswith("Hyperkvasir"):
-            if args.dataset.endswith("pathological"):
-                class_type = "pathological-findings/"
-            elif args.dataset.endswith("anatomical"):
-                class_type = "anatomical-landmarks/"
-            base_folders = sorted(glob.glob(args.root + "/labeled-images/*/"))
-            sub_folders = []
-            for bf in base_folders:
-                sub_folders += sorted(glob.glob(bf + "*/"))
-            subsub_folders = []
-            for sf in sub_folders:
-                if sf.endswith(class_type):
-                    subsub_folders += sorted(glob.glob(sf + "*/"))
-            class_id = 0
-            input_paths = []
-            targets = []
-            N_in_class = []
-            N_total = 0
-            for ssf in subsub_folders:
-                contents = sorted(glob.glob(ssf + "*.jpg"))
-                ssf_targets = [class_id for _ in range(len(contents))]
-                input_paths += contents
-                targets += ssf_targets
-                class_id += 1
-                N_in_class.append(len(contents))
-                N_total += len(contents)
-            n_class = class_id
-            class_weights = [1 / N * N_total / n_class for N in N_in_class]
-        train_paths = None
-        val_paths = None
-        test_paths = None
-        if args.train_dir:
-            train_paths = sorted(glob.glob(os.path.join(args.train_dir, "*.jpg")))
-        if args.val_dir:
-            val_paths = sorted(glob.glob(os.path.join(args.val_dir, "*.jpg")))
-        if args.test_dir:
-            test_paths = sorted(glob.glob(os.path.join(args.test_dir, "*.jpg")))
-        if args.train_paths is not None:
-            train_paths = args.train_paths
-        if args.val_paths is not None:
-            val_paths = args.val_paths
-        if args.test_paths is not None:
-            test_paths = args.test_paths
+    loaders, datasets, samplers = create_classification_dataloaders(
+        train_spec=args.train_pack,
+        val_spec=val_spec,
+        test_spec=test_spec,
+        train_split=args.train_split,
+        val_split=args.val_split,
+        test_split=args.test_split,
+        batch_size=args.batch_size // args.world_size,
+        num_workers=args.workers,
+        rank=rank,
+        world_size=args.world_size,
+        prefetch_factor=args.prefetch_factor,
+        pin_memory=args.pin_memory,
+        persistent_workers=args.persistent_workers,
+        pack_root=pack_root,
+        roots_map=args.roots_map,
+        image_size=args.image_size,
+        perturbation_splits=args.perturbation_splits,
+        hmac_key=args.perturbation_key.encode("utf-8"),
+        snapshot_dir=Path(args.output_dir) if rank == 0 else None,
+    )
+
+    train_dataloader = loaders.get("train")
+    if train_dataloader is None:
+        raise RuntimeError("Training dataloader could not be constructed; check --train-pack and --train-split inputs.")
+    val_dataloader = loaders.get("val")
+    test_dataloader = loaders.get("test")
+    if val_dataloader is None:
+        raise RuntimeError("Validation dataloader missing; specify --val-pack/--val-split.")
+    if test_dataloader is None:
+        raise RuntimeError("Test dataloader missing; specify --test-pack/--test-split.")
+    train_sampler = samplers.get("train")
+
+    train_dataset = datasets.get(args.train_split)
+    if train_dataset is None or train_dataset.labels_list is None:
+        raise ValueError("Training dataset does not provide labels; ensure the selected pack includes labels.")
+    train_labels = list(train_dataset.labels_list)
+    n_class = len(set(train_labels))
+    if n_class == 0:
+        raise ValueError("No classes found in training dataset.")
+    counts = np.bincount(train_labels, minlength=n_class)
+    N_total = len(train_labels)
+    class_weights = [
+        (N_total / (n_class * count)) if count > 0 else 0.0 for count in counts
+    ]
 
     # Override automatically computed class weights if provided by the user
     if args.class_weights is not None:
         class_weights = [float(w) for w in args.class_weights.split(",")]
-        assert len(class_weights) == n_class, "Number of class weights must match number of classes"
-
-    (
-        train_dataloader,
-        test_dataloader,
-        val_dataloader,
-        train_sampler,
-    ) = dataloaders.get_dataloaders(
-        rank,
-        args.world_size,
-        input_paths,
-        targets,
-        batch_size=args.batch_size // args.world_size,
-        workers=args.workers,
-        prefetch_factor=args.prefetch_factor,
-        pin_memory=args.pin_memory,
-        persistent_workers=args.persistent_workers,
-        seed=args.seed,
-        train_paths=train_paths,
-        train_labels=train_labels,
-        train_meta=train_meta,
-        val_paths=val_paths,
-        val_labels=val_labels,
-        val_meta=val_meta,
-        test_paths=test_paths,
-        test_labels=test_labels,
-        test_meta=test_meta,
-    )
+        if len(class_weights) != n_class:
+            raise ValueError("Number of class weights must match number of classes")
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
         assert os.path.exists(args.ckpt)
@@ -411,19 +312,7 @@ def train(rank, args):
         prev_best_test,
         class_weights,
         scaler,
-    ) = build(
-        args,
-        rank,
-        getattr(args, "train_paths", None),
-        getattr(args, "train_labels", None),
-        getattr(args, "train_meta", None),
-        getattr(args, "val_paths", None),
-        getattr(args, "val_labels", None),
-        getattr(args, "val_meta", None),
-        getattr(args, "test_paths", None),
-        getattr(args, "test_labels", None),
-        getattr(args, "test_meta", None),
-    )
+    ) = build(args, rank)
     use_amp = args.precision == "amp"
 
     loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(class_weights).cuda(rank))
@@ -550,60 +439,53 @@ def get_args():
     parser.add_argument("--ss-framework", type=str, choices=["mae"])
     parser.add_argument("--checkpoint", type=str, dest="ckpt")
     parser.add_argument("--frozen", action="store_true", default=False)
+    parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument(
-        "--dataset",
+        "--train-pack",
         type=str,
         required=True,
+        help="Pack specification (name, directory or manifest) providing the training split",
     )
     parser.add_argument(
-        "--simple-dataset",
-        action="store_true",
-        default=False,
-        dest="simple",
-        help="assume data_root/class_x/*.jpg structure; inferred if 'labeled-images' missing",
-    )
-    parser.add_argument("--data-root", type=str, required=True, dest="root")
-    parser.add_argument(
-        "--train-dir",
+        "--val-pack",
         type=str,
-        help="(deprecated) directory for training images",
+        default=None,
+        help="Pack specification for validation split (defaults to --train-pack)",
     )
     parser.add_argument(
-        "--val-dir", type=str, help="(deprecated) directory for validation images"
+        "--test-pack",
+        type=str,
+        default=None,
+        help="Pack specification for test split (defaults to --val-pack)",
     )
+    parser.add_argument("--train-split", type=str, default="train")
+    parser.add_argument("--val-split", type=str, default="val")
+    parser.add_argument("--test-split", type=str, default="test")
     parser.add_argument(
-        "--test-dir", type=str, help="(deprecated) directory for test images"
-    )
-    parser.add_argument(
-        "--train-paths", nargs="*", help="(deprecated) explicit training image paths"
-    )
-    parser.add_argument(
-        "--val-paths", nargs="*", help="(deprecated) explicit validation image paths"
-    )
-    parser.add_argument(
-        "--test-paths", nargs="*", help="(deprecated) explicit test image paths"
-    )
-    parser.add_argument(
-        "--train-csv", type=str, dest="train_csv", help="CSV manifest for training split"
-    )
-    parser.add_argument(
-        "--val-csv", type=str, dest="val_csv", help="CSV manifest for validation split"
-    )
-    parser.add_argument(
-        "--test-csv", type=str, dest="test_csv", help="CSV manifest for test split"
-    )
-    parser.add_argument(
-        "--manifest", type=str, dest="manifest_yaml", help="YAML manifest describing dataset pack"
+        "--pack-root",
+        type=str,
+        default=str(data_packs_root()),
+        help="Base directory containing data packs (defaults to repository data_packs/)",
     )
     parser.add_argument(
         "--roots",
         type=str,
         default=str(Path("data") / "roots.json"),
-        help=(
-            "JSON file mapping manifest root identifiers to directories. "
-            "Defaults to data/roots.json"
-        ),
+        help=("JSON file mapping manifest root identifiers to directories. Defaults to data/roots.json"),
     )
+    parser.add_argument(
+        "--perturbation-key",
+        type=str,
+        default="ssl4polyp",
+        help="HMAC key used for deterministic per-row perturbations",
+    )
+    parser.add_argument(
+        "--perturbation-splits",
+        nargs="*",
+        default=["test"],
+        help="Splits (case-insensitive) where on-the-fly perturbations should be enabled",
+    )
+    parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument(
         "--class-weights",
         type=str,
@@ -622,10 +504,30 @@ def get_args():
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument(
-        "--pin-memory", action="store_true", default=True
+        "--pin-memory",
+        dest="pin_memory",
+        action="store_true",
+        default=True,
+        help="Enable pinned memory when loading batches",
     )
     parser.add_argument(
-        "--persistent-workers", action="store_true", default=True
+        "--no-pin-memory",
+        dest="pin_memory",
+        action="store_false",
+        help="Disable pinned memory when loading batches",
+    )
+    parser.add_argument(
+        "--persistent-workers",
+        dest="persistent_workers",
+        action="store_true",
+        default=True,
+        help="Keep dataloader workers alive between epochs",
+    )
+    parser.add_argument(
+        "--no-persistent-workers",
+        dest="persistent_workers",
+        action="store_false",
+        help="Shut down dataloader workers at the end of each epoch",
     )
     parser.add_argument("--precision", choices=["amp", "fp32"], default="amp")
     parser.add_argument("--log-interval", type=int, default=10)
@@ -643,81 +545,28 @@ def get_args():
 
 def main():
     args = get_args()
-    roots_path = Path(args.roots) if args.roots else None
-    manifest_style = any(
-        [args.train_csv, args.val_csv, args.test_csv, args.manifest_yaml]
-    )
-    old_style = any(
-        [
-            args.train_dir,
-            args.val_dir,
-            args.test_dir,
-            args.train_paths,
-            args.val_paths,
-            args.test_paths,
-        ]
-    )
-    roots_map = None
-    if manifest_style:
-        if roots_path is None or not roots_path.exists():
-            missing_path = roots_path or (Path("data") / "roots.json")
-            raise FileNotFoundError(
-                f"Roots mapping not found at {missing_path}. "
-                "Copy data/roots.example.json to data/roots.json or "
-                "pass --roots explicitly."
-            )
-        with open(roots_path) as f:
-            roots_map = json.load(f)
-    elif roots_path and roots_path.exists():
-        with open(roots_path) as f:
-            roots_map = json.load(f)
-    elif roots_path:
-        warnings.warn(
-            "Roots mapping path provided but file does not exist; continuing without it.",
-            RuntimeWarning,
+    roots_path = Path(args.roots).expanduser()
+    if not roots_path.exists():
+        raise FileNotFoundError(
+            f"Roots mapping not found at {roots_path}. Copy data/roots.example.json to data/roots.json or provide --roots explicitly."
         )
-    if manifest_style:
-        manifest_path = _resolve_optional_manifest_path(args.manifest_yaml)
-        train_csv = _resolve_optional_pack_path(args.train_csv)
-        val_csv = _resolve_optional_pack_path(args.val_csv)
-        test_csv = _resolve_optional_pack_path(args.test_csv)
-        pack = load_pack(
-            train=train_csv,
-            val=val_csv,
-            test=test_csv,
-            manifest_yaml=manifest_path,
-            roots_map=roots_map,
-            pack_root=data_packs_root(),
-            snapshot_dir=Path(args.output_dir),
-        )
-        (
-            args.train_paths,
-            args.train_labels,
-            args.train_meta,
-        ) = pack.get("train", (None, None, None))
-        (
-            args.val_paths,
-            args.val_labels,
-            args.val_meta,
-        ) = pack.get("val", (None, None, None))
-        (
-            args.test_paths,
-            args.test_labels,
-            args.test_meta,
-        ) = pack.get("test", (None, None, None))
-        if old_style:
-            warnings.warn(
-                "Both manifest-based and directory/path-based dataset arguments provided; using manifest-based data and ignoring others."
-            )
-    elif old_style:
-        warnings.warn(
-            "Directory/path-based dataset flags are deprecated; use manifest-based flags instead.",
-            FutureWarning,
-        )
+    with open(roots_path) as f:
+        roots_map = json.load(f)
+    args.roots_map = roots_map
+
+    if not args.val_pack:
+        args.val_pack = args.train_pack
+    if not args.test_pack:
+        args.test_pack = args.val_pack
+
+    args.pack_root = str(Path(args.pack_root).expanduser()) if args.pack_root else str(data_packs_root())
+    args.perturbation_splits = [s.lower() for s in (args.perturbation_splits or [])]
+
     set_determinism(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(os.path.join(args.output_dir, "tb"), exist_ok=True)
     config = vars(args).copy()
+    config.pop("roots_map", None)
     try:
         commit = (
             subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
@@ -734,4 +583,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
