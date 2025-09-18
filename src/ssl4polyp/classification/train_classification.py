@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ssl4polyp import utils
 from ssl4polyp.classification.data import create_classification_dataloaders
-from ssl4polyp.classification.metrics import performance
+from ssl4polyp.classification.metrics import performance, thresholds
 from ssl4polyp.configs import data_packs_root
 from ssl4polyp.configs.layered import (
     extract_dataset_config,
@@ -459,6 +459,7 @@ def build(args, rank):
     ckpt_path = os.path.join(args.output_dir, base_name + ".pth")
     log_path = os.path.join(args.output_dir, base_name + ".txt")
 
+    thresholds_map = {}
     if os.path.exists(ckpt_path):
         main_dict = torch.load(ckpt_path, map_location="cpu")
         model.load_state_dict(main_dict["model_state_dict"])
@@ -467,10 +468,12 @@ def build(args, rank):
         random.setstate(main_dict["py_state"])
         np.random.set_state(main_dict["np_state"])
         torch.set_rng_state(main_dict["torch_state"])
+        thresholds_map = dict(main_dict.get("thresholds", {}) or {})
     else:
         start_epoch = 1
         best_val_perf = None
         open(log_path, "w")
+        thresholds_map = {}
 
     model.cuda(rank)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -479,6 +482,37 @@ def build(args, rank):
         model.parameters(), lr=args.lr, weight_decay=getattr(args, "weight_decay", 0.0)
     )
     use_amp = args.precision == "amp"
+    thresholds_map = dict(thresholds_map)
+    raw_policy = (args.threshold_policy or "auto").strip().lower()
+    if raw_policy not in {"auto", "youden", "none", ""}:
+        raise ValueError(
+            f"Unsupported threshold policy '{raw_policy}'. Use 'auto', 'youden' or 'none'."
+        )
+    resolved_policy = raw_policy
+    if resolved_policy in {"", "auto"}:
+        resolved_policy = "youden" if len(class_weights) == 2 else "none"
+        if rank == 0:
+            if resolved_policy == "youden":
+                print("Auto-selecting Youden's J threshold policy for binary classification.")
+            else:
+                print(
+                    "Threshold policy resolved to 'none' because the task is not binary."
+                )
+    if resolved_policy == "youden" and len(class_weights) != 2:
+        if rank == 0:
+            print(
+                "Warning: Youden threshold policy requested but dataset is not binary; disabling threshold computation."
+            )
+        resolved_policy = "none"
+    compute_threshold = resolved_policy == "youden"
+    threshold_key = None
+    if compute_threshold:
+        dataset_name = args.dataset or "dataset"
+        val_split = args.val_split or "val"
+        threshold_key = thresholds.format_threshold_key(
+            dataset_name, val_split, resolved_policy
+        )
+    args.threshold_policy = resolved_policy
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     scheduler = create_scheduler(optimizer, args)
     if best_val_perf is not None:
@@ -501,6 +535,9 @@ def build(args, rank):
         class_weights,
         scaler,
         scheduler,
+        thresholds_map,
+        compute_threshold,
+        threshold_key,
     )
 
 
@@ -532,6 +569,9 @@ def train(rank, args):
         class_weights,
         scaler,
         scheduler,
+        thresholds_map,
+        compute_threshold,
+        threshold_key,
     ) = build(args, rank)
     use_amp = args.precision == "amp"
 
@@ -586,6 +626,7 @@ def train(rank, args):
                     log_path,
                     metric_fns=aux_metric_fns,
                     split_name="Val",
+                    return_outputs=compute_threshold,
                 )
                 test_metrics = test(
                     model.module,
@@ -597,6 +638,9 @@ def train(rank, args):
                     metric_fns=aux_metric_fns,
                     split_name="Test",
                 )
+                val_logits = val_metrics.pop("logits", None)
+                val_metrics.pop("probabilities", None)
+                val_targets = val_metrics.pop("targets", None)
                 val_perf = val_metrics["auroc"]
                 test_perf = test_metrics["auroc"]
                 if writer is not None:
@@ -631,6 +675,26 @@ def train(rank, args):
                 with open(log_path, "a") as f:
                     f.write("Saving...")
                     f.write("\n")
+                updated_thresholds = dict(thresholds_map)
+                if (
+                    compute_threshold
+                    and threshold_key is not None
+                    and val_logits is not None
+                    and val_targets is not None
+                ):
+                    try:
+                        tau = thresholds.compute_youden_j_threshold(
+                            val_logits, val_targets
+                        )
+                    except ValueError as exc:
+                        print(
+                            f"Warning: unable to compute threshold '{threshold_key}': {exc}"
+                        )
+                    else:
+                        updated_thresholds[threshold_key] = tau
+                        tau_path = Path(ckpt_path).with_suffix(".thresholds.json")
+                        thresholds.save_thresholds(tau_path, updated_thresholds)
+                        print(f"Updated threshold {threshold_key} = {tau:.6f}")
                 payload = {
                     "epoch": epoch,
                     "model_state_dict": model.module.state_dict(),
@@ -647,8 +711,11 @@ def train(rank, args):
                 }
                 if scheduler is not None:
                     payload["scheduler_state_dict"] = scheduler.state_dict()
+                if updated_thresholds:
+                    payload["thresholds"] = updated_thresholds
                 torch.save(payload, ckpt_path)
                 best_val_perf = val_perf
+                thresholds_map = updated_thresholds
                 no_improve_epochs = 0
             else:
                 no_improve_epochs += 1
@@ -771,7 +838,13 @@ def get_args():
     parser.add_argument("--scheduler-factor", type=float, default=0.5)
     parser.add_argument("--early-stop-monitor", type=str, default="val_auroc")
     parser.add_argument("--early-stop-patience", type=int, default=0)
-    parser.add_argument("--threshold-policy", type=str, default=None)
+    parser.add_argument(
+        "--threshold-policy",
+        type=str,
+        default="auto",
+        choices=["auto", "youden", "none"],
+        help="Threshold policy to apply when tracking the best checkpoint (default: auto)",
+    )
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument(
