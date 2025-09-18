@@ -3,7 +3,10 @@
 This module provides helpers for reading CSV split files, verifying their
 integrity with SHA256 hashes declared in a manifest YAML, resolving the
 filesystem paths for the listed frames, and a convenience ``load_pack``
-function that loads one or more splits at once.
+function that loads one or more splits at once.  Dataset packs are, by
+default, resolved relative to the repository-level ``data_packs/`` directory
+so that manifests and split CSVs can be colocated with other configuration
+artifacts.
 """
 
 from __future__ import annotations
@@ -21,6 +24,8 @@ from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tupl
 import torch
 import yaml
 
+from . import data_packs_root, resolve_config_path, resolve_data_pack_path
+
 # Type aliases for clarity
 Row = MutableMapping[str, str]
 Paths = List[Path]
@@ -29,6 +34,22 @@ Meta = List[Row]
 SplitReturn = Tuple[Paths, Labels, Meta]
 
 REQUIRED_COLUMNS = {"frame_path", "label"}
+
+
+def resolve_manifest_path(manifest: Optional[str | Path]) -> Optional[Path]:
+    """Resolve ``manifest`` relative to the default configuration directory."""
+
+    if manifest is None:
+        return None
+    return resolve_config_path(manifest)
+
+
+def resolve_pack_asset(path: Optional[str | Path]) -> Optional[Path]:
+    """Resolve ``path`` relative to the default data pack directory."""
+
+    if path is None:
+        return None
+    return resolve_data_pack_path(path)
 
 
 def load_split(csv_path: Path) -> Meta:
@@ -141,13 +162,17 @@ def load_pack(
     eval: Optional[Path] = None,
     manifest_yaml: Optional[Path] = None,
     roots_map: Optional[Mapping[str, str]] = None,
+    pack_root: Optional[Path] = None,
     snapshot_dir: Optional[Path] = None,
 ) -> Dict[str, SplitReturn]:
     """Load dataset splits described by CSV manifest files.
 
     The function returns a mapping of split name to ``(paths, labels, meta)``.
     If ``manifest_yaml`` is provided, missing split paths are inferred from it
-    and SHA256 hashes are verified when available.
+    and SHA256 hashes are verified when available.  Relative CSV paths are
+    resolved first against the manifest location (when available) and then
+    against ``pack_root`` which defaults to the repository ``data_packs``
+    directory.
 
     When ``snapshot_dir`` is provided, the function will copy any parsed CSV
     files and ``manifest.yaml`` into ``snapshot_dir/manifest_snapshot`` and
@@ -163,6 +188,10 @@ def load_pack(
     }
 
     manifest: Optional[Mapping[str, object]] = None
+    if manifest_yaml is not None and not isinstance(manifest_yaml, Path):
+        manifest_yaml = Path(manifest_yaml)
+    pack_root = pack_root or data_packs_root()
+    manifest_parent: Optional[Path] = None
     if manifest_yaml is not None:
         with open(manifest_yaml, "r") as f:
             manifest = yaml.safe_load(f) or {}
@@ -176,16 +205,37 @@ def load_pack(
                 if csv_entry is not None:
                     csv_path = Path(csv_entry)
                     if not csv_path.is_absolute():
-                        csv_path = Path(manifest_yaml).parent / csv_path
+                        if manifest_parent is None:
+                            manifest_parent = Path(manifest_yaml).parent
+                        csv_path = manifest_parent / csv_path
                     splits[name] = csv_path
         if roots_map is None and isinstance(manifest, Mapping):
             roots_map = manifest.get("roots")  # type: ignore[assignment]
+
+    if manifest_parent is None and manifest_yaml is not None:
+        manifest_parent = Path(manifest_yaml).parent
+
+    def _resolve_csv_path(path: Path) -> Path:
+        if path.is_absolute():
+            return path
+        candidates: List[Path] = []
+        if manifest_parent is not None:
+            candidates.append(manifest_parent / path)
+        if pack_root is not None:
+            candidates.append(pack_root / path)
+        candidates.append(Path.cwd() / path)
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
 
     result: Dict[str, SplitReturn] = {}
     used_csvs: List[Path] = []
     for name, csv_path in splits.items():
         if csv_path is None:
             continue
+        csv_path = Path(csv_path)
+        csv_path = _resolve_csv_path(csv_path)
         verify_hash(csv_path, manifest_yaml)
         rows = load_split(csv_path)
         paths = resolve_paths(rows, roots_map)

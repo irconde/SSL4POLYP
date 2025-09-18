@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+CONFIG_ROOT=$(python - <<'PY'
+from ssl4polyp.configs import config_root
+print(config_root())
+PY
+)
+
 # Run experiments Exp-1..Exp-5 using manifests and a roots mapping.
 # Usage: scripts/run_exps.sh MANIFEST_DIR ROOTS_JSON OUT_BASE
 # MANIFEST_DIR: Directory containing manifest YAML files exp1.yaml..exp5.yaml
@@ -13,7 +19,13 @@ if [[ $# -ne 3 ]]; then
 fi
 
 MANIFEST_DIR="$1"
+if [[ "$MANIFEST_DIR" != /* && ! -e "$MANIFEST_DIR" ]]; then
+  MANIFEST_DIR="${CONFIG_ROOT}/${MANIFEST_DIR}"
+fi
 ROOTS_JSON="$2"
+if [[ "$ROOTS_JSON" != /* && ! -e "$ROOTS_JSON" ]]; then
+  ROOTS_JSON="${CONFIG_ROOT}/${ROOTS_JSON}"
+fi
 OUT_BASE="$3"
 
 CSV="joblist.csv"

@@ -52,6 +52,27 @@ finetuning:
   `ssl4polyp/classification/eval_outputs.py` offers a utility to persist logits and
   metadata for later analysis.
 
+### Configuration layout
+
+Configuration assets are now organised into two top-level directories that live
+next to the source tree:
+
+```
+config/
+└─ … experiment manifests, corruption specifications, roots mappings, …
+data_packs/
+└─ … dataset packs containing `manifest.yaml`, CSV splits and auxiliary files
+```
+
+Command-line interfaces resolve relative paths against these directories by
+default.  For example, providing `--manifest classification/hyperkvasir.yaml` to
+`train_classification.py` looks for the file at `config/classification/
+hyperkvasir.yaml`.  Likewise, passing `--train-csv hyperkvasir/train.csv`
+expects the file under `data_packs/hyperkvasir/train.csv`.  The `polypdb`
+utilities follow the same convention for corruption specifications and dataset
+packs.  Absolute paths are still honoured, so you can store packs elsewhere if
+desired.
+
 The following sections describe how to invoke these utilities.
 
 ## Usage
@@ -145,10 +166,12 @@ to set the batch size for each run. Any additional options supported by
 
 #### Experiment definition with manifests
 
-1. **Prepare split CSVs** containing at least `frame_path` and `label` columns for
-   `train`, `val` and `test`.
-2. **Create a manifest** that references those CSVs and optionally records SHA256
-   hashes and root identifiers:
+1. **Prepare split CSVs** inside a folder such as
+   `data_packs/hyperkvasir/pathology/` containing at least `frame_path` and
+   `label` columns for `train`, `val` and `test`.
+2. **Create a manifest** (for example `data_packs/hyperkvasir/pathology/manifest.yaml`)
+   that references those CSVs and optionally records SHA256 hashes and root
+   identifiers:
 
    ```yaml
    train:
@@ -160,8 +183,8 @@ to set the batch size for each run. Any additional options supported by
    roots:
      data_root: /data/hyperkvasir
    ```
-3. **Provide a roots mapping** in `roots.json` so identifiers resolve to absolute
-   paths:
+3. **Provide a roots mapping** (e.g. `config/roots.json`) so identifiers resolve
+   to absolute paths:
 
    ```json
    {
@@ -173,11 +196,12 @@ to set the batch size for each run. Any additional options supported by
    ```bash
    python scripts/check_paths.py train.csv roots.json
    ```
-5. **Launch training** with the manifest and roots mapping:
+5. **Launch training** with the manifest and roots mapping.  Paths that are not
+   absolute are resolved against `config/` and `data_packs/` automatically:
 
    ```bash
    python -m ssl4polyp.classification.train_classification \
-       --manifest path/to/exp.yaml \
+       --manifest classification/exp.yaml \
        --roots roots.json \
        --output-dir runs/exp1
    ```
@@ -190,6 +214,8 @@ to set the batch size for each run. Any additional options supported by
 
    The training script snapshots the manifest files, roots mapping and
    environment details inside the chosen output directory for reproducibility.
+   When `MANIFEST_DIR` or `roots.json` are provided as relative paths they are
+   interpreted with respect to `config/`.
 
 For all finetuning runs, the following optional arguments are also available:
 + `--frozen` - to freeze the pretrained encoder and only train the decoder. We did not use this in our experiments.
