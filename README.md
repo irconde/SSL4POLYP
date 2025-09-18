@@ -14,12 +14,12 @@ Links to the original paper:
 We include helper scripts that automate common workflows introduced in the
 paper:
 
-- `Models/mae/run_hyperkvasir_pretraining.py` – wraps MAE pretraining on the
+- `ssl4polyp/models/mae/run_hyperkvasir_pretraining.py` – wraps MAE pretraining on the
   Hyperkvasir-unlabelled dataset with the settings used in the paper. The
   script exposes `--batch-size`, `--epochs`, `--extra-args`, `--auto-resume`,
   `--save-freq-epochs` and `--save-freq-mins` so you can tweak the training run
   or forward additional options to `main_pretrain.py`.
-- `Classification/run_all_pretrainings.py` – sequentially fine-tunes ViT-B/16
+- `ssl4polyp/classification/run_all_pretrainings.py` – sequentially fine-tunes ViT-B/16
   under all three pretraining schemes (SUP-imnet, SSL-imnet and SSL-colon).
   Customise the architecture and batch size with `--arch` and `--batch-size`,
   and pass further arguments to `train_classification.py` via `--extra-args`.
@@ -49,7 +49,7 @@ finetuning:
 - Class imbalance can be addressed with `--class-weights` to override automatic
   weighting.
 - Evaluation reports mean AUROC in addition to the existing metrics, and
-  `Classification/eval_outputs.py` offers a utility to persist logits and
+  `ssl4polyp/classification/eval_outputs.py` offers a utility to persist logits and
   metadata for later analysis.
 
 The following sections describe how to invoke these utilities.
@@ -65,12 +65,12 @@ Follow the guidance in this section for obtaining the weights for pretrained mod
 + For encoders pretrained in a self-supervised manner with
   [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using
   [MAE](https://github.com/facebookresearch/mae), use the helper script
-  `Models/mae/run_hyperkvasir_pretraining.py` to generate the checkpoint. You can
+  `ssl4polyp/models/mae/run_hyperkvasir_pretraining.py` to generate the checkpoint. You can
   override the default `--batch-size` and `--epochs` values and pass additional
   options to `main_pretrain.py` via `--extra-args`. Example:
 
 ```bash
-python Models/mae/run_hyperkvasir_pretraining.py \
+python -m ssl4polyp.models.mae.run_hyperkvasir_pretraining \
     --data-root /path/to/hyperkvasir-unlabelled \
     --output-dir /path/to/save \
     --batch-size 64 --epochs 400
@@ -78,17 +78,17 @@ python Models/mae/run_hyperkvasir_pretraining.py \
 
 ### Finetuning
 
-The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `SSL4GIE/Classification/Trained models` if you wish to evaluate or make predictions with an already finetuned model.
+The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `Trained models/` if you wish to evaluate or make predictions with an already finetuned model.
 
 Prior to running finetuning, download the required data and change directory:
 
-+ For classification, download [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/) and change directory to `SSL4GIE/Classification`.
++ For classification, download [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/) and ensure the dataset follows the expected directory layout (`labeled-images/<split>/<class>/*.jpg`).
 
 Datasets can also be described via CSV manifests rather than directory structures; see [Experiment definition with manifests](#experiment-definition-with-manifests) for details.
 
 For finetuning models pretrained in a self-supervised manner, run the following:
 ```
-python train_classification.py \
+python -m ssl4polyp.classification.train_classification \
     --architecture [architecture] \
     --pretraining [pretraining] \
     --ss-framework [ss-framework] \
@@ -100,7 +100,7 @@ python train_classification.py \
 ```
 For finetuning models pretrained in a supervised manner, or not pretrained at all, omit the `--ss-framework` and `--checkpoint` arguments:
 ```
-python train_classification.py \
+python -m ssl4polyp.classification.train_classification \
     --architecture [architecture] \
     --pretraining [pretraining] \
     --dataset [dataset] \
@@ -176,7 +176,7 @@ to set the batch size for each run. Any additional options supported by
 5. **Launch training** with the manifest and roots mapping:
 
    ```bash
-   python Classification/train_classification.py \
+   python -m ssl4polyp.classification.train_classification \
        --manifest path/to/exp.yaml \
        --roots roots.json \
        --output-dir runs/exp1
@@ -201,11 +201,11 @@ Please also note that, when using MAE, code from the [MAE](https://github.com/fa
 
 ### Evaluation
 
-Ensure that the weights for the desired model are located in `SSL4GIE/Classification/Trained models`. This will have been done automatically if finetuning was run. Additionally, download the required data and change directory accordingly.
+Ensure that the weights for the desired model are located in `Trained models/` relative to your working directory. This will have been done automatically if finetuning was run. Additionally, download the required data and change directory accordingly.
 
 For evaluating classification models pretrained in a self-supervised manner, run the following:
 ```
-python eval_classification.py \
+python -m ssl4polyp.classification.eval_classification \
     --architecture [architecture] \
     --pretraining [pretraining] \
     --ss-framework [ss-framework] \
@@ -214,7 +214,7 @@ python eval_classification.py \
 ```
 For evaluating classification models pretrained in a supervised manner, or not pretrained at all, omit the `--ss-framework` argument:
 ```
-python eval_classification.py \
+python -m ssl4polyp.classification.eval_classification \
     --architecture [architecture] \
     --pretraining [pretraining] \
     --dataset [dataset] \
@@ -227,7 +227,7 @@ python eval_classification.py \
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 
-In addition to printing the results (mean F1, precision, recall, AUROC and accuracy) the evaluation script also writes them to `SSL4GIE/eval_results.txt`. For further analysis, `Classification/eval_outputs.py` provides a `write_outputs` helper to persist logits and metadata.
+In addition to printing the results (mean F1, precision, recall, AUROC and accuracy) the evaluation script also writes them to `eval_results.txt`. For further analysis, `ssl4polyp/classification/eval_outputs.py` provides a `write_outputs` helper to persist logits and metadata.
 
 ### Prediction
 

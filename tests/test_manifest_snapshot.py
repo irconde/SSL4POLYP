@@ -1,17 +1,14 @@
 import csv
 import json
 import pathlib
-import sys
 
 import pytest
 
 torch = pytest.importorskip("torch")
 import yaml
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-
-from Classification.manifests import load_pack
-from Classification.eval_outputs import write_outputs
+from ssl4polyp.classification.eval_outputs import write_outputs
+from ssl4polyp.classification.manifests import load_pack
 
 
 def test_manifest_snapshot(tmp_path):

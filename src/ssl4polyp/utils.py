@@ -1,4 +1,4 @@
-from Models import models
+from ssl4polyp.models import models
 
 
 def get_MAE_backbone(weight_path, head, num_classes, frozen, dense, out_token="cls"):

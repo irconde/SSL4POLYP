@@ -1,4 +1,3 @@
-import sys
 import os
 import argparse
 import glob
@@ -9,12 +8,9 @@ from datetime import datetime
 import torch
 import torchvision
 
-
-from Data import dataloaders
-from Metrics import performance
-
-sys.path.append("..")
-import utils
+from ssl4polyp import utils
+from ssl4polyp.classification.data import dataloaders
+from ssl4polyp.classification.metrics import performance
 
 
 @torch.no_grad()

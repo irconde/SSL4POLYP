@@ -8,8 +8,8 @@ from torch.utils import data
 
 from torch.utils.data.distributed import DistributedSampler
 
-from Data.dataset import Dataset
-from Data.manifest_dataset import ManifestDataset
+from .dataset import Dataset
+from .manifest_dataset import ManifestDataset
 
 
 class MultiEpochsDataLoader(data.DataLoader):
