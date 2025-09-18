@@ -12,6 +12,7 @@ early_stop:
   patience: 10
 threshold_policy: youden
 seed: 47
+seeds: [13, 29, 47]
 image_size: 224
 num_workers: 8
 prefetch_factor: 2
