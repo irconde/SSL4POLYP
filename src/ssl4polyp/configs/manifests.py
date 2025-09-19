@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence
+from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import torch
 import yaml
@@ -114,7 +114,12 @@ def load_split(
     return rows
 
 
-def verify_hash(csv_path: Path, manifest_yaml: Optional[Path]) -> None:
+def verify_hash(
+    csv_path: Path,
+    manifest_yaml: Optional[Path],
+    *,
+    split_name: Optional[str] = None,
+) -> None:
     """Validate the SHA256 hash of ``csv_path`` against ``manifest_yaml``.
 
     ``manifest_yaml`` may define hashes for one or more CSV files.  Several
@@ -128,29 +133,74 @@ def verify_hash(csv_path: Path, manifest_yaml: Optional[Path]) -> None:
     with open(manifest_yaml, "r") as f:
         manifest = yaml.safe_load(f) or {}
 
-    csv_name = Path(csv_path).name
+    csv_path = Path(csv_path)
+    csv_name = csv_path.name
+    csv_stem = csv_path.stem
+    candidate_keys: List[str] = []
+    if split_name:
+        candidate_keys.append(split_name)
+    candidate_keys.append(csv_name)
+    if csv_stem not in candidate_keys:
+        candidate_keys.append(csv_stem)
+
+    def _extract_sha(entry: object) -> Optional[str]:
+        if isinstance(entry, str):
+            return entry
+        if isinstance(entry, Mapping):
+            sha = entry.get("sha256")
+            if isinstance(sha, str):
+                return sha
+        return None
+
+    def _match_csv_entry(entry: Mapping[str, object]) -> Optional[str]:
+        csv_entry = entry.get("csv")
+        if csv_entry:
+            csv_entry_path = Path(csv_entry)
+            if (
+                csv_entry_path.name not in candidate_keys
+                and csv_entry_path.stem not in candidate_keys
+            ):
+                return None
+        return _extract_sha(entry)
+
+    def _lookup_hashes(container: Mapping[str, object]) -> Optional[str]:
+        for key in candidate_keys:
+            entry = container.get(key)
+            if entry is None:
+                continue
+            sha = _extract_sha(entry)
+            if sha:
+                return sha
+        for entry in container.values():
+            if isinstance(entry, Mapping):
+                sha = _match_csv_entry(entry)
+                if sha:
+                    return sha
+        return None
+
     expected: Optional[str] = None
 
     if isinstance(manifest, Mapping):
         # Layout 1: {split: {csv: "train.csv", sha256: "..."}}
-        for entry in manifest.values():
+        if split_name:
+            entry = manifest.get(split_name)
             if isinstance(entry, Mapping):
-                csv_entry = entry.get("csv")
-                if csv_entry and Path(csv_entry).name == csv_name:
-                    expected = entry.get("sha256")
+                expected = _match_csv_entry(entry)
+        if expected is None:
+            for entry in manifest.values():
+                if not isinstance(entry, Mapping):
+                    continue
+                expected = _match_csv_entry(entry)
+                if expected:
                     break
         # Layout 2: {hashes: {"train.csv": "sha256"}}
         if expected is None and "hashes" in manifest:
             hashes = manifest.get("hashes") or {}
             if isinstance(hashes, Mapping):
-                expected = hashes.get(csv_name)
+                expected = _lookup_hashes(hashes)
         # Layout 3: {"train.csv": "sha256"}
         if expected is None:
-            entry = manifest.get(csv_name)
-            if isinstance(entry, str):
-                expected = entry
-            elif isinstance(entry, Mapping):
-                expected = entry.get("sha256")
+            expected = _lookup_hashes(manifest)
 
     if not expected:
         return
@@ -245,6 +295,38 @@ def load_pack(
             raise ValueError(
                 "Manifest defines an 'eval' split which is no longer supported; rename the split to 'test'."
             )
+        if isinstance(manifest, Mapping):
+            row_schema = manifest.get("row_schema")
+            if isinstance(row_schema, Mapping):
+                fields = row_schema.get("fields")
+                if isinstance(fields, Sequence):
+                    field_names: List[str] = []
+                    for field in fields:
+                        name_value: Optional[str] = None
+                        if isinstance(field, Mapping):
+                            candidate = field.get("name")
+                            if isinstance(candidate, str):
+                                name_value = candidate
+                                role_value = field.get("role")
+                                if (
+                                    split_column_name is None
+                                    and isinstance(role_value, str)
+                                    and role_value.lower() == "split"
+                                ):
+                                    split_column_name = candidate
+                        elif isinstance(field, str):
+                            name_value = field
+                        if isinstance(name_value, str):
+                            field_names.append(name_value)
+                    if field_names:
+                        schema_columns = [
+                            name for name in field_names if name not in REQUIRED_COLUMNS
+                        ]
+                        if split_column_name is None and "split" in field_names:
+                            split_column_name = "split"
+            split_column_override = manifest.get("split_column")
+            if isinstance(split_column_override, str):
+                split_column_name = split_column_override
         for name, path in splits.items():
             if path is not None:
                 continue
@@ -292,7 +374,7 @@ def load_pack(
             continue
         csv_path = Path(csv_path)
         csv_path = _resolve_csv_path(csv_path)
-        verify_hash(csv_path, manifest_yaml)
+        verify_hash(csv_path, manifest_yaml, split_name=name)
         expected_split_value: Optional[str] = None
         if split_column_name is not None and name in CANONICAL_SPLIT_NAMES:
             expected_split_value = name

@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -46,12 +47,15 @@ def _write_manifest(
     fields: list[str],
     splits: dict[str, str],
     roots: dict[str, Path],
+    hashes: dict[str, object] | None = None,
 ) -> None:
     manifest: dict[str, object] = {
         "row_schema": {"fields": [{"name": name} for name in fields]},
         "roots": {key: str(value) for key, value in roots.items()},
     }
     manifest.update({split: {"csv": csv_name} for split, csv_name in splits.items()})
+    if hashes:
+        manifest["hashes"] = hashes
     path.write_text(json.dumps(manifest))
 
 
@@ -147,4 +151,49 @@ def test_load_pack_rejects_split_leak(tmp_path: Path, root_with_frame: Path) -> 
 
     with pytest.raises(ValueError, match="Split value mismatch"):
         load_pack(val=val_csv, manifest_yaml=manifest_yaml)
+
+
+def test_load_pack_detects_hash_mismatch_for_split_keyed_hashes(
+    tmp_path: Path, root_with_frame: Path
+) -> None:
+    train_csv = tmp_path / "custom_train.csv"
+    fieldnames = ["frame_path", "label", "split", "dataset"]
+    with open(train_csv, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerow(
+            {
+                "frame_path": "root/frame.png",
+                "label": "0",
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+
+    original_digest = hashlib.sha256(train_csv.read_bytes()).hexdigest()
+
+    manifest_yaml = tmp_path / "manifest.yaml"
+    _write_manifest(
+        manifest_yaml,
+        fields=fieldnames,
+        splits={"train": "custom_train.csv"},
+        roots={"root": root_with_frame},
+        hashes={"train": original_digest},
+    )
+
+    # Corrupt the CSV after the manifest has been written.
+    with open(train_csv, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerow(
+            {
+                "frame_path": "root/frame.png",
+                "label": "1",  # Different label to change the digest
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+
+    with pytest.raises(ValueError, match="SHA256 mismatch"):
+        load_pack(train=train_csv, manifest_yaml=manifest_yaml)
 
