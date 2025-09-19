@@ -54,15 +54,36 @@ finetuning:
 
 ### Configuration layout
 
-Configuration assets are now organised into two top-level directories that live
-next to the source tree:
+Configuration assets are organised into two top-level directories that live
+next to the source tree.  The `config/` directory now contains layered YAML
+files that capture shared defaults and experiment-specific overrides, while
+`data_packs/` stores the dataset manifests and CSV splits referenced by those
+configs.  A typical layout looks like:
 
 ```
 config/
-└─ … experiment manifests, corruption specifications, roots mappings, …
+├─ base.yaml                  # global defaults (optimizer, scheduler, seed, …)
+├─ data/                      # dataset pack descriptors
+│  ├─ sun_full.yaml
+│  ├─ sun_morphology.yaml
+│  ├─ sun_subsets.yaml
+│  ├─ polypgen_clean_test.yaml
+│  └─ …
+├─ model/                     # backbone definitions (checkpoints, freezing policy)
+│  ├─ sup_imnet.yaml
+│  ├─ ssl_imnet.yaml
+│  └─ ssl_colon.yaml
+└─ exp/                       # experiment manifests (include base + data + models)
+   ├─ exp1.yaml
+   ├─ exp2.yaml
+   └─ …
+
 data_packs/
-└─ … dataset packs containing `manifest.yaml`, CSV splits and auxiliary files
+└─ <pack_name>/manifest.yaml, *.csv, …
 ```
+
+Layered configs use a `defaults:` list to compose these files; the training
+scripts resolve everything automatically when pointed at an experiment manifest.
 
 In addition, the repository seeds git-ignored directories that act as default
 targets for local assets:
@@ -75,7 +96,7 @@ results/
 ```
 
 Each ships with a short README describing the expected sub-structure. Command
-line interfaces default to these folders for datasets, weights, logs and
+line interfaces default to these folders for datasets, pretrained weights, logs and
 evaluation exports while still letting you override the destinations.
 
 Command-line interfaces resolve relative paths against these directories by
@@ -116,7 +137,7 @@ python -m ssl4polyp.models.mae.run_hyperkvasir_pretraining \
 
 ### Finetuning
 
-The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `checkpoints/` if you wish to evaluate or make predictions with an already finetuned model.
+The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `checkpoints/classification/<exp_seed>/` if you wish to evaluate or make predictions with an already finetuned model.  Non-downloadable ViT-B MAE backbones (ImageNet and Hyperkvasir) should be stored under `checkpoints/pretrained/vit_b/` so the model configs can reference them directly.
 
 Prior to running finetuning, download the required data and change directory:
 
@@ -124,44 +145,88 @@ Prior to running finetuning, download the required data and change directory:
 
 Datasets can also be described via CSV manifests rather than directory structures; see [Experiment definition with manifests](#experiment-definition-with-manifests) for details.
 
-For finetuning models pretrained in a self-supervised manner, run the following:
+We recommend launching runs via experiment manifests, which resolve datasets,
+models and hyperparameters from the layered config stack:
+
 ```
 python -m ssl4polyp.classification.train_classification \
-    --architecture [architecture] \
-    --pretraining [pretraining] \
-    --ss-framework [ss-framework] \
-    --checkpoint [checkpoint] \
-    --dataset [dataset] \
-    --data-root [data-root] \
-    --learning-rate-scheduler \
-    --batch-size [batch-size]
+    --exp-config exp/exp1.yaml \
+    --model-key sup_imnet \
+    --roots data/roots.json \
+    --output-dir checkpoints/classification/exp1_seed42 \
+    --seed 42
 ```
-For finetuning models pretrained in a supervised manner, or not pretrained at all, omit the `--ss-framework` and `--checkpoint` arguments:
+
+Choose a different `--model-key` to fine-tune the MAE variants defined in
+`config/model/*.yaml`.  You can still override individual knobs on the command
+line (for example `--batch-size` or `--lr`) and they will overwrite values from
+the manifest.
+
+If you prefer a fully manual invocation, you can supply the dataset packs and
+model settings explicitly:
+
 ```
 python -m ssl4polyp.classification.train_classification \
-    --architecture [architecture] \
-    --pretraining [pretraining] \
-    --dataset [dataset] \
-    --data-root [data-root] \
-    --learning-rate-scheduler \
-    --batch-size [batch-size]
+    --architecture vit_b \
+    --pretraining Hyperkvasir \
+    --ss-framework mae \
+    --checkpoint checkpoints/pretrained/vit_b/mae_hyperkvasir.pth \
+    --dataset sun_full \
+    --train-pack sun_full \
+    --val-pack sun_full \
+    --test-pack sun_full \
+    --roots data/roots.json \
+    --batch-size 32 \
+    --scheduler cosine \
+    --warmup-epochs 5
 ```
 
-* Replace `[architecture]` with name of encoder architecture (`vit_b`).
-* Replace `[pretraining]` with general pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
-* For models pretrained in a self-supervised manner, replace `[ss-framework]` with pretraining algorithm `mae` and `[checkpoint]` with path to pretrained weights (classification only).
-* Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
-* Replace `[data-root]` with path to the chosen dataset.
-* Replace `[batch-size]` with desired batch size.
-
-The degree of encoder fine-tuning can be controlled with `--finetune-mode` (or
-the `protocol.finetune` key when using experiment manifests):
+The degree of encoder fine-tuning can be controlled with the
+`protocol.finetune` key inside the experiment manifest (or the corresponding
+command-line overrides):
 
 * `full` (default) trains the entire encoder.
 * `none` trains only the classification head, keeping the encoder frozen as in
   prior releases.
 * `head+2` updates the head together with the final two transformer blocks for a
   lightweight adaptation regime.
+
+### Experiments
+
+The paper’s experiments map to manifests in `config/exp/`.  Launch them with
+`--exp-config` and pick a backbone via `--model-key` (`sup_imnet`, `ssl_imnet`,
+`ssl_colon`).  Outputs default to
+`checkpoints/classification/<exp>_seed<seed>/`.
+
+| Experiment | Config | Description | Example command |
+|-----------:|:-------|:------------|:----------------|
+| 1 | `config/exp/exp1.yaml` | SUN baseline vs MAE(ImageNet) fine-tuning | `python -m ssl4polyp.classification.train_classification --exp-config exp/exp1.yaml --model-key sup_imnet --seed 42 --output-dir checkpoints/classification/exp1_seed42` |
+| 2 | `config/exp/exp2.yaml` | Domain MAE vs ImageNet MAE on SUN | run with `--model-key ssl_imnet` and `ssl_colon` |
+| 3 | `config/exp/exp3.yaml` | Morphology sensitivity (flat vs polypoid) | reuse Exp‑1 command but point to `exp3.yaml` |
+| 4 | `config/exp/exp4.yaml` | SUN sample-efficiency subsets (5–100%) | loop over percents/seeds using overrides, e.g. `--override dataset.percent=25 --override dataset.seed=29` |
+| 5A | `config/exp/exp5a.yaml` | Zero-shot transfer to PolypGen clean test | `--model-key sup_imnet` (repeat for other models) |
+| 5B | `config/exp/exp5b.yaml` | SUN robustness under perturbations | `--model-key ssl_imnet` (or others) |
+| 5C | `config/exp/exp5c.yaml` | Few-shot adaptation on PolypGen (50–500 frames) | set `--override dataset.size=<N> dataset.seed=<seed>` and evaluate both frozen and re-fit thresholds |
+
+To sweep subsets/seeds, wrap the command in a shell loop. Example for Exp‑4:
+
+```bash
+for seed in 13 29 47; do
+  for pct in 5 10 25 50 100; do
+    python -m ssl4polyp.classification.train_classification \
+      --exp-config exp/exp4.yaml \
+      --model-key ssl_imnet \
+      --seed "${seed}" \
+      --override dataset.percent="${pct}" dataset.seed="${seed}" \
+      --output-dir "checkpoints/classification/exp4_seed${seed}_p${pct}";
+  done
+done
+```
+
+For few-shot Exp‑5C, adjust `dataset.size` (`50`, `100`, `200`, `500`) and
+optionally re-fit the decision threshold on a support fold before testing. After
+training, evaluate runs with `python -m ssl4polyp.classification.eval_classification`
+using the same experiment config or explicit packs.
 
 The script expects the HyperKvasir directory structure by default. For datasets
 organised more simply as `data-root/class_x/*.jpg`, either pass `--simple-dataset`
