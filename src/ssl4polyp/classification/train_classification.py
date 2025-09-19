@@ -24,6 +24,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ssl4polyp import utils
 from ssl4polyp.classification.data import create_classification_dataloaders
+from ssl4polyp.classification.finetune import (
+    configure_finetune_parameters,
+    normalise_finetune_mode,
+)
 from ssl4polyp.classification.metrics import performance, thresholds
 from ssl4polyp.configs import data_packs_root
 from ssl4polyp.configs.layered import (
@@ -725,6 +729,15 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     args.pretraining = selected_model.get("pretraining", args.pretraining)
     args.ckpt = selected_model.get("checkpoint", args.ckpt)
     args.frozen = selected_model.get("frozen", args.frozen)
+    protocol_cfg = (experiment_cfg or {}).get("protocol") or {}
+    finetune_mode = protocol_cfg.get("finetune")
+    default_mode = getattr(args, "finetune_mode", None)
+    if not default_mode:
+        default_mode = "none" if args.frozen else "full"
+    args.finetune_mode = normalise_finetune_mode(
+        finetune_mode, default=default_mode
+    )
+    args.frozen = args.finetune_mode == "none"
     args.ss_framework = selected_model.get("ss_framework", args.ss_framework)
     args.dataset = dataset_cfg.get("name", args.dataset)
 
@@ -1008,6 +1021,8 @@ def build(args, rank):
         best_val_perf = None
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch()
+
+    configure_finetune_parameters(model, getattr(args, "finetune_mode", "full"))
 
     model.cuda(rank)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -1490,6 +1505,13 @@ def get_args():
         default=None,
         help="Path to the checkpoint of a parent run when fine-tuning hierarchically.",
     )
+    parser.add_argument(
+        "--finetune-mode",
+        type=str,
+        default="full",
+        choices=["none", "full", "head+2"],
+        help="Fine-tuning regime controlling which encoder layers receive gradients.",
+    )
     parser.add_argument("--frozen", action="store_true", default=False)
     parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument(
@@ -1618,6 +1640,12 @@ def get_args():
 
 def main():
     args = get_args()
+    args.finetune_mode = normalise_finetune_mode(
+        getattr(args, "finetune_mode", None), default="full"
+    )
+    if getattr(args, "frozen", False):
+        args.finetune_mode = "none"
+    args.frozen = args.finetune_mode == "none"
     args.seeds = _normalize_seeds(getattr(args, "seeds", None))
     if args.seeds:
         args.seed = args.seeds[0]

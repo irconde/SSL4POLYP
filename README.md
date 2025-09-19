@@ -154,6 +154,15 @@ python -m ssl4polyp.classification.train_classification \
 * Replace `[data-root]` with path to the chosen dataset.
 * Replace `[batch-size]` with desired batch size.
 
+The degree of encoder fine-tuning can be controlled with `--finetune-mode` (or
+the `protocol.finetune` key when using experiment manifests):
+
+* `full` (default) trains the entire encoder.
+* `none` trains only the classification head, keeping the encoder frozen as in
+  prior releases.
+* `head+2` updates the head together with the final two transformer blocks for a
+  lightweight adaptation regime.
+
 The script expects the HyperKvasir directory structure by default. For datasets
 organised more simply as `data-root/class_x/*.jpg`, either pass `--simple-dataset`
 or point `--data-root` to the top-level directory and the script will infer this
