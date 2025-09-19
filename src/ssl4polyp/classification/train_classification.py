@@ -1129,11 +1129,24 @@ def train(rank, args):
         writer = None
     dist.barrier()
 
+    ckpt_pointer = Path(ckpt_path)
+    ckpt_stem = ckpt_pointer.with_suffix("")
+    selection_tag = _format_selection_tag(getattr(args, "early_stop_monitor", None))
+
     global_step = 0
     no_improve_epochs = 0
     scheduler_name = getattr(args, "scheduler", "none").lower()
     early_patience = getattr(args, "early_stop_patience", 0) or 0
     device = torch.device("cuda", rank)
+    last_epoch: Optional[int] = None
+    last_loss: Optional[float] = None
+    last_val_perf: Optional[float] = None
+    last_test_perf: Optional[float] = None
+    last_val_metrics_export: Optional[Dict[str, float]] = None
+    last_test_metrics_export: Optional[Dict[str, float]] = None
+    latest_threshold_file_relpath: Optional[str] = None
+    latest_threshold_record: Optional[Dict[str, Any]] = None
+    latest_thresholds_root: Optional[str] = None
 
     for epoch in range(start_epoch, args.epochs + 1):
         try:
@@ -1194,6 +1207,12 @@ def train(rank, args):
                         if name in {"logits", "probabilities", "targets"}:
                             continue
                         writer.add_scalar(f"test/{name}", value, epoch)
+                last_epoch = int(epoch)
+                last_loss = float(loss)
+                last_val_perf = float(val_perf)
+                last_test_perf = float(test_perf)
+                last_val_metrics_export = dict(val_metrics_export)
+                last_test_metrics_export = dict(test_metrics_export)
             else:
                 val_perf = 0.0
                 test_perf = 0.0
@@ -1306,11 +1325,7 @@ def train(rank, args):
                         ] = threshold_record
                 if thresholds_root_path is not None:
                     payload["thresholds_root"] = str(thresholds_root_path)
-                ckpt_pointer = Path(ckpt_path)
-                ckpt_stem = ckpt_pointer.with_suffix("")
-                selection_tag = _format_selection_tag(
-                    getattr(args, "early_stop_monitor", None)
-                )
+                    latest_thresholds_root = str(thresholds_root_path)
                 candidate_name = (
                     f"{ckpt_stem.name}_e{epoch:02d}_{selection_tag}.pth"
                 )
@@ -1346,6 +1361,9 @@ def train(rank, args):
                 metrics_path = ckpt_stem.with_suffix(".metrics.json")
                 with open(metrics_path, "w") as f:
                     json.dump(metrics_payload, f, indent=2)
+                if threshold_file_relpath:
+                    latest_threshold_file_relpath = threshold_file_relpath
+                    latest_threshold_record = threshold_record
                 best_val_perf = val_perf
                 thresholds_map = updated_thresholds
                 no_improve_epochs = 0
@@ -1366,6 +1384,71 @@ def train(rank, args):
         dist.barrier()
     if writer is not None:
         writer.close()
+    if rank == 0 and last_epoch is not None:
+        last_payload: Dict[str, Any] = {
+            "epoch": int(last_epoch),
+            "model_state_dict": model.module.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scaler_state_dict": scaler.state_dict(),
+            "loss": float(last_loss) if last_loss is not None else None,
+            "val_perf": last_val_perf,
+            "val_auroc": last_val_perf,
+            "test_perf": last_test_perf,
+            "test_auroc": last_test_perf,
+            "py_state": random.getstate(),
+            "np_state": np.random.get_state(),
+            "torch_state": torch.get_rng_state(),
+        }
+        if scheduler is not None:
+            last_payload["scheduler_state_dict"] = scheduler.state_dict()
+        if thresholds_map:
+            last_payload["thresholds"] = thresholds_map
+        if latest_threshold_file_relpath and threshold_key is not None:
+            last_payload.setdefault("threshold_files", {})[
+                threshold_key
+            ] = latest_threshold_file_relpath
+            if latest_threshold_record is not None:
+                last_payload.setdefault("threshold_records", {})[
+                    threshold_key
+                ] = latest_threshold_record
+        if latest_thresholds_root is not None:
+            last_payload["thresholds_root"] = latest_thresholds_root
+        last_candidate_name = (
+            f"{ckpt_stem.name}_last_e{last_epoch:02d}_{selection_tag}.pth"
+        )
+        last_final_path = ckpt_stem.parent / last_candidate_name
+        if last_final_path.exists():
+            digest_payload = {
+                "epoch": int(last_epoch),
+                "seed": int(args.seed),
+                "val": float(last_val_perf) if last_val_perf is not None else None,
+                "test": float(last_test_perf) if last_test_perf is not None else None,
+            }
+            digest = hashlib.sha1(
+                json.dumps(digest_payload, sort_keys=True).encode("utf-8")
+            ).hexdigest()[:8]
+            last_candidate_name = (
+                f"{ckpt_stem.name}_last_e{last_epoch:02d}_{selection_tag}+{digest}.pth"
+            )
+            last_final_path = ckpt_stem.parent / last_candidate_name
+        torch.save(last_payload, last_final_path)
+        last_pointer_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.pth"
+        _update_checkpoint_pointer(last_pointer_path, last_final_path)
+        last_metrics_payload: Dict[str, Any] = {
+            "seed": int(args.seed),
+            "epoch": int(last_epoch),
+            "train_loss": float(last_loss) if last_loss is not None else None,
+            "val": dict(last_val_metrics_export or {}),
+            "test": dict(last_test_metrics_export or {}),
+        }
+        if latest_threshold_file_relpath and threshold_key is not None:
+            last_metrics_payload["threshold_files"] = {
+                threshold_key: latest_threshold_file_relpath
+            }
+            last_metrics_payload["threshold_policy"] = args.threshold_policy
+        last_metrics_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.metrics.json"
+        with open(last_metrics_path, "w") as handle:
+            json.dump(last_metrics_payload, handle, indent=2)
     dist.destroy_process_group()
 
 
