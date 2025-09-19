@@ -57,11 +57,7 @@ class VisionTransformer_from_Any(VisionTransformer):
         return z if self.dense else self.norm(x)
 
     def forward(self, x):
-        if self.frozen:
-            with torch.no_grad():
-                x = self.forward_features(x)
-        else:
-            x = self.forward_features(x)
+        x = self.forward_features(x)
         if self.dense:
             x = self.decoder(x)
         else:
@@ -143,11 +139,7 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
         return z if self.dense else self.norm(x)
 
     def forward(self, imgs):
-        if self.frozen:
-            with torch.no_grad():
-                x = self.forward_encoder(imgs)
-        else:
-            x = self.forward_encoder(imgs)
+        x = self.forward_encoder(imgs)
         if self.dense:
             x = self.decoder(x)
         else:
