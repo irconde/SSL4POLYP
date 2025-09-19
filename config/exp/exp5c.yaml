@@ -16,3 +16,4 @@ protocol:
   thresholds:
     primary: sun_val_youden
     sensitivity: fewshot_val_youden
+epochs: 50
