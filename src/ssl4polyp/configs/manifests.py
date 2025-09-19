@@ -38,6 +38,7 @@ Meta = List[Row]
 SplitReturn = Tuple[Paths, Labels, Meta]
 
 REQUIRED_COLUMNS = {"frame_path", "label"}
+CANONICAL_SPLIT_NAMES = {"train", "val", "test", "eval"}
 
 
 def resolve_manifest_path(manifest: Optional[str | Path]) -> Optional[Path]:
@@ -56,20 +57,60 @@ def resolve_pack_asset(path: Optional[str | Path]) -> Optional[Path]:
     return resolve_data_pack_path(path)
 
 
-def load_split(csv_path: Path) -> Meta:
+def load_split(
+    csv_path: Path,
+    required_columns: Optional[Sequence[str]] = None,
+    split_column: Optional[str] = None,
+    expected_split_value: Optional[str] = None,
+) -> Meta:
     """Read a CSV split file and return its rows.
 
-    The CSV must contain at least the columns listed in ``REQUIRED_COLUMNS``.
-    A :class:`ValueError` is raised if any are missing.
+    Parameters
+    ----------
+    csv_path:
+        Path to the CSV file to read.
+    required_columns:
+        Additional columns expected to be present in the CSV, beyond
+        :data:`REQUIRED_COLUMNS`.
+    split_column:
+        Name of the column that encodes the logical split of the row.  When
+        provided together with ``expected_split_value`` every row must report
+        the expected value.
+    expected_split_value:
+        Expected value for ``split_column``.  A :class:`ValueError` is raised if
+        any row disagrees.
+
+    Returns
+    -------
+    Meta
+        Parsed CSV rows.
+
+    Raises
+    ------
+    ValueError
+        If any required columns are missing or if the split column contains an
+        unexpected value.
     """
 
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         fieldnames = set(reader.fieldnames or [])
-        missing = REQUIRED_COLUMNS - fieldnames
+        required = set(REQUIRED_COLUMNS)
+        if required_columns is not None:
+            required.update(required_columns)
+        missing = required - fieldnames
         if missing:
             raise ValueError(f"Missing required columns {sorted(missing)} in {csv_path}")
         rows: Meta = list(reader)
+    if split_column and expected_split_value is not None:
+        for idx, row in enumerate(rows, start=1):
+            value = row.get(split_column)
+            if value != expected_split_value:
+                raise ValueError(
+                    "Split value mismatch in {} row {}: expected {!r} in column {!r}, got {!r}".format(
+                        csv_path, idx, expected_split_value, split_column, value
+                    )
+                )
     return rows
 
 
@@ -191,6 +232,8 @@ def load_pack(
     }
 
     manifest: Optional[Mapping[str, object]] = None
+    schema_columns: Optional[Sequence[str]] = None
+    split_column_name: Optional[str] = None
     if manifest_yaml is not None and not isinstance(manifest_yaml, Path):
         manifest_yaml = Path(manifest_yaml)
     pack_root = pack_root or data_packs_root()
@@ -250,7 +293,15 @@ def load_pack(
         csv_path = Path(csv_path)
         csv_path = _resolve_csv_path(csv_path)
         verify_hash(csv_path, manifest_yaml)
-        rows = load_split(csv_path)
+        expected_split_value: Optional[str] = None
+        if split_column_name is not None and name in CANONICAL_SPLIT_NAMES:
+            expected_split_value = name
+        rows = load_split(
+            csv_path,
+            required_columns=schema_columns,
+            split_column=split_column_name,
+            expected_split_value=expected_split_value,
+        )
         paths = resolve_paths(rows, roots_map)
         labels: Labels = [row.get("label", "") for row in rows]
         result[name] = (paths, labels, rows)
