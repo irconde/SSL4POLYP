@@ -3,6 +3,6 @@ model:
   name: SSL-imnet
   arch: vit_b
   pretraining: ImageNet_self
-  checkpoint: checkpoints/pretrained/mae_imagenet_vitb.pth
+  checkpoint: checkpoints/pretrained/vit_b/mae_imagenet.pth
   frozen: false
   ss_framework: mae
