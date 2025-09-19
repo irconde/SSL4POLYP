@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence
 
 import torch
 import yaml
@@ -204,7 +204,6 @@ def load_pack(
     train: Optional[Path] = None,
     val: Optional[Path] = None,
     test: Optional[Path] = None,
-    eval: Optional[Path] = None,
     manifest_yaml: Optional[Path] = None,
     roots_map: Optional[Mapping[str, str]] = None,
     pack_root: Optional[Path] = None,
@@ -223,13 +222,13 @@ def load_pack(
     files and ``manifest.yaml`` into ``snapshot_dir/manifest_snapshot`` and
     record provenance information (``roots.json``, git commit, ``pip freeze``,
     and CUDA details) inside ``snapshot_dir``.
+
     """
 
     splits: Dict[str, Optional[Path]] = {
         "train": train,
         "val": val,
         "test": test,
-        "eval": eval,
     }
 
     manifest: Optional[Mapping[str, object]] = None
@@ -242,35 +241,30 @@ def load_pack(
     if manifest_yaml is not None:
         with open(manifest_yaml, "r") as f:
             manifest = yaml.safe_load(f) or {}
-        if isinstance(manifest, Mapping):
-            row_schema = manifest.get("row_schema")
-            if isinstance(row_schema, Mapping):
-                fields = row_schema.get("fields")
-                if isinstance(fields, Sequence):
-                    collected = []
-                    for field in fields:
-                        if isinstance(field, Mapping):
-                            name = field.get("name")
-                            if isinstance(name, str):
-                                collected.append(name)
-                                if name == "split":
-                                    split_column_name = name
-                    if collected:
-                        schema_columns = collected
-        for name in splits:
-            if splits[name] is None and name in manifest:
-                entry = manifest[name]
-                if isinstance(entry, Mapping):
-                    csv_entry = entry.get("csv")
-                else:
-                    csv_entry = entry
-                if csv_entry is not None:
-                    csv_path = Path(csv_entry)
-                    if not csv_path.is_absolute():
-                        if manifest_parent is None:
-                            manifest_parent = Path(manifest_yaml).parent
-                        csv_path = manifest_parent / csv_path
-                    splits[name] = csv_path
+        if isinstance(manifest, Mapping) and "eval" in manifest:
+            raise ValueError(
+                "Manifest defines an 'eval' split which is no longer supported; rename the split to 'test'."
+            )
+        for name, path in splits.items():
+            if path is not None:
+                continue
+            if not isinstance(manifest, Mapping):
+                continue
+            entry = manifest.get(name)
+            if entry is None:
+                continue
+            if isinstance(entry, Mapping):
+                csv_entry = entry.get("csv")
+            else:
+                csv_entry = entry
+            if csv_entry is None:
+                continue
+            csv_path = Path(csv_entry)
+            if not csv_path.is_absolute():
+                if manifest_parent is None:
+                    manifest_parent = Path(manifest_yaml).parent
+                csv_path = manifest_parent / csv_path
+            splits[name] = csv_path
         if roots_map is None and isinstance(manifest, Mapping):
             roots_map = manifest.get("roots")  # type: ignore[assignment]
 

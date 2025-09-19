@@ -1,6 +1,5 @@
 import csv
 import json
-import pathlib
 
 import pytest
 
@@ -42,6 +41,25 @@ def test_manifest_snapshot(tmp_path):
     with open(out_dir / "cuda.json") as f:
         cuda = json.load(f)
     assert "available" in cuda
+
+
+def test_eval_split_in_manifest_errors(tmp_path):
+    root_dir = tmp_path / "root"
+    root_dir.mkdir()
+    (root_dir / "img.png").write_text("data")
+
+    eval_csv = tmp_path / "eval.csv"
+    with open(eval_csv, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["frame_path", "label"])
+        writer.writerow(["root/img.png", "1"])
+
+    manifest_yaml = tmp_path / "manifest.yaml"
+    with open(manifest_yaml, "w") as f:
+        yaml.safe_dump({"eval": {"csv": "eval.csv"}, "roots": {"root": str(root_dir)}}, f)
+
+    with pytest.raises(ValueError, match="eval split"):
+        load_pack(manifest_yaml=manifest_yaml)
 
 
 def test_write_outputs(tmp_path):
