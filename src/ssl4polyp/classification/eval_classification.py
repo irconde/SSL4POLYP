@@ -508,7 +508,7 @@ def test(
             for fid, p in zip(frame_ids, preds_list):
                 writer.writerow([fid, p])
 
-    metrics: dict[str, float] = {}
+    metrics: dict[str, Any] = {}
     if len(frame_ids) > 0:
         if args.ss_framework:
             name = (
@@ -530,6 +530,19 @@ def test(
         metrics["mAUROC"] = mauroc(prob, targ).item()
         metrics["mAUPRC"] = mauprc(prob, targ).item()
         metrics["accuracy"] = (pred == targ).sum().item() / len(pred)
+        total_samples = targ.numel()
+        if total_samples == 0:
+            prevalence_value: Any = 0.0 if args.n_class == 2 else [0.0] * args.n_class
+        elif args.n_class == 2:
+            positive = (targ == 1).sum().item()
+            prevalence_value = positive / total_samples
+        else:
+            counts = torch.bincount(targ.view(-1), minlength=args.n_class)
+            prevalence_value = [
+                counts[class_index].item() / total_samples for class_index in range(args.n_class)
+            ]
+        metrics["prevalence"] = prevalence_value
+        prevalence_serialised = json.dumps(prevalence_value)
         print_balanced = f"Balanced accuracy: {metrics['balanced_accuracy']}"
         print_mf1 = f"mF1: {metrics['mF1']}"
         print_mprec = f"mPrecision: {metrics['mPrecision']}"
@@ -537,6 +550,7 @@ def test(
         print_mauroc = f"mAUROC: {metrics['mAUROC']}"
         print_mauprc = f"mAUPRC: {metrics['mAUPRC']}"
         print_acc = f"Accuracy: {metrics['accuracy']}"
+        print_prev = f"Prevalence: {prevalence_serialised}"
         print(print_title)
         print(print_balanced)
         print(print_mf1)
@@ -545,6 +559,7 @@ def test(
         print(print_mauroc)
         print(print_mauprc)
         print(print_acc)
+        print(print_prev)
         if tau is not None and args.n_class == 2:
             tau_label = tau_source or "tau"
             print_tau = f"{tau_label}: {tau:.6f}"
@@ -560,6 +575,7 @@ def test(
             f.write(print_mauroc + "\n")
             f.write(print_mauprc + "\n")
             f.write(print_acc + "\n")
+            f.write(print_prev + "\n")
             if tau is not None and args.n_class == 2:
                 f.write(f"{tau_label}: {tau:.6f}\n")
 
