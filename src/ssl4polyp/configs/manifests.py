@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from collections import Counter
 from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import torch
@@ -39,6 +40,60 @@ SplitReturn = Tuple[Paths, Labels, Meta]
 
 REQUIRED_COLUMNS = {"frame_path", "label"}
 CANONICAL_SPLIT_NAMES = {"train", "val", "test", "eval"}
+
+
+def _coerce_int(value: object) -> Optional[int]:
+    """Convert ``value`` to ``int`` when it represents an integer quantity."""
+
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        try:
+            number = float(value)
+        except ValueError:
+            return None
+        if number.is_integer():
+            return int(number)
+    return None
+
+
+def _parse_expected_counts(
+    manifest: Optional[Mapping[str, object]]
+) -> Dict[str, Tuple[Optional[int], Dict[str, int]]]:
+    """Extract per-split frame and label count expectations from ``manifest``."""
+
+    expectations: Dict[str, Tuple[Optional[int], Dict[str, int]]] = {}
+    if not isinstance(manifest, Mapping):
+        return expectations
+
+    counts_section = manifest.get("counts")
+    if not isinstance(counts_section, Mapping):
+        return expectations
+
+    for split_name, entry in counts_section.items():
+        if not isinstance(entry, Mapping):
+            continue
+        expected_frames = _coerce_int(entry.get("frames"))
+        label_expectations: Dict[str, int] = {}
+        label_counts = entry.get("label_counts")
+        if isinstance(label_counts, Mapping):
+            for label, count in label_counts.items():
+                coerced = _coerce_int(count)
+                if coerced is not None:
+                    label_expectations[str(label)] = coerced
+        for key, value in entry.items():
+            if key in {"frames", "label_counts"} or key.endswith("_cases"):
+                continue
+            coerced = _coerce_int(value)
+            if coerced is not None:
+                label_expectations[str(key)] = coerced
+        if expected_frames is not None or label_expectations:
+            expectations[str(split_name)] = (expected_frames, label_expectations)
+    return expectations
 
 
 def resolve_manifest_path(manifest: Optional[str | Path]) -> Optional[Path]:
@@ -353,6 +408,8 @@ def load_pack(
     if manifest_parent is None and manifest_yaml is not None:
         manifest_parent = Path(manifest_yaml).parent
 
+    expected_counts = _parse_expected_counts(manifest)
+
     def _resolve_csv_path(path: Path) -> Path:
         if path.is_absolute():
             return path
@@ -384,6 +441,23 @@ def load_pack(
             split_column=split_column_name,
             expected_split_value=expected_split_value,
         )
+        expected_frames, expected_label_counts = expected_counts.get(name, (None, {}))
+        if expected_frames is not None and len(rows) != expected_frames:
+            raise ValueError(
+                "Split {!r} row count mismatch: expected {} rows but found {} in {}".format(
+                    name, expected_frames, len(rows), csv_path
+                )
+            )
+        if expected_label_counts:
+            label_counter = Counter(row.get("label") for row in rows)
+            for label, expected_count in expected_label_counts.items():
+                actual_count = label_counter.get(label, 0)
+                if actual_count != expected_count:
+                    raise ValueError(
+                        "Split {!r} label count mismatch for label {!r}: expected {} rows but found {} in {}".format(
+                            name, label, expected_count, actual_count, csv_path
+                        )
+                    )
         paths = resolve_paths(rows, roots_map)
         labels: Labels = [row.get("label", "") for row in rows]
         result[name] = (paths, labels, rows)
