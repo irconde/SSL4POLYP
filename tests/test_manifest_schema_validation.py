@@ -46,12 +46,16 @@ def _write_manifest(
     fields: list[str],
     splits: dict[str, str],
     roots: dict[str, Path],
+    *,
+    counts: dict[str, dict[str, int]] | None = None,
 ) -> None:
     manifest: dict[str, object] = {
         "row_schema": {"fields": [{"name": name} for name in fields]},
         "roots": {key: str(value) for key, value in roots.items()},
     }
     manifest.update({split: {"csv": csv_name} for split, csv_name in splits.items()})
+    if counts is not None:
+        manifest["counts"] = counts
     path.write_text(json.dumps(manifest))
 
 
@@ -147,4 +151,117 @@ def test_load_pack_rejects_split_leak(tmp_path: Path, root_with_frame: Path) -> 
 
     with pytest.raises(ValueError, match="Split value mismatch"):
         load_pack(val=val_csv, manifest_yaml=manifest_yaml)
+
+
+def test_load_pack_detects_fewer_rows_than_manifest(
+    tmp_path: Path, root_with_frame: Path
+) -> None:
+    train_csv = tmp_path / "train.csv"
+    with open(train_csv, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["frame_path", "label", "split", "dataset"]
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "frame_path": "root/frame.png",
+                "label": "pos",
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+
+    manifest_yaml = tmp_path / "manifest.yaml"
+    _write_manifest(
+        manifest_yaml,
+        fields=["frame_path", "label", "split", "dataset"],
+        splits={"train": "train.csv"},
+        roots={"root": root_with_frame},
+        counts={"train": {"frames": 2, "pos": 1, "neg": 1}},
+    )
+
+    with pytest.raises(ValueError, match="Row count mismatch"):
+        load_pack(train=train_csv, manifest_yaml=manifest_yaml)
+
+
+def test_load_pack_detects_more_rows_than_manifest(
+    tmp_path: Path, root_with_frame: Path
+) -> None:
+    train_csv = tmp_path / "train.csv"
+    second_frame = root_with_frame / "frame2.png"
+    second_frame.write_text("data")
+    with open(train_csv, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["frame_path", "label", "split", "dataset"]
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "frame_path": "root/frame.png",
+                "label": "pos",
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+        writer.writerow(
+            {
+                "frame_path": "root/frame2.png",
+                "label": "neg",
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+
+    manifest_yaml = tmp_path / "manifest.yaml"
+    _write_manifest(
+        manifest_yaml,
+        fields=["frame_path", "label", "split", "dataset"],
+        splits={"train": "train.csv"},
+        roots={"root": root_with_frame},
+        counts={"train": {"frames": 1, "pos": 1}},
+    )
+
+    with pytest.raises(ValueError, match="Row count mismatch"):
+        load_pack(train=train_csv, manifest_yaml=manifest_yaml)
+
+
+def test_load_pack_detects_label_count_mismatch(
+    tmp_path: Path, root_with_frame: Path
+) -> None:
+    train_csv = tmp_path / "train.csv"
+    second_frame = root_with_frame / "frame2.png"
+    second_frame.write_text("data")
+    with open(train_csv, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["frame_path", "label", "split", "dataset"]
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "frame_path": "root/frame.png",
+                "label": "pos",
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+        writer.writerow(
+            {
+                "frame_path": "root/frame2.png",
+                "label": "pos",
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+
+    manifest_yaml = tmp_path / "manifest.yaml"
+    _write_manifest(
+        manifest_yaml,
+        fields=["frame_path", "label", "split", "dataset"],
+        splits={"train": "train.csv"},
+        roots={"root": root_with_frame},
+        counts={"train": {"frames": 2, "pos": 1, "neg": 1}},
+    )
+
+    with pytest.raises(ValueError, match="Label count mismatch"):
+        load_pack(train=train_csv, manifest_yaml=manifest_yaml)
 

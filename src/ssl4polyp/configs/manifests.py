@@ -18,8 +18,9 @@ import random
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence
+from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import torch
 import yaml
@@ -36,9 +37,27 @@ Paths = List[Path]
 Labels = List[str]
 Meta = List[Row]
 SplitReturn = Tuple[Paths, Labels, Meta]
+SplitCountsExpectation = Tuple[Optional[int], Dict[str, int], Dict[str, int]]
 
 REQUIRED_COLUMNS = {"frame_path", "label"}
 CANONICAL_SPLIT_NAMES = {"train", "val", "test", "eval"}
+
+
+def _coerce_to_int(value: object) -> Optional[int]:
+    """Attempt to coerce ``value`` into an integer."""
+
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def resolve_manifest_path(manifest: Optional[str | Path]) -> Optional[Path]:
@@ -234,6 +253,7 @@ def load_pack(
     manifest: Optional[Mapping[str, object]] = None
     schema_columns: Optional[Sequence[str]] = None
     split_column_name: Optional[str] = None
+    expected_counts: Dict[str, SplitCountsExpectation] = {}
     if manifest_yaml is not None and not isinstance(manifest_yaml, Path):
         manifest_yaml = Path(manifest_yaml)
     pack_root = pack_root or data_packs_root()
@@ -245,6 +265,55 @@ def load_pack(
             raise ValueError(
                 "Manifest defines an 'eval' split which is no longer supported; rename the split to 'test'."
             )
+        if isinstance(manifest, Mapping):
+            row_schema = manifest.get("row_schema")
+            if isinstance(row_schema, Mapping):
+                fields = row_schema.get("fields")
+                columns: List[str] = []
+                if isinstance(fields, Sequence):
+                    for field in fields:
+                        if isinstance(field, Mapping):
+                            name = field.get("name")
+                            if name is not None:
+                                columns.append(str(name))
+                        elif isinstance(field, str):
+                            columns.append(field)
+                if columns:
+                    schema_columns = columns
+                split_field = row_schema.get("split_column")
+                if isinstance(split_field, str):
+                    split_column_name = split_field
+                elif schema_columns and "split" in schema_columns:
+                    split_column_name = "split"
+            counts_section = manifest.get("counts")
+            if isinstance(counts_section, Mapping):
+                for split_name, raw_counts in counts_section.items():
+                    if not isinstance(raw_counts, Mapping):
+                        continue
+                    expected_rows = _coerce_to_int(raw_counts.get("frames"))
+                    explicit_label_counts: Dict[str, int] = {}
+                    fallback_label_counts: Dict[str, int] = {}
+                    label_counts_section = raw_counts.get("label_counts")
+                    if isinstance(label_counts_section, Mapping):
+                        for label, value in label_counts_section.items():
+                            coerced = _coerce_to_int(value)
+                            if coerced is not None:
+                                explicit_label_counts[str(label)] = coerced
+                    for key, value in raw_counts.items():
+                        if key in {"frames", "label_counts"}:
+                            continue
+                        key_str = str(key)
+                        if "case" in key_str or "frame" in key_str:
+                            continue
+                        coerced = _coerce_to_int(value)
+                        if coerced is None:
+                            continue
+                        fallback_label_counts[key_str] = coerced
+                    expected_counts[str(split_name)] = (
+                        expected_rows,
+                        explicit_label_counts,
+                        fallback_label_counts,
+                    )
         for name, path in splits.items():
             if path is not None:
                 continue
@@ -302,8 +371,42 @@ def load_pack(
             split_column=split_column_name,
             expected_split_value=expected_split_value,
         )
-        paths = resolve_paths(rows, roots_map)
         labels: Labels = [row.get("label", "") for row in rows]
+        expected = expected_counts.get(name)
+        if expected is not None:
+            expected_rows, explicit_label_counts, fallback_label_counts = expected
+            if expected_rows is not None and len(rows) != expected_rows:
+                raise ValueError(
+                    "Row count mismatch for split {!r} ({}): expected {}, found {}".format(
+                        name, csv_path, expected_rows, len(rows)
+                    )
+                )
+            if explicit_label_counts or fallback_label_counts:
+                actual_label_counts = Counter(labels)
+                enforce_full_label_set = bool(explicit_label_counts)
+                if explicit_label_counts:
+                    expected_label_counts = dict(explicit_label_counts)
+                else:
+                    expected_label_counts = dict(fallback_label_counts)
+                mismatched: List[str] = []
+                for label, expected_count in expected_label_counts.items():
+                    actual_count = actual_label_counts.get(label, 0)
+                    if actual_count != expected_count:
+                        mismatched.append(
+                            "{}: expected {}, found {}".format(label, expected_count, actual_count)
+                        )
+                if enforce_full_label_set:
+                    for label in sorted(set(actual_label_counts) - set(expected_label_counts)):
+                        mismatched.append(
+                            "{}: expected 0, found {}".format(label, actual_label_counts[label])
+                        )
+                if mismatched:
+                    raise ValueError(
+                        "Label count mismatch for split {!r} ({}): {}".format(
+                            name, csv_path, "; ".join(mismatched)
+                        )
+                    )
+        paths = resolve_paths(rows, roots_map)
         result[name] = (paths, labels, rows)
         used_csvs.append(csv_path)
 
