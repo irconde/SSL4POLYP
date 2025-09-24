@@ -1,8 +1,9 @@
-numpy==1.22.3
+numpy==1.21.6
 opencv_python==4.5.5.64
-Pillow==9.1.0
+Pillow==10.4.0
 scikit_learn==1.0.2
-timm==0.6.12
+timm==0.3.2
 torch==1.9.0+cu111
-torchmetrics==1.1.2
 torchvision==0.10.0+cu111
+torchmetrics==1.1.2
+lightning-utilities==0.11.9
