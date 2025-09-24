@@ -1,0 +1,7 @@
+name: /workspace/conda/envs/ssl-mae
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - ipykernel
+prefix: /workspace/conda/envs/ssl-mae
