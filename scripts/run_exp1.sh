@@ -8,15 +8,24 @@ SEEDS=${SEEDS:-42 47 13}
 MODELS=${MODELS:-sup_imnet ssl_imnet}
 
 python - <<'PY'
-import torch
-
-if torch.cuda.is_available():
-    count = torch.cuda.device_count()
-    names = [torch.cuda.get_device_name(i) for i in range(count)]
-    devices = ", ".join(names)
-    print(f"Detected {count} CUDA device(s): {devices}")
+try:
+    import torch
+except ModuleNotFoundError:
+    print("PyTorch not installed; skipping CUDA availability check.")
 else:
-    print("No CUDA devices detected; training will run on CPU.")
+    try:
+        if torch.cuda.is_available():
+            count = torch.cuda.device_count()
+            try:
+                names = [torch.cuda.get_device_name(i) for i in range(count)]
+                devices = ", ".join(names)
+            except RuntimeError:
+                devices = "unknown CUDA device(s)"
+            print(f"Detected {count} CUDA device(s): {devices}")
+        else:
+            print("No CUDA devices detected; training will run on CPU.")
+    except RuntimeError as err:
+        print(f"CUDA initialization failed ({err}); training will run on CPU.")
 PY
 
 for seed in ${SEEDS}; do
