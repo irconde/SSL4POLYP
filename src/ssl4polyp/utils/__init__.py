@@ -10,6 +10,7 @@ __all__ = [
 
 
 def get_MAE_backbone(weight_path, head, num_classes, frozen, dense, out_token="cls"):
+
     from ssl4polyp.models import models
 
     return models.ViT_from_MAE(
@@ -33,6 +34,7 @@ def get_ImageNet_or_random_ViT(
     ImageNet_weights,
     out_token="cls",
 ):
+
     from ssl4polyp.models import models
 
     return models.VisionTransformer_from_Any(
