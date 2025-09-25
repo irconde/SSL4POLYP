@@ -52,6 +52,18 @@ if [[ ${#EXP_CONFIGS[@]} -eq 0 ]]; then
   exit 1
 fi
 
+python - <<'PY'
+import torch
+
+if torch.cuda.is_available():
+    count = torch.cuda.device_count()
+    names = [torch.cuda.get_device_name(i) for i in range(count)]
+    devices = ", ".join(names)
+    print(f"Detected {count} CUDA device(s): {devices}")
+else:
+    print("No CUDA devices detected; training will run on CPU.")
+PY
+
 for CONFIG_PATH in "${EXP_CONFIGS[@]}"; do
   EXP_NAME=$(basename "${CONFIG_PATH%.*}")
   echo "Launching experiment ${EXP_NAME}"
