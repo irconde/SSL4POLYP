@@ -1,7 +1,17 @@
-from ssl4polyp.models import models
+"""Utility helpers for SSL4POLYP."""
+
+from .tensorboard import SummaryWriter
+
+__all__ = [
+    "SummaryWriter",
+    "get_MAE_backbone",
+    "get_ImageNet_or_random_ViT",
+]
 
 
 def get_MAE_backbone(weight_path, head, num_classes, frozen, dense, out_token="cls"):
+    from ssl4polyp.models import models
+
     return models.ViT_from_MAE(
         weight_path,
         head,
@@ -23,6 +33,8 @@ def get_ImageNet_or_random_ViT(
     ImageNet_weights,
     out_token="cls",
 ):
+    from ssl4polyp.models import models
+
     return models.VisionTransformer_from_Any(
         head,
         num_classes,
@@ -34,4 +46,3 @@ def get_ImageNet_or_random_ViT(
         out_token,
         ImageNet_weights,
     )
-
