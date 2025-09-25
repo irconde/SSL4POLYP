@@ -21,7 +21,7 @@ import torch.nn as nn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.tensorboard import SummaryWriter
+from ssl4polyp.utils.tensorboard import SummaryWriter
 
 from ssl4polyp import utils
 from ssl4polyp.classification.data import create_classification_dataloaders
