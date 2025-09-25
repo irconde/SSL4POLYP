@@ -61,6 +61,23 @@ def _coerce_int(value: object) -> Optional[int]:
     return None
 
 
+_LABEL_ALIASES = {
+    "pos": "1",
+    "positive": "1",
+    "neg": "0",
+    "negative": "0",
+}
+
+
+def _normalise_label_key(label: object) -> str:
+    """Normalise ``label`` to a canonical representation for comparisons."""
+
+    if isinstance(label, str):
+        stripped = label.strip()
+        return _LABEL_ALIASES.get(stripped.lower(), stripped)
+    return _normalise_label_key(str(label))
+
+
 def _parse_expected_counts(
     manifest: Optional[Mapping[str, object]]
 ) -> Dict[str, Tuple[Optional[int], Dict[str, int]]]:
@@ -84,13 +101,13 @@ def _parse_expected_counts(
             for label, count in label_counts.items():
                 coerced = _coerce_int(count)
                 if coerced is not None:
-                    label_expectations[str(label)] = coerced
+                    label_expectations[_normalise_label_key(label)] = coerced
         for key, value in entry.items():
             if key in {"frames", "label_counts"} or key.endswith("_cases"):
                 continue
             coerced = _coerce_int(value)
             if coerced is not None:
-                label_expectations[str(key)] = coerced
+                label_expectations[_normalise_label_key(key)] = coerced
         if expected_frames is not None or label_expectations:
             expectations[str(split_name)] = (expected_frames, label_expectations)
     return expectations
@@ -449,7 +466,9 @@ def load_pack(
                 )
             )
         if expected_label_counts:
-            label_counter = Counter(row.get("label") for row in rows)
+            label_counter = Counter(
+                _normalise_label_key(row.get("label", "")) for row in rows
+            )
             for label, expected_count in expected_label_counts.items():
                 actual_count = label_counter.get(label, 0)
                 if actual_count != expected_count:

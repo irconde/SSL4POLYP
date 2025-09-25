@@ -201,6 +201,38 @@ def test_load_pack_detects_hash_mismatch_for_split_keyed_hashes(
         load_pack(train=train_csv, manifest_yaml=manifest_yaml)
 
 
+def test_load_pack_accepts_canonical_label_aliases(
+    tmp_path: Path, root_with_frame: Path
+) -> None:
+    train_csv = tmp_path / "train.csv"
+    with open(train_csv, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["frame_path", "label", "split", "dataset"]
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "frame_path": "root/frame.png",
+                "label": "1",
+                "split": "train",
+                "dataset": "demo",
+            }
+        )
+
+    manifest_yaml = tmp_path / "manifest.yaml"
+    _write_manifest(
+        manifest_yaml,
+        fields=["frame_path", "label", "split", "dataset"],
+        splits={"train": "train.csv"},
+        roots={"root": root_with_frame},
+        counts={"train": {"label_counts": {"pos": 1, "neg": 0}}},
+    )
+
+    pack = load_pack(train=train_csv, manifest_yaml=manifest_yaml)
+    labels = pack["train"][1]
+    assert labels == ["1"]
+
+
 def test_load_pack_rejects_when_rows_removed(tmp_path: Path, root_with_frame: Path) -> None:
     train_csv = tmp_path / "train.csv"
     fieldnames = ["frame_path", "label", "split", "dataset"]
