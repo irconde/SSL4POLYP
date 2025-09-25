@@ -9,6 +9,23 @@ Links to the original paper:
 + [IEEE Access (open access)](https://ieeexplore.ieee.org/document/10478725)
 + [arXiv](https://arxiv.org/abs/2401.06278)
 
+## Installation
+
+The project ships a fully pinned runtime in `requirements.txt` / `requirements-pip.txt`.
+To reproduce the curated environment:
+
+1. Create and activate a fresh virtual environment (for example, `python -m venv .venv && source .venv/bin/activate`).
+2. Install the locked dependencies, e.g. `pip install -r requirements.txt` (or `requirements-pip.txt` when building the
+   extended tooling stack).
+3. Register the package in editable mode without letting pip resolve alternatives:
+
+   ```bash
+   pip install --no-deps -e .
+   ```
+
+Using `--no-deps` prevents pip from overwriting the pinned versions with newer releases while still exposing the
+`ssl4polyp` CLI entry points.
+
 ## New functionality
 
 We include helper scripts that automate common workflows introduced in the

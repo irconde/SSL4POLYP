@@ -26,16 +26,9 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 # --- compat shim: make timm==0.3.2 work with newer Torch ---
-import sys, types
-try:
-    import torch._six as _six
-    _ = _six.container_abcs  # already present → OK
-except Exception:
-    from collections import abc as _abc
-    _six = sys.modules.get("torch._six") or types.ModuleType("torch._six")
-    _six.container_abcs = _abc
-    sys.modules["torch._six"] = _six
-# --- end shim ---
+from ssl4polyp._compat import ensure_torch_container_abcs
+
+ensure_torch_container_abcs()
 
 import timm
 

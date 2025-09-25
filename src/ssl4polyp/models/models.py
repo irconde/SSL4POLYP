@@ -2,8 +2,16 @@ import torch
 import torch.nn as nn
 
 from functools import partial
+from pathlib import Path
+from urllib.parse import urlparse
+
+from torch.hub import download_url_to_file, get_dir as get_torch_hub_dir
+
+from ssl4polyp._compat import ensure_torch_container_abcs
+
+ensure_torch_container_abcs()
+
 from timm.models.vision_transformer import VisionTransformer
-from timm.models.hub import download_cached_file
 
 from .mae import models_mae
 
@@ -28,7 +36,7 @@ class VisionTransformer_from_Any(VisionTransformer):
         )
 
         if ImageNet_weights:
-            loc = download_cached_file(
+            loc = _download_cached_file(
                 "https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz"
             )
             self.load_pretrained(loc)
@@ -150,4 +158,14 @@ class ViT_from_MAE(models_mae.MaskedAutoencoderViT):
             if self.head:
                 x = self.lin_head(x)
         return x
+
+
+def _download_cached_file(url: str) -> str:
+    cache_root = Path(get_torch_hub_dir()) / "ssl4polyp"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    filename = Path(urlparse(url).path).name or "download"
+    destination = cache_root / filename
+    if not destination.exists():
+        download_url_to_file(url, destination, progress=True)
+    return str(destination)
 

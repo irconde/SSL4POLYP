@@ -1,4 +1,11 @@
+"""Utility helpers exposed under :mod:`ssl4polyp.utils`."""
+
 from ssl4polyp.models import models
+
+__all__ = [
+    "get_MAE_backbone",
+    "get_ImageNet_or_random_ViT",
+]
 
 
 def get_MAE_backbone(weight_path, head, num_classes, frozen, dense, out_token="cls"):
@@ -34,4 +41,3 @@ def get_ImageNet_or_random_ViT(
         out_token,
         ImageNet_weights,
     )
-
