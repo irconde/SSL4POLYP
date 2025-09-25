@@ -13,6 +13,7 @@ from pathlib import Path
 
 import yaml
 
+from contextlib import nullcontext
 from typing import Any, Dict, Iterable, Optional
 
 import torch
@@ -75,11 +76,26 @@ def set_determinism(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True, warn_only=True)
     print(f"Setting deterministic mode with seed {seed}")
+
+
+def _resolve_device(rank: int) -> torch.device:
+    """Return the appropriate device for ``rank``."""
+
+    if torch.cuda.is_available():
+        return torch.device("cuda", rank)
+    return torch.device("cpu")
+
+
+def _unwrap_model(model: nn.Module) -> nn.Module:
+    """Return the underlying model from a possible DDP wrapper."""
+
+    return model.module if isinstance(model, DDP) else model
 
 
 def _prepare_metric_export(
@@ -773,6 +789,9 @@ def train_epoch(
     log_interval,
     global_step,
     seed,
+    *,
+    device: torch.device,
+    distributed: bool,
 ):
     t = time.time()
     model.train()
@@ -784,16 +803,23 @@ def train_epoch(
             data, target, _ = batch
         else:
             data, target = batch
-        data, target = data.cuda(rank), target.cuda(rank)
+        non_blocking = device.type == "cuda"
+        data = data.to(device, non_blocking=non_blocking)
+        target = target.to(device, non_blocking=non_blocking)
         optimizer.zero_grad()
-        with torch.cuda.amp.autocast(enabled=use_amp):
+        if device.type == "cuda":
+            autocast_context = torch.cuda.amp.autocast(enabled=use_amp)
+        else:
+            autocast_context = nullcontext()
+        with autocast_context:
             output = model(data)
             loss = loss_fn(output, target)
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
-        dist.all_reduce(loss)
-        loss /= world_size
+        if distributed:
+            dist.all_reduce(loss)
+            loss /= world_size
         loss_accumulator.append(loss.item())
         if rank == 0:
             if writer is not None and global_step % log_interval == 0:
@@ -825,7 +851,8 @@ def train_epoch(
                 with open(log_path, "a") as f:
                     f.write(printout)
                     f.write("\n")
-        dist.barrier()
+        if distributed:
+            dist.barrier()
         global_step += 1
 
     return np.mean(loss_accumulator), global_step
@@ -848,6 +875,8 @@ def test(
     t = time.time()
     model.eval()
     metric_fns = metric_fns or {}
+    device = next(model.parameters()).device
+    non_blocking = device.type == "cuda"
     N = 0
     logits = None
     targets = None
@@ -858,7 +887,8 @@ def test(
             raise ValueError("Test dataloader does not provide labels; enable metadata return with labels.")
         else:  # pragma: no cover - defensive
             raise ValueError("Unexpected batch structure returned by dataloader")
-        data, target = data.cuda(rank), target.cuda(rank)
+        data = data.to(device, non_blocking=non_blocking)
+        target = target.to(device, non_blocking=non_blocking)
         N += len(data)
         output = model(data).detach().cpu()
         target_cpu = target.detach().cpu()
@@ -923,7 +953,7 @@ def test(
     return results
 
 
-def build(args, rank):
+def build(args, rank, device: torch.device, distributed: bool):
 
     pack_root = Path(args.pack_root).expanduser() if args.pack_root else None
     val_spec = args.val_pack or args.train_pack
@@ -1024,13 +1054,17 @@ def build(args, rank):
 
     configure_finetune_parameters(model, getattr(args, "finetune_mode", "full"))
 
-    model.cuda(rank)
-    model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model = DDP(model, device_ids=[rank])
+    if distributed:
+        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    model = model.to(device)
+    if distributed:
+        ddp_kwargs: Dict[str, Any] = {}
+        if device.type == "cuda":
+            ddp_kwargs["device_ids"] = [rank]
+        model = DDP(model, **ddp_kwargs)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.lr, weight_decay=getattr(args, "weight_decay", 0.0)
     )
-    use_amp = args.precision == "amp"
     thresholds_map = dict(thresholds_map)
     raw_policy = (args.threshold_policy or "auto").strip().lower()
     if raw_policy not in {"auto", "youden", "none", ""}:
@@ -1062,6 +1096,7 @@ def build(args, rank):
             dataset_name, val_split, resolved_policy
         )
     args.threshold_policy = resolved_policy
+    use_amp = args.precision == "amp" and device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     scheduler = create_scheduler(optimizer, args)
     if best_val_perf is not None:
@@ -1092,14 +1127,24 @@ def build(args, rank):
 
 def train(rank, args):
 
-    dist.init_process_group(
-        backend="nccl",
-        rank=rank,
-        world_size=args.world_size,
-        init_method="tcp://localhost:58472",
+    device = _resolve_device(rank)
+    distributed = args.world_size > 1
+    backend = None
+    if distributed:
+        if device.type == "cuda" and torch.distributed.is_nccl_available():
+            backend = "nccl"
+        else:
+            backend = "gloo"
+        dist.init_process_group(
+            backend=backend,
+            rank=rank,
+            world_size=args.world_size,
+            init_method="tcp://localhost:58472",
+        )
+    backend_msg = f" using {backend} backend" if backend else ""
+    print(
+        f"Rank {rank + 1}/{args.world_size} process initialized on {device}.{backend_msg}\n"
     )
-
-    print(f"Rank {rank + 1}/{args.world_size} process initialized.\n")
 
     seed = int(getattr(args, "seed", 0)) + int(rank)
     set_determinism(seed)
@@ -1124,10 +1169,10 @@ def train(rank, args):
         thresholds_map,
         compute_threshold,
         threshold_key,
-    ) = build(args, rank)
-    use_amp = args.precision == "amp"
+    ) = build(args, rank, device, distributed)
+    use_amp = args.precision == "amp" and device.type == "cuda"
 
-    loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(class_weights).cuda(rank))
+    loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
     perf_fn = performance.meanAUROC(n_class=len(class_weights))
     aux_metric_fns = {
         "f1": performance.meanF1Score(n_class=len(class_weights)),
@@ -1142,7 +1187,8 @@ def train(rank, args):
             f.write("\n")
     else:
         writer = None
-    dist.barrier()
+    if distributed:
+        dist.barrier()
 
     ckpt_pointer = Path(ckpt_path)
     ckpt_stem = ckpt_pointer.with_suffix("")
@@ -1152,7 +1198,6 @@ def train(rank, args):
     no_improve_epochs = 0
     scheduler_name = getattr(args, "scheduler", "none").lower()
     early_patience = getattr(args, "early_stop_patience", 0) or 0
-    device = torch.device("cuda", rank)
     last_epoch: Optional[int] = None
     last_loss: Optional[float] = None
     last_val_perf: Optional[float] = None
@@ -1181,10 +1226,12 @@ def train(rank, args):
                 args.log_interval,
                 global_step,
                 args.seed,
+                device=device,
+                distributed=distributed,
             )
             if rank == 0:
                 val_metrics = test(
-                    model.module,
+                    _unwrap_model(model),
                     rank,
                     val_dataloader,
                     epoch,
@@ -1195,7 +1242,7 @@ def train(rank, args):
                     return_outputs=compute_threshold,
                 )
                 test_metrics = test(
-                    model.module,
+                    _unwrap_model(model),
                     rank,
                     test_dataloader,
                     epoch,
@@ -1234,12 +1281,18 @@ def train(rank, args):
 
             if scheduler is not None:
                 if scheduler_name == "plateau":
-                    metric_tensor = torch.tensor([val_perf if rank == 0 else 0.0], device=device)
-                    dist.broadcast(metric_tensor, src=0)
-                    scheduler.step(metric_tensor.item())
+                    if distributed:
+                        metric_tensor = torch.tensor(
+                            [val_perf if rank == 0 else 0.0], device=device
+                        )
+                        dist.broadcast(metric_tensor, src=0)
+                        scheduler.step(metric_tensor.item())
+                    else:
+                        scheduler.step(val_perf)
                 else:
                     scheduler.step()
-            dist.barrier()
+            if distributed:
+                dist.barrier()
         except KeyboardInterrupt:
             print("Training interrupted by user")
             sys.exit(0)
@@ -1312,9 +1365,10 @@ def train(rank, args):
                         print(
                             f"Updated threshold {threshold_key} = {tau:.6f} -> {threshold_file_relpath}"
                         )
+                model_to_save = _unwrap_model(model)
                 payload = {
                     "epoch": epoch,
-                    "model_state_dict": model.module.state_dict(),
+                    "model_state_dict": model_to_save.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scaler_state_dict": scaler.state_dict(),
                     "loss": loss,
@@ -1386,23 +1440,28 @@ def train(rank, args):
                 no_improve_epochs += 1
 
         if early_patience > 0:
-            stop_tensor = torch.tensor(
-                [1 if (rank == 0 and no_improve_epochs >= early_patience) else 0],
-                device=device,
-            )
-            dist.broadcast(stop_tensor, src=0)
-            if stop_tensor.item():
-                if rank == 0:
-                    print("Early stopping triggered after reaching patience limit.")
+            if distributed:
+                stop_tensor = torch.tensor(
+                    [1 if (rank == 0 and no_improve_epochs >= early_patience) else 0],
+                    device=device,
+                )
+                dist.broadcast(stop_tensor, src=0)
+                if stop_tensor.item():
+                    if rank == 0:
+                        print("Early stopping triggered after reaching patience limit.")
+                    break
+            elif rank == 0 and no_improve_epochs >= early_patience:
+                print("Early stopping triggered after reaching patience limit.")
                 break
 
-        dist.barrier()
+        if distributed:
+            dist.barrier()
     if writer is not None:
         writer.close()
     if rank == 0 and last_epoch is not None:
         last_payload: Dict[str, Any] = {
             "epoch": int(last_epoch),
-            "model_state_dict": model.module.state_dict(),
+            "model_state_dict": _unwrap_model(model).state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "scaler_state_dict": scaler.state_dict(),
             "loss": float(last_loss) if last_loss is not None else None,
@@ -1464,7 +1523,8 @@ def train(rank, args):
         last_metrics_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.metrics.json"
         with open(last_metrics_path, "w") as handle:
             json.dump(last_metrics_payload, handle, indent=2)
-    dist.destroy_process_group()
+    if distributed:
+        dist.destroy_process_group()
 
 
 def get_args():
@@ -1736,9 +1796,13 @@ def main():
     config_path = output_dir / "config.yaml"
     with open(config_path, "w") as f:
         yaml.safe_dump(run_config, f)
-    args.world_size = torch.cuda.device_count()
+    device_count = torch.cuda.device_count()
+    args.world_size = device_count if device_count > 0 else 1
     assert args.batch_size % args.world_size == 0
-    mp.spawn(train, nprocs=args.world_size, args=(args,), join=True)
+    if args.world_size > 1:
+        mp.spawn(train, nprocs=args.world_size, args=(args,), join=True)
+    else:
+        train(0, args)
 
 
 if __name__ == "__main__":
