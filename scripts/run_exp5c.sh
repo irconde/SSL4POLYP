@@ -8,6 +8,18 @@ SEEDS=${SEEDS:-13 29 47}
 SIZES=${SIZES:-50 100 200 500}
 MODELS=${MODELS:-sup_imnet ssl_imnet ssl_colon}
 
+python - <<'PY'
+import torch
+
+if torch.cuda.is_available():
+    count = torch.cuda.device_count()
+    names = [torch.cuda.get_device_name(i) for i in range(count)]
+    devices = ", ".join(names)
+    print(f"Detected {count} CUDA device(s): {devices}")
+else:
+    print("No CUDA devices detected; training will run on CPU.")
+PY
+
 for seed in ${SEEDS}; do
   for size in ${SIZES}; do
     for model in ${MODELS}; do
