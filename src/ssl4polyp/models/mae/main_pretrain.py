@@ -25,6 +25,8 @@ from ssl4polyp.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
+from ssl4polyp import utils
+
 # --- compat shim: make timm==0.3.2 work with newer Torch ---
 from ssl4polyp._compat import ensure_torch_container_abcs
 
@@ -148,7 +150,7 @@ def main(args):
     cudnn.benchmark = False
     cudnn.deterministic = True
     # warn_only=True logs when ops fall back to non-deterministic versions
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    utils.enable_deterministic_algorithms()
 
     # simple augmentation
     transform_train = transforms.Compose([
