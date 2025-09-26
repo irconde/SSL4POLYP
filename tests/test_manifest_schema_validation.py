@@ -201,6 +201,40 @@ def test_load_pack_detects_hash_mismatch_for_split_keyed_hashes(
         load_pack(train=train_csv, manifest_yaml=manifest_yaml)
 
 
+def test_load_pack_resolves_store_root_when_path_missing_root(tmp_path: Path) -> None:
+    dataset_root = tmp_path / "sun_root"
+    image_dir = dataset_root / "images"
+    image_dir.mkdir(parents=True)
+    frame_path = image_dir / "frame.png"
+    frame_path.write_text("data")
+
+    train_csv = tmp_path / "train.csv"
+    fieldnames = ["frame_path", "label", "store_id"]
+    with open(train_csv, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerow(
+            {
+                "frame_path": "images/frame.png",
+                "label": "1",
+                "store_id": "sun",
+            }
+        )
+
+    manifest_yaml = tmp_path / "manifest.yaml"
+    _write_manifest(
+        manifest_yaml,
+        fields=fieldnames,
+        splits={"train": "train.csv"},
+        roots={"sun": dataset_root},
+    )
+
+    pack = load_pack(train=train_csv, manifest_yaml=manifest_yaml)
+    resolved_paths, labels, _ = pack["train"]
+    assert labels == ["1"]
+    assert resolved_paths == [frame_path]
+
+
 def test_load_pack_accepts_canonical_label_aliases(
     tmp_path: Path, root_with_frame: Path
 ) -> None:
