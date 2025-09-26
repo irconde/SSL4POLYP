@@ -11,7 +11,7 @@ from ssl4polyp._compat import ensure_torch_container_abcs
 
 ensure_torch_container_abcs()
 
-from timm.models.vision_transformer import VisionTransformer
+from timm.models.vision_transformer import VisionTransformer, _load_weights
 
 from .mae import models_mae
 
@@ -51,6 +51,50 @@ class VisionTransformer_from_Any(VisionTransformer):
         if dense:
             self.decoder = DPT_decoder(num_classes=num_classes, dense=dense)
         self.out_token = out_token
+
+    def load_pretrained(self, checkpoint_path):
+        checkpoint_path = Path(checkpoint_path)
+
+        if checkpoint_path.suffix.lower() == ".npz":
+            _load_weights(self, str(checkpoint_path))
+            return
+
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        state_dict = None
+
+        if isinstance(checkpoint, dict):
+            for key in (
+                "state_dict",
+                "model",
+                "model_state",
+                "weights",
+                "params",
+            ):
+                candidate = checkpoint.get(key)
+                if isinstance(candidate, dict):
+                    state_dict = candidate
+                    break
+            if state_dict is None and all(
+                isinstance(k, str) for k in checkpoint.keys()
+            ):
+                state_dict = checkpoint
+        else:
+            state_dict = checkpoint
+
+        if hasattr(state_dict, "state_dict"):
+            state_dict = state_dict.state_dict()
+
+        if not isinstance(state_dict, dict):
+            print(
+                f"Warning: unsupported checkpoint format for {checkpoint_path!s}: {type(checkpoint)}"
+            )
+            return
+
+        missing, unexpected = self.load_state_dict(state_dict, strict=False)
+        if missing:
+            print(f"Missing keys when loading pretrained weights: {missing}")
+        if unexpected:
+            print(f"Unexpected keys when loading pretrained weights: {unexpected}")
 
     def forward_features(self, x):
         x = self.patch_embed(x)
