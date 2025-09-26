@@ -20,6 +20,8 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 from ssl4polyp.utils.tensorboard import SummaryWriter
+
+from ssl4polyp import utils
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
@@ -135,7 +137,7 @@ def main(args):
     cudnn.benchmark = False
     cudnn.deterministic = True
     # warn_only=True logs when ops fall back to non-deterministic versions
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    utils.enable_deterministic_algorithms()
     use_amp = args.precision == 'amp'
 
     # linear probe: weak augmentation

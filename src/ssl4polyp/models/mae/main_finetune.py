@@ -21,6 +21,8 @@ import torch
 import torch.backends.cudnn as cudnn
 from ssl4polyp.utils.tensorboard import SummaryWriter
 
+from ssl4polyp import utils
+
 import timm
 
 assert timm.__version__ == "0.3.2" # version check
@@ -177,7 +179,7 @@ def main(args):
     cudnn.benchmark = False
     cudnn.deterministic = True
     # warn_only=True logs when ops fall back to non-deterministic versions
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    utils.enable_deterministic_algorithms()
     use_amp = args.precision == 'amp'
 
     dataset_train = build_dataset(is_train=True, args=args)
