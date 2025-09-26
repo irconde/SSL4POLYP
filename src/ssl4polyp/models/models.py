@@ -11,7 +11,12 @@ from ssl4polyp._compat import ensure_torch_container_abcs
 
 ensure_torch_container_abcs()
 
-from timm.models.vision_transformer import VisionTransformer, _load_weights
+from timm.models.vision_transformer import VisionTransformer
+
+try:  # timm<0.9 exposes the helper while newer versions removed it
+    from timm.models.vision_transformer import _load_weights  # type: ignore
+except ImportError:  # pragma: no cover - best effort compatibility shim
+    _load_weights = None
 
 from .mae import models_mae
 
@@ -56,8 +61,13 @@ class VisionTransformer_from_Any(VisionTransformer):
         checkpoint_path = Path(checkpoint_path)
 
         if checkpoint_path.suffix.lower() == ".npz":
-            _load_weights(self, str(checkpoint_path))
-            return
+            if _load_weights is not None:
+                _load_weights(self, str(checkpoint_path))
+                return
+
+            # Fallback to the upstream implementation which supports
+            # loading numpy checkpoints on newer timm releases.
+            return super().load_pretrained(str(checkpoint_path))
 
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
         state_dict = None
