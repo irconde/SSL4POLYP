@@ -310,8 +310,18 @@ def resolve_paths(
         p = Path(raw)
         if roots_map and p.parts:
             root = p.parts[0]
-            if root in roots_map:
-                p = Path(roots_map[root]) / Path(*p.parts[1:])
+            mapped_root = roots_map.get(root)
+            if mapped_root is not None:
+                p = Path(mapped_root) / Path(*p.parts[1:])
+            else:
+                for key in ("store_id", "dataset"):
+                    dataset_id = row.get(key)
+                    if not dataset_id:
+                        continue
+                    dataset_root = roots_map.get(dataset_id)
+                    if dataset_root is not None:
+                        p = Path(dataset_root) / p
+                        break
         paths.append(p)
 
     if paths:
