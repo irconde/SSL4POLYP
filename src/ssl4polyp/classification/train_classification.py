@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import distutils.version
 import sys
 import os
 import argparse

@@ -63,7 +63,7 @@ stack-data @ file:///home/conda/feedstock_root/build_artifacts/stack_data_166963
 tensorboard==2.14.0
 tensorboard-data-server==0.7.2
 threadpoolctl==3.5.0
-timm==0.3.2
+timm==0.4.12
 torch==1.9.0+cu111
 torchmetrics==1.1.2
 torchvision==0.10.0+cu111

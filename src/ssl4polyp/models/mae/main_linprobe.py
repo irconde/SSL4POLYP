@@ -9,6 +9,7 @@
 # MoCo v3: https://github.com/facebookresearch/moco-v3
 # --------------------------------------------------------
 
+import distutils.version
 import argparse
 import datetime
 import json
@@ -27,7 +28,7 @@ import torchvision.datasets as datasets
 
 import timm
 
-assert timm.__version__ == "0.3.2" # version check
+assert timm.__version__ == "0.4.12" # version check
 from timm.models.layers import trunc_normal_
 
 import util.misc as misc
