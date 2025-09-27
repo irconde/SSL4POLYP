@@ -23,6 +23,12 @@ To reproduce the curated environment:
    pip install --no-deps -e .
    ```
 
+   ```bash
+   export CUBLAS_WORKSPACE_CONFIG=:4096:8
+   ```
+
+   Configure CuBLAS determinism before launching training to avoid runtime errors when `torch.use_deterministic_algorithms(True)` is active.
+
 Using `--no-deps` prevents pip from overwriting the pinned versions with newer releases while still exposing the
 `ssl4polyp` CLI entry points.
 
