@@ -22,7 +22,7 @@ dependencies = [
   "opencv-python==4.5.5.64",
   "Pillow==10.4.0",
   "scikit-learn==1.0.2",
-  "timm==0.3.2",
+  "timm==0.4.12",
   "torch==1.9.0+cu111",
   "torchmetrics==1.1.2",
   "torchvision==0.10.0+cu111",

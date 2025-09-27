@@ -1174,12 +1174,14 @@ def train(rank, args):
     ) = build(args, rank, device, distributed)
     use_amp = args.precision == "amp" and device.type == "cuda"
 
-    loss_fn = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, device=device))
-    perf_fn = performance.meanAUROC(n_class=len(class_weights))
+    class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights_tensor)
+    n_classes = len(class_weights)
+    perf_fn = performance.meanAUROC(n_class=n_classes)
     aux_metric_fns = {
-        "f1": performance.meanF1Score(n_class=len(class_weights)),
-        "precision": performance.meanPrecision(n_class=len(class_weights)),
-        "recall": performance.meanRecall(n_class=len(class_weights)),
+        "f1": performance.meanF1Score(n_class=n_classes),
+        "precision": performance.meanPrecision(n_class=n_classes),
+        "recall": performance.meanRecall(n_class=n_classes),
     }
     if rank == 0:
         tb_dir = getattr(args, "tensorboard_dir", None)

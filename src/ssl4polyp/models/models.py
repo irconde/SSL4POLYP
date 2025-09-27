@@ -24,6 +24,14 @@ from .DPT_decoder import DPT_decoder
 
 
 class VisionTransformer_from_Any(VisionTransformer):
+    
+    def _pos_embed(self, x):
+        B = x.shape[0]
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.pos_embed
+        return self.pos_drop(x)
+
     def __init__(
         self,
         head,
