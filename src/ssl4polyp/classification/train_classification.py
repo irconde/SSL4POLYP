@@ -902,16 +902,30 @@ def test(
             logits = torch.cat((logits, output), 0)
             targets = torch.cat((targets, target_cpu), 0)
 
-        probs = torch.softmax(logits, dim=1)
-        primary_metric = perf_fn(probs, targets).item()
-        additional_metrics = {
-            name: fn(torch.argmax(probs, dim=1), targets).item()
-            for name, fn in metric_fns.items()
-        }
-        metrics_display = "\t".join(
-            [f"AUROC: {primary_metric:.6f}"]
-            + [f"{name.upper()}: {value:.6f}" for name, value in additional_metrics.items()]
-        )
+        # (Removed per-batch AUROC to avoid single-class crash.)
+        # Compute inexpensive interim progress metric(s):
+        probs_batch = torch.softmax(output, dim=1)  # only current batch
+        preds_cumulative = torch.argmax(logits, dim=1)
+        targets_cumulative = targets  # already CPU
+        # Running (cumulative) balanced accuracy (safe with single class)
+        unique_classes = torch.unique(targets_cumulative)
+        if unique_classes.numel() >= 2:
+            # You could compute balanced accuracy; re-use existing helper if desired.
+            # Simple implementation here:
+            from sklearn.metrics import balanced_accuracy_score
+            running_bal_acc = balanced_accuracy_score(
+                targets_cumulative.numpy(),
+                preds_cumulative.numpy()
+            )
+            bal_display = f"BALACC: {running_bal_acc:.6f}"
+        else:
+            bal_display = "BALACC: (pending)"
+
+        metrics_display = "\t".join([
+            "AUROC: (pending)",  # final AUROC printed after loop
+            bal_display,
+        ])
+
         if batch_idx + 1 < len(test_loader):
             print(
                 "\r{}  Epoch: {} [{}/{} ({:.1f}%)]\t{}\tTime: {:.6f}".format(
@@ -935,11 +949,9 @@ def test(
                 metrics_display,
                 time.time() - t,
             )
-
             print("\r" + printout)
             with open(log_path, "a") as f:
-                f.write(printout)
-                f.write("\n")
+                f.write(printout + "\n")
     probs = torch.softmax(logits, dim=1)
     results = {
         "auroc": perf_fn(probs, targets).item(),
@@ -947,6 +959,8 @@ def test(
     preds = torch.argmax(probs, dim=1)
     for name, fn in metric_fns.items():
         results[name] = fn(preds, targets).item()
+
+    print(f"{split_name} final AUROC: {results['auroc']:.6f}")
 
     if return_outputs:
         results["logits"] = logits
