@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import time
+import copy
 from pathlib import Path
 
 import yaml
@@ -685,6 +686,89 @@ def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
         "val_split": val_split,
         "test_split": test_split,
     }
+
+
+def _flatten_override_args(raw_overrides: Optional[Iterable[Any]]) -> list[str]:
+    """Return a flat list of override entries from argparse output."""
+
+    overrides: list[str] = []
+    if not raw_overrides:
+        return overrides
+
+    for group in raw_overrides:
+        if group is None:
+            continue
+        if isinstance(group, str):
+            entry = group.strip()
+            if entry:
+                overrides.append(entry)
+            continue
+        for item in group:
+            if item is None:
+                continue
+            entry = str(item).strip()
+            if entry:
+                overrides.append(entry)
+    return overrides
+
+
+def _assign_nested_mapping(
+    root: Dict[str, Any], keys: Iterable[str], value: Any, *, context: str
+) -> None:
+    """Assign ``value`` into ``root`` following ``keys`` while validating mappings."""
+
+    keys = list(keys)
+    if not keys:
+        raise ValueError("Override path must contain at least one key")
+
+    current = root
+    for key in keys[:-1]:
+        existing = current.get(key)
+        if existing is None:
+            existing = {}
+            current[key] = existing
+        elif not isinstance(existing, dict):
+            raise TypeError(
+                f"Cannot apply override for {'.'.join(keys)}: "
+                f"{context} segment '{key}' is not a mapping"
+            )
+        current = existing
+    current[keys[-1]] = value
+
+
+def _parse_override_entry(entry: str) -> tuple[list[str], Any]:
+    """Return (path, value) for a raw override specification."""
+
+    if "=" not in entry:
+        raise ValueError(
+            f"Invalid override '{entry}'. Expected format section.key=value"
+        )
+    raw_path, raw_value = entry.split("=", 1)
+    path = [segment.strip() for segment in raw_path.split(".") if segment.strip()]
+    if not path:
+        raise ValueError(
+            f"Invalid override '{entry}'. Expected non-empty dot-separated path"
+        )
+    value = yaml.safe_load(raw_value)
+    return path, value
+
+
+def _apply_config_overrides(
+    config: Dict[str, Any], overrides: Iterable[str]
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Apply CLI overrides onto ``config`` and return the applied mapping."""
+
+    overrides = list(overrides or [])
+    if not overrides:
+        return config, {}
+
+    updated = copy.deepcopy(config)
+    applied: Dict[str, Any] = {}
+    for entry in overrides:
+        path, value = _parse_override_entry(entry)
+        _assign_nested_mapping(updated, path, value, context="config")
+        _assign_nested_mapping(applied, path, value, context="override")
+    return updated, applied
 
 
 def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
@@ -1557,6 +1641,18 @@ def get_args():
         help="Experiment configuration reference (relative to configs/ or absolute path)",
     )
     parser.add_argument(
+        "--override",
+        action="append",
+        nargs="+",
+        dest="overrides",
+        default=None,
+        metavar="KEY=VALUE",
+        help=(
+            "Override experiment configuration entries (e.g. dataset.percent=5). "
+            "May be specified multiple times."
+        ),
+    )
+    parser.add_argument(
         "--model-key",
         type=str,
         dest="model_key",
@@ -1719,6 +1815,9 @@ def get_args():
 
 def main():
     args = get_args()
+    overrides = _flatten_override_args(getattr(args, "overrides", None))
+    args.overrides = overrides
+    resolved_overrides: Dict[str, Any] = {}
     args.finetune_mode = normalise_finetune_mode(
         getattr(args, "finetune_mode", None), default="full"
     )
@@ -1735,6 +1834,9 @@ def main():
 
     if args.exp_config:
         experiment_cfg = load_layered_config(args.exp_config)
+        experiment_cfg, resolved_overrides = _apply_config_overrides(
+            experiment_cfg, overrides
+        )
         selected_model, dataset_cfg, dataset_resolved = apply_experiment_config(args, experiment_cfg)
 
     for required in ("pretraining", "dataset", "train_pack"):
@@ -1795,6 +1897,8 @@ def main():
     run_config = {
         "args": {k: _serialize(v) for k, v in vars(args).items() if k != "roots_map"},
     }
+    if resolved_overrides:
+        run_config["config_overrides"] = _serialize(resolved_overrides)
     if experiment_cfg is not None:
         run_config["experiment"] = _serialize(experiment_cfg)
     if dataset_cfg is not None and dataset_resolved is not None:
