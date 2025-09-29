@@ -912,6 +912,46 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     args.ss_framework = selected_model.get("ss_framework", args.ss_framework)
     args.dataset = dataset_cfg.get("name", args.dataset)
 
+    init_from = protocol_cfg.get("init_from")
+    if isinstance(init_from, str):
+        init_key = init_from.strip().lower()
+        if (
+            init_key == "canonical_sun_models"
+            and not getattr(args, "parent_checkpoint", None)
+        ):
+            model_key = (selected_model or {}).get("key") or getattr(
+                args, "model_key", None
+            )
+            if not model_key:
+                raise ValueError(
+                    "Protocol requested canonical SUN initialisation but model key is undefined."
+                )
+            seed_value = getattr(args, "seed", None)
+            if seed_value is None:
+                raise ValueError(
+                    "Protocol requested canonical SUN initialisation but seed is undefined."
+                )
+            try:
+                seed_int = int(seed_value)
+            except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+                raise ValueError(
+                    "Seed must be an integer to resolve canonical SUN checkpoints."
+                ) from exc
+            model_key_lower = str(model_key).lower()
+            checkpoint_templates = {
+                "sup_imnet": "exp1_sup_imnet_seed{seed}/sup_imnet__SUNFull_s{seed}.pth",
+                "ssl_imnet": "exp1_ssl_imnet_seed{seed}/ssl_imnet__SUNFull_s{seed}.pth",
+                "ssl_colon": "exp2_ssl_colon_seed{seed}/ssl_colon__SUNFull_s{seed}.pth",
+            }
+            template = checkpoint_templates.get(model_key_lower)
+            if template is None:
+                raise ValueError(
+                    f"Unsupported model '{model_key}' for canonical SUN initialisation."
+                )
+            relative_path = template.format(seed=seed_int)
+            canonical_root = Path("checkpoints") / "classification"
+            args.parent_checkpoint = str(canonical_root / relative_path)
+
     dataset_resolved = _resolve_dataset_specs(dataset_cfg)
     args.train_pack = (
         str(dataset_resolved["train_pack"]) if dataset_resolved["train_pack"] else None
@@ -1236,6 +1276,7 @@ def build(args, rank, device: torch.device, distributed: bool):
 
     thresholds_map: Dict[str, Any] = {}
     existing_ckpt, pointer_valid = _find_existing_checkpoint(stem_path)
+    parent_reference = getattr(args, "parent_checkpoint", None)
     if existing_ckpt is not None:
         main_dict = torch.load(existing_ckpt, map_location="cpu")
         model.load_state_dict(main_dict["model_state_dict"])
@@ -1247,6 +1288,24 @@ def build(args, rank, device: torch.device, distributed: bool):
         thresholds_map = dict(main_dict.get("thresholds", {}) or {})
         if not pointer_valid:
             _update_checkpoint_pointer(ckpt_path, Path(existing_ckpt))
+    elif parent_reference:
+        parent_path = Path(parent_reference).expanduser()
+        if not parent_path.exists():
+            raise FileNotFoundError(
+                f"Parent checkpoint '{parent_reference}' does not exist."
+            )
+        if rank == 0:
+            print(f"Loading parent checkpoint from {parent_path}")
+        parent_state = torch.load(parent_path, map_location="cpu")
+        if isinstance(parent_state, dict) and "model_state_dict" in parent_state:
+            state_dict = parent_state["model_state_dict"]
+        else:
+            state_dict = parent_state
+        model.load_state_dict(state_dict)
+        start_epoch = 1
+        best_val_perf = None
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.touch(exist_ok=True)
     else:
         start_epoch = 1
         best_val_perf = None
