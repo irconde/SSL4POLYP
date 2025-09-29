@@ -1,11 +1,18 @@
 defaults:
   - base
-  - data/polypgen_clean_test
+  - data/sun_full
 models:
   - model/sup_imnet
   - model/ssl_imnet
   - model/ssl_colon
 protocol:
-  init_from: canonical_sun_models
-  finetune: none
+  finetune: full
   eval_split: test
+  early_stop_split: val
+  thresholds: sun_val_youden
+transfer_targets:
+  polypgen_clean:
+    name: polypgen_clean_test
+    pack: polypgen_clean_test
+    test_split: test
+    stem: polypgen

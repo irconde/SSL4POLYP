@@ -1235,23 +1235,55 @@ def build(args, rank, device: torch.device, distributed: bool):
     log_path = stem_path.with_suffix(".log")
 
     thresholds_map: Dict[str, Any] = {}
-    existing_ckpt, pointer_valid = _find_existing_checkpoint(stem_path)
-    if existing_ckpt is not None:
-        main_dict = torch.load(existing_ckpt, map_location="cpu")
-        model.load_state_dict(main_dict["model_state_dict"])
-        start_epoch = main_dict["epoch"] + 1
+    parent_reference = getattr(args, "parent_checkpoint", None)
+    parent_threshold_files: Dict[str, Any] = {}
+    parent_threshold_records: Dict[str, Any] = {}
+    parent_thresholds_root: Optional[str] = None
+    start_epoch = 1
+    best_val_perf = None
+
+    if parent_reference:
+        parent_path = Path(parent_reference).expanduser()
+        if not parent_path.exists():
+            raise FileNotFoundError(f"Parent checkpoint not found: {parent_path}")
+        print(f"Loading parent checkpoint from {parent_path}")
+        main_dict = torch.load(parent_path, map_location="cpu")
+        state_dict = main_dict.get("model_state_dict")
+        if not isinstance(state_dict, dict):
+            raise ValueError(
+                "Parent checkpoint is missing a valid 'model_state_dict' entry"
+            )
+        model.load_state_dict(state_dict)
+        start_epoch = int(main_dict.get("epoch", 0)) + 1
         best_val_perf = main_dict.get("val_perf")
-        random.setstate(main_dict["py_state"])
-        np.random.set_state(main_dict["np_state"])
-        torch.set_rng_state(main_dict["torch_state"])
         thresholds_map = dict(main_dict.get("thresholds", {}) or {})
-        if not pointer_valid:
-            _update_checkpoint_pointer(ckpt_path, Path(existing_ckpt))
-    else:
-        start_epoch = 1
-        best_val_perf = None
+        parent_threshold_files = dict(main_dict.get("threshold_files", {}) or {})
+        parent_threshold_records = dict(main_dict.get("threshold_records", {}) or {})
+        parent_thresholds_root = main_dict.get("thresholds_root")
+        if parent_thresholds_root:
+            args.thresholds_root = parent_thresholds_root
+        if parent_threshold_files:
+            setattr(args, "parent_threshold_files", parent_threshold_files)
+        if parent_threshold_records:
+            setattr(args, "parent_threshold_records", parent_threshold_records)
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.touch()
+        log_path.touch(exist_ok=True)
+    else:
+        existing_ckpt, pointer_valid = _find_existing_checkpoint(stem_path)
+        if existing_ckpt is not None:
+            main_dict = torch.load(existing_ckpt, map_location="cpu")
+            model.load_state_dict(main_dict["model_state_dict"])
+            start_epoch = main_dict["epoch"] + 1
+            best_val_perf = main_dict.get("val_perf")
+            random.setstate(main_dict["py_state"])
+            np.random.set_state(main_dict["np_state"])
+            torch.set_rng_state(main_dict["torch_state"])
+            thresholds_map = dict(main_dict.get("thresholds", {}) or {})
+            if not pointer_valid:
+                _update_checkpoint_pointer(ckpt_path, Path(existing_ckpt))
+        else:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.touch()
 
     configure_finetune_parameters(model, getattr(args, "finetune_mode", "full"))
 
