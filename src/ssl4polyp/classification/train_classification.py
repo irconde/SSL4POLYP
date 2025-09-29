@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import time
 import copy
+import warnings
 from pathlib import Path
 
 import yaml
@@ -42,6 +43,66 @@ from ssl4polyp.configs.layered import (
 )
 
 import numpy as np
+
+
+class TensorboardLogger:
+    """Centralised TensorBoard logging with failure detection."""
+
+    def __init__(self, writer: Optional[SummaryWriter]) -> None:
+        self._writer = writer
+
+    @classmethod
+    def create(cls, log_dir: Optional[str]) -> "TensorboardLogger":
+        if not log_dir:
+            return cls(None)
+        return cls(SummaryWriter(log_dir))
+
+    def _is_enabled(self) -> bool:
+        if self._writer is None:
+            return False
+        enabled = getattr(self._writer, "enabled", True)
+        if not enabled:
+            self._writer = None
+            return False
+        return True
+
+    def log_scalar(self, tag: str, value: float, step: int) -> None:
+        if not self._is_enabled():
+            return
+        try:
+            assert self._writer is not None  # for type checkers
+            self._writer.add_scalar(tag, value, step)
+        except (OSError, IOError) as exc:
+            warnings.warn(
+                "Disabling TensorBoard logging after write failure: " f"{exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self.close()
+
+    def log_metrics(self, prefix: str, metrics: Dict[str, Any], step: int) -> None:
+        if not self._is_enabled():
+            return
+        for name, value in metrics.items():
+            if name in {"logits", "probabilities", "targets"}:
+                continue
+            if isinstance(value, torch.Tensor):
+                if value.numel() != 1:
+                    continue
+                value = value.item()
+            if isinstance(value, (int, float, np.floating)):
+                self.log_scalar(f"{prefix}/{name}", float(value), step)
+
+    def close(self) -> None:
+        if self._writer is None:
+            return
+        try:
+            self._writer.close()
+        finally:
+            self._writer = None
+
+    def __bool__(self) -> bool:
+        return self._is_enabled()
 
 
 def _normalize_seeds(raw: Any) -> list[int]:
@@ -872,7 +933,7 @@ def train_epoch(
     log_path,
     scaler,
     use_amp,
-    writer,
+    tb_logger,
     log_interval,
     global_step,
     seed,
@@ -909,10 +970,10 @@ def train_epoch(
             loss /= world_size
         loss_accumulator.append(loss.item())
         if rank == 0:
-            if writer is not None and global_step % log_interval == 0:
+            if tb_logger and global_step % log_interval == 0:
                 lr = optimizer.param_groups[0]["lr"]
-                writer.add_scalar("loss", loss.item(), global_step)
-                writer.add_scalar("lr", lr, global_step)
+                tb_logger.log_scalar("loss", loss.item(), global_step)
+                tb_logger.log_scalar("lr", lr, global_step)
             if batch_idx + 1 < len(train_loader):
                 print(
                     "\rTrain Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}\tTime: {:.6f}".format(
@@ -1284,12 +1345,13 @@ def train(rank, args):
     }
     if rank == 0:
         tb_dir = getattr(args, "tensorboard_dir", None)
-        writer = SummaryWriter(str(tb_dir) if tb_dir else os.path.join(args.output_dir, "tb"))
+        tb_path = str(tb_dir) if tb_dir else os.path.join(args.output_dir, "tb")
+        tb_logger = TensorboardLogger.create(tb_path)
         with open(log_path, "a") as f:
             f.write(str(args))
             f.write("\n")
     else:
-        writer = None
+        tb_logger = TensorboardLogger.create(None)
     if distributed:
         dist.barrier()
 
@@ -1325,7 +1387,7 @@ def train(rank, args):
                 log_path,
                 scaler,
                 use_amp,
-                writer,
+                tb_logger,
                 args.log_interval,
                 global_step,
                 args.seed,
@@ -1363,15 +1425,9 @@ def train(rank, args):
                 val_targets = val_metrics.pop("targets", None)
                 val_perf = val_metrics["auroc"]
                 test_perf = test_metrics["auroc"]
-                if writer is not None:
-                    for name, value in val_metrics.items():
-                        if name in {"logits", "probabilities", "targets"}:
-                            continue
-                        writer.add_scalar(f"val/{name}", value, epoch)
-                    for name, value in test_metrics.items():
-                        if name in {"logits", "probabilities", "targets"}:
-                            continue
-                        writer.add_scalar(f"test/{name}", value, epoch)
+                if tb_logger:
+                    tb_logger.log_metrics("val", val_metrics, epoch)
+                    tb_logger.log_metrics("test", test_metrics, epoch)
                 last_epoch = int(epoch)
                 last_loss = float(loss)
                 last_val_perf = float(val_perf)
@@ -1559,8 +1615,7 @@ def train(rank, args):
 
         if distributed:
             dist.barrier()
-    if writer is not None:
-        writer.close()
+    tb_logger.close()
     if rank == 0 and last_epoch is not None:
         last_payload: Dict[str, Any] = {
             "epoch": int(last_epoch),
