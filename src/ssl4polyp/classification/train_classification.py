@@ -708,14 +708,21 @@ def _select_model_config(models, desired_key: str | None):
 
 def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
     splits = dataset_cfg.get("splits", {})
-    train_split = splits.get("train", "train")
+    train_split = splits.get("train")
     val_split = splits.get("val")
     test_split = splits.get("test")
 
     base_pack = dataset_cfg.get("pack")
-    train_pack = dataset_cfg.get("train_pack", base_pack)
-    val_pack = dataset_cfg.get("val_pack", dataset_cfg.get("base_pack", base_pack))
-    test_pack = dataset_cfg.get("test_pack", dataset_cfg.get("base_pack", base_pack))
+    fallback_pack = dataset_cfg.get("base_pack", base_pack)
+    train_pack = dataset_cfg.get("train_pack")
+    if train_pack is None and train_split is not None:
+        train_pack = base_pack
+    val_pack = dataset_cfg.get("val_pack")
+    if val_pack is None and val_split is not None:
+        val_pack = fallback_pack
+    test_pack = dataset_cfg.get("test_pack")
+    if test_pack is None:
+        test_pack = fallback_pack
 
     if "train_pattern" in dataset_cfg:
         percent = dataset_cfg.get("percent")
@@ -915,9 +922,12 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     args.test_pack = (
         str(dataset_resolved["test_pack"]) if dataset_resolved["test_pack"] else None
     )
-    args.train_split = dataset_resolved["train_split"] or args.train_split
-    args.val_split = dataset_resolved["val_split"] or args.val_split
-    args.test_split = dataset_resolved["test_split"] or args.test_split
+    if dataset_resolved["train_split"] is not None:
+        args.train_split = dataset_resolved["train_split"]
+    if dataset_resolved["val_split"] is not None:
+        args.val_split = dataset_resolved["val_split"]
+    if dataset_resolved["test_split"] is not None:
+        args.test_split = dataset_resolved["test_split"]
 
     return selected_model, dataset_cfg, dataset_resolved
 
@@ -1144,28 +1154,57 @@ def build(args, rank, device: torch.device, distributed: bool):
     )
 
     train_dataloader = loaders.get("train")
-    if train_dataloader is None:
-        raise RuntimeError("Training dataloader could not be constructed; check --train-pack and --train-split inputs.")
+    eval_only = train_dataloader is None
+    if train_dataloader is None and not getattr(args, "frozen", False):
+        raise RuntimeError(
+            "Training dataloader could not be constructed; check --train-pack and --train-split inputs."
+        )
     val_dataloader = loaders.get("val")
     test_dataloader = loaders.get("test")
-    if val_dataloader is None:
+    if val_dataloader is None and not eval_only:
         raise RuntimeError("Validation dataloader missing; specify --val-pack/--val-split.")
     if test_dataloader is None:
         raise RuntimeError("Test dataloader missing; specify --test-pack/--test-split.")
     train_sampler = samplers.get("train")
 
-    train_dataset = datasets.get(args.train_split)
-    if train_dataset is None or train_dataset.labels_list is None:
-        raise ValueError("Training dataset does not provide labels; ensure the selected pack includes labels.")
-    train_labels = list(train_dataset.labels_list)
-    n_class = len(set(train_labels))
+    train_dataset = (
+        datasets.get(args.train_split) if getattr(args, "train_split", None) else None
+    )
+    if not eval_only:
+        if train_dataset is None or train_dataset.labels_list is None:
+            raise ValueError(
+                "Training dataset does not provide labels; ensure the selected pack includes labels."
+            )
+
+    labelled_datasets = []
+    for split_name in (args.train_split, args.val_split, args.test_split):
+        if not split_name:
+            continue
+        candidate = datasets.get(split_name)
+        if candidate is not None and candidate.labels_list is not None:
+            labelled_datasets.append(candidate)
+
+    label_source = labelled_datasets[0] if labelled_datasets else None
+    if label_source is None:
+        raise ValueError(
+            "No labelled datasets available; ensure at least one split provides labels."
+        )
+
+    label_values = list(label_source.labels_list or [])
+    n_class = len(set(label_values))
     if n_class == 0:
-        raise ValueError("No classes found in training dataset.")
-    counts = np.bincount(train_labels, minlength=n_class)
-    N_total = len(train_labels)
-    class_weights = [
-        (N_total / (n_class * count)) if count > 0 else 0.0 for count in counts
-    ]
+        raise ValueError("No classes found in available datasets.")
+
+    class_weights: list[float]
+    if train_dataset is not None and train_dataset.labels_list is not None:
+        train_labels = list(train_dataset.labels_list)
+        counts = np.bincount(train_labels, minlength=n_class)
+        N_total = len(train_labels)
+        class_weights = [
+            (N_total / (n_class * count)) if count > 0 else 0.0 for count in counts
+        ]
+    else:
+        class_weights = [1.0 for _ in range(n_class)]
 
     # Override automatically computed class weights if provided by the user
     if args.class_weights is not None:
@@ -1249,7 +1288,7 @@ def build(args, rank, device: torch.device, distributed: bool):
                 "Warning: Youden threshold policy requested but dataset is not binary; disabling threshold computation."
             )
         resolved_policy = "none"
-    compute_threshold = resolved_policy == "youden"
+    compute_threshold = resolved_policy == "youden" and val_dataloader is not None
     threshold_key = None
     if compute_threshold:
         dataset_name = args.dataset or "dataset"
@@ -1332,6 +1371,7 @@ def train(rank, args):
         compute_threshold,
         threshold_key,
     ) = build(args, rank, device, distributed)
+    eval_only = train_dataloader is None
     use_amp = args.precision == "amp" and device.type == "cuda"
 
     class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32)
@@ -1354,6 +1394,41 @@ def train(rank, args):
         tb_logger = TensorboardLogger.create(None)
     if distributed:
         dist.barrier()
+
+    if eval_only:
+        eval_epoch = max(start_epoch - 1, 0)
+        if rank == 0:
+            print("No training data provided; running evaluation-only mode.")
+            if val_dataloader is not None:
+                val_metrics = test(
+                    _unwrap_model(model),
+                    rank,
+                    val_dataloader,
+                    eval_epoch,
+                    perf_fn,
+                    log_path,
+                    metric_fns=aux_metric_fns,
+                    split_name="Val",
+                )
+                if tb_logger:
+                    tb_logger.log_metrics("val", val_metrics, eval_epoch)
+            if test_dataloader is not None:
+                test_metrics = test(
+                    _unwrap_model(model),
+                    rank,
+                    test_dataloader,
+                    eval_epoch,
+                    perf_fn,
+                    log_path,
+                    metric_fns=aux_metric_fns,
+                    split_name="Test",
+                )
+                if tb_logger:
+                    tb_logger.log_metrics("test", test_metrics, eval_epoch)
+        tb_logger.close()
+        if distributed:
+            dist.destroy_process_group()
+        return
 
     ckpt_pointer = Path(ckpt_path)
     ckpt_stem = ckpt_pointer.with_suffix("")
@@ -1894,16 +1969,21 @@ def main():
         )
         selected_model, dataset_cfg, dataset_resolved = apply_experiment_config(args, experiment_cfg)
 
-    for required in ("pretraining", "dataset", "train_pack"):
+    for required in ("pretraining", "dataset"):
         if getattr(args, required) is None:
             raise ValueError(
                 f"Missing required argument '{required}'. Provide it via --{required.replace('_', '-')} or the experiment config."
             )
 
-    if not args.val_pack:
+    if getattr(args, "train_pack", None) is None and not getattr(args, "frozen", False):
+        raise ValueError(
+            "Missing required argument 'train_pack'. Provide it via --train-pack or the experiment config, or run with --frozen/finetune-mode none for evaluation-only mode."
+        )
+
+    if not args.val_pack and args.train_pack:
         args.val_pack = args.train_pack
     if not args.test_pack:
-        args.test_pack = args.val_pack
+        args.test_pack = args.val_pack or args.train_pack
 
     args.pack_root = str(Path(args.pack_root).expanduser()) if args.pack_root else str(data_packs_root())
     args.perturbation_splits = [s.lower() for s in (args.perturbation_splits or [])]
