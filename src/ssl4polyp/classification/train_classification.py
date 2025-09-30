@@ -1456,7 +1456,7 @@ def train(rank, args):
         "recall": performance.meanRecall(n_class=n_classes),
     }
     sun_threshold_key = thresholds.format_threshold_key(
-        "sunfull", args.val_split or "val", "youden"
+        "sun_full", args.val_split or "val", "youden"
     )
 
     def resolve_eval_tau(*keys: Optional[str]) -> Optional[float]:
