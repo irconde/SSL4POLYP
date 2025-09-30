@@ -2,9 +2,12 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+EXP_CONFIG=${EXP_CONFIG:-exp/exp4.yaml}
 ROOTS=${ROOTS:-data/roots.json}
 OUTPUT_ROOT=${OUTPUT_ROOT:-checkpoints/classification}
-SEEDS=${SEEDS:-13 29 47}
+DEFAULT_SEEDS=$("${SCRIPT_DIR}/print_config_seeds.py" "${EXP_CONFIG}")
+SEEDS=${SEEDS:-${DEFAULT_SEEDS}}
 PERCENTS=${PERCENTS:-5 10 25 50 100}
 MODEL=${MODEL:-ssl_imnet}
 
@@ -24,7 +27,7 @@ for seed in ${SEEDS}; do
   for pct in ${PERCENTS}; do
     out_dir="${OUTPUT_ROOT}/exp4_${MODEL}_seed${seed}_p${pct}"
     python -m ssl4polyp.classification.train_classification \
-      --exp-config exp/exp4.yaml \
+      --exp-config "${EXP_CONFIG}" \
       --model-key "${MODEL}" \
       --seed "${seed}" \
       --roots "${ROOTS}" \
