@@ -101,10 +101,11 @@ class meanF1Score(nn.Module):
         self.n_class = n_class
         self.smooth = smooth
 
-    def forward(self, preds, targets):
+    def forward(self, preds, targets, tau: Optional[float] = None):
+        labels = _as_label_predictions(preds.detach(), self.n_class, tau)
         score = 0
         for i in range(self.n_class):
-            m1 = preds == i
+            m1 = labels == i
             m2 = targets == i
             intersection = m1 * m2
 
@@ -122,10 +123,11 @@ class meanPrecision(nn.Module):
         self.n_class = n_class
         self.smooth = smooth
 
-    def forward(self, preds, targets):
+    def forward(self, preds, targets, tau: Optional[float] = None):
+        labels = _as_label_predictions(preds.detach(), self.n_class, tau)
         score = 0
         for i in range(self.n_class):
-            m1 = preds == i
+            m1 = labels == i
             m2 = targets == i
             intersection = m1 * m2
 
@@ -139,10 +141,11 @@ class meanRecall(nn.Module):
         self.n_class = n_class
         self.smooth = smooth
 
-    def forward(self, preds, targets):
+    def forward(self, preds, targets, tau: Optional[float] = None):
+        labels = _as_label_predictions(preds.detach(), self.n_class, tau)
         score = 0
         for i in range(self.n_class):
-            m1 = preds == i
+            m1 = labels == i
             m2 = targets == i
             intersection = m1 * m2
 

@@ -1067,6 +1067,7 @@ def test(
     metric_fns: Optional[Dict[str, Any]] = None,
     split_name: str = "Test",
     return_outputs: bool = False,
+    tau: Optional[float] = None,
 ):
     if test_loader is None:
         return float("nan")
@@ -1099,8 +1100,11 @@ def test(
 
         # (Removed per-batch AUROC to avoid single-class crash.)
         # Compute inexpensive interim progress metric(s):
-        probs_batch = torch.softmax(output, dim=1)  # only current batch
-        preds_cumulative = torch.argmax(logits, dim=1)
+        probs_cumulative = torch.softmax(logits, dim=1)
+        if tau is not None and probs_cumulative.size(1) == 2:
+            preds_cumulative = (probs_cumulative[:, 1] >= tau).to(dtype=torch.long)
+        else:
+            preds_cumulative = torch.argmax(probs_cumulative, dim=1)
         targets_cumulative = targets  # already CPU
         # Running (cumulative) balanced accuracy (safe with single class)
         unique_classes = torch.unique(targets_cumulative)
@@ -1148,12 +1152,20 @@ def test(
             with open(log_path, "a") as f:
                 f.write(printout + "\n")
     probs = torch.softmax(logits, dim=1)
+    n_classes = probs.size(1) if probs.ndim == 2 else 1
+    binary_tau = tau if (tau is not None and n_classes == 2) else None
     results = {
         "auroc": perf_fn(probs, targets).item(),
     }
-    preds = torch.argmax(probs, dim=1)
+    if binary_tau is not None:
+        preds = (probs[:, 1] >= binary_tau).to(dtype=torch.long)
+    else:
+        preds = torch.argmax(probs, dim=1)
     for name, fn in metric_fns.items():
-        results[name] = fn(preds, targets).item()
+        try:
+            results[name] = fn(probs, targets, tau=binary_tau).item()
+        except TypeError:
+            results[name] = fn(preds, targets).item()
 
     print(f"{split_name} final AUROC: {results['auroc']:.6f}")
 
@@ -1299,6 +1311,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         parent_state = torch.load(parent_path, map_location="cpu")
         if isinstance(parent_state, dict) and "model_state_dict" in parent_state:
             state_dict = parent_state["model_state_dict"]
+            thresholds_map = dict(parent_state.get("thresholds", {}) or {})
         else:
             state_dict = parent_state
         model.load_state_dict(state_dict)
@@ -1442,6 +1455,19 @@ def train(rank, args):
         "precision": performance.meanPrecision(n_class=n_classes),
         "recall": performance.meanRecall(n_class=n_classes),
     }
+    sun_threshold_key = thresholds.format_threshold_key(
+        "sunfull", args.val_split or "val", "youden"
+    )
+
+    def resolve_eval_tau(*keys: Optional[str]) -> Optional[float]:
+        for key in keys:
+            if not key:
+                continue
+            tau_value = thresholds.resolve_threshold(thresholds_map, key)
+            if tau_value is not None:
+                return tau_value
+        return None
+
     if rank == 0:
         tb_dir = getattr(args, "tensorboard_dir", None)
         tb_path = str(tb_dir) if tb_dir else os.path.join(args.output_dir, "tb")
@@ -1458,6 +1484,7 @@ def train(rank, args):
         eval_epoch = max(start_epoch - 1, 0)
         if rank == 0:
             print("No training data provided; running evaluation-only mode.")
+            eval_tau = resolve_eval_tau(threshold_key, sun_threshold_key)
             if val_dataloader is not None:
                 val_metrics = test(
                     _unwrap_model(model),
@@ -1468,6 +1495,7 @@ def train(rank, args):
                     log_path,
                     metric_fns=aux_metric_fns,
                     split_name="Val",
+                    tau=eval_tau,
                 )
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, eval_epoch)
@@ -1481,6 +1509,7 @@ def train(rank, args):
                     log_path,
                     metric_fns=aux_metric_fns,
                     split_name="Test",
+                    tau=eval_tau,
                 )
                 if tb_logger:
                     tb_logger.log_metrics("test", test_metrics, eval_epoch)
@@ -1529,6 +1558,7 @@ def train(rank, args):
                 distributed=distributed,
             )
             if rank == 0:
+                eval_tau = resolve_eval_tau(threshold_key, sun_threshold_key)
                 val_metrics = test(
                     _unwrap_model(model),
                     rank,
@@ -1539,6 +1569,7 @@ def train(rank, args):
                     metric_fns=aux_metric_fns,
                     split_name="Val",
                     return_outputs=compute_threshold,
+                    tau=eval_tau,
                 )
                 test_metrics = test(
                     _unwrap_model(model),
@@ -1549,6 +1580,7 @@ def train(rank, args):
                     log_path,
                     metric_fns=aux_metric_fns,
                     split_name="Test",
+                    tau=eval_tau,
                 )
                 val_metrics_export = _prepare_metric_export(
                     val_metrics, drop={"logits", "probabilities", "targets"}
