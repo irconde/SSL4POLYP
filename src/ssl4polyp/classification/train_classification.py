@@ -132,6 +132,24 @@ def _normalize_seeds(raw: Any) -> list[int]:
     return seeds
 
 
+def _resolve_active_seed(args) -> int:
+    """Determine the seed that should drive the current run."""
+
+    seeds = getattr(args, "seeds", None) or []
+    if seeds:
+        return int(seeds[0])
+    config_seed = getattr(args, "config_seed", None)
+    if config_seed is not None:
+        return int(config_seed)
+    return int(getattr(args, "seed", 0))
+
+
+def _get_active_seed(args) -> int:
+    """Return the resolved seed for use in downstream helpers."""
+
+    return int(getattr(args, "active_seed", _resolve_active_seed(args)))
+
+
 def set_determinism(seed: int) -> None:
     """Configure deterministic behavior for reproducibility.
 
@@ -589,7 +607,9 @@ def _resolve_run_layout(
     model_tag = _resolve_model_tag(args, selected_model)
     data_tag = dataset_layout["data_tag"]
     qualifiers = _resolve_lineage_qualifiers(args, dataset_layout, experiment_cfg)
-    stem = _compose_stem(model_tag, data_tag, qualifiers, getattr(args, "seed", 0))
+    stem = _compose_stem(
+        model_tag, data_tag, qualifiers, _get_active_seed(args)
+    )
     checkpoint_path = output_dir / f"{stem}.pth"
     log_path = output_dir / f"{stem}.log"
     metrics_path = output_dir / f"{stem}.metrics.json"
@@ -850,13 +870,14 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     config_seeds = _normalize_seeds(experiment_cfg.get("seeds"))
     if config_seeds:
         args.seeds = config_seeds
-        args.seed = config_seeds[0]
 
     args.lr = experiment_cfg.get("lr", args.lr)
     args.weight_decay = experiment_cfg.get("weight_decay", getattr(args, "weight_decay", 0.05))
     args.batch_size = experiment_cfg.get("batch_size", args.batch_size)
     args.epochs = experiment_cfg.get("epochs", args.epochs)
-    args.seed = experiment_cfg.get("seed", args.seed)
+    config_seed = _as_int(experiment_cfg.get("seed"))
+    if config_seed is not None:
+        args.config_seed = config_seed
     args.image_size = experiment_cfg.get("image_size", args.image_size)
     args.workers = experiment_cfg.get("num_workers", args.workers)
     args.prefetch_factor = experiment_cfg.get("prefetch_factor", args.prefetch_factor)
@@ -1553,7 +1574,7 @@ def train(rank, args):
                 tb_logger,
                 args.log_interval,
                 global_step,
-                args.seed,
+                _get_active_seed(args),
                 device=device,
                 distributed=distributed,
             )
@@ -1727,7 +1748,7 @@ def train(rank, args):
                 if final_path.exists():
                     digest_payload = {
                         "epoch": int(epoch),
-                        "seed": int(args.seed),
+                        "seed": _get_active_seed(args),
                         "val": float(val_perf),
                         "test": float(test_perf),
                     }
@@ -1741,7 +1762,7 @@ def train(rank, args):
                 torch.save(payload, final_path)
                 _update_checkpoint_pointer(ckpt_pointer, final_path)
                 metrics_payload = {
-                    "seed": int(args.seed),
+                    "seed": _get_active_seed(args),
                     "epoch": int(epoch),
                     "train_loss": float(loss),
                     "val": val_metrics_export,
@@ -1818,7 +1839,7 @@ def train(rank, args):
         if last_final_path.exists():
             digest_payload = {
                 "epoch": int(last_epoch),
-                "seed": int(args.seed),
+                "seed": _get_active_seed(args),
                 "val": float(last_val_perf) if last_val_perf is not None else None,
                 "test": float(last_test_perf) if last_test_perf is not None else None,
             }
@@ -1833,7 +1854,7 @@ def train(rank, args):
         last_pointer_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.pth"
         _update_checkpoint_pointer(last_pointer_path, last_final_path)
         last_metrics_payload: Dict[str, Any] = {
-            "seed": int(args.seed),
+            "seed": _get_active_seed(args),
             "epoch": int(last_epoch),
             "train_loss": float(last_loss) if last_loss is not None else None,
             "val": dict(last_val_metrics_export or {}),
@@ -2046,8 +2067,6 @@ def main():
         args.finetune_mode = "none"
     args.frozen = args.finetune_mode == "none"
     args.seeds = _normalize_seeds(getattr(args, "seeds", None))
-    if args.seeds:
-        args.seed = args.seeds[0]
     experiment_cfg = None
     dataset_cfg = None
     dataset_resolved = None
@@ -2059,6 +2078,9 @@ def main():
             experiment_cfg, overrides
         )
         selected_model, dataset_cfg, dataset_resolved = apply_experiment_config(args, experiment_cfg)
+
+    args.active_seed = _resolve_active_seed(args)
+    args.seed = args.active_seed
 
     for required in ("pretraining", "dataset"):
         if getattr(args, required) is None:
@@ -2106,7 +2128,7 @@ def main():
     thresholds_root = Path(layout.get("base_dir", "checkpoints")).expanduser()
     args.thresholds_root = str(thresholds_root.parent / "thresholds")
 
-    set_determinism(args.seed)
+    set_determinism(_get_active_seed(args))
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     Path(args.tensorboard_dir).mkdir(parents=True, exist_ok=True)
