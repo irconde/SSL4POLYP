@@ -10,10 +10,11 @@ MODELS=${MODELS:-sup_imnet ssl_imnet ssl_colon}
 
 # Canonical SUN fine-tuning checkpoints must be available prior to running this
 # script. The expected layout is:
-#   ${PARENT_ROOT}/exp1_sup_imnet_seed{seed}/sup_imnet__SUNFull_s{seed}.pth
-#   ${PARENT_ROOT}/exp1_ssl_imnet_seed{seed}/ssl_imnet__SUNFull_s{seed}.pth
-#   ${PARENT_ROOT}/exp2_ssl_colon_seed{seed}/ssl_colon__SUNFull_s{seed}.pth
-# for each seed used below.
+#   ${PARENT_ROOT}/sun_baselines/exp1_sup_imnet_seed{seed}/sup_imnet__SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/sun_baselines/exp1_ssl_imnet_seed{seed}/ssl_imnet__SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/sun_baselines/exp2_ssl_colon_seed{seed}/ssl_colon__SUNFull_s{seed}.pth
+# for each seed used below. If the layout differs, update PARENT_ROOT or place
+# the checkpoints under the dataset-specific subdirectory before launching.
 
 python - <<'PY'
 import torch
@@ -30,14 +31,18 @@ PY
 for seed in ${SEEDS}; do
   for model in ${MODELS}; do
     out_dir="${OUTPUT_ROOT}/exp5a_${model}_seed${seed}"
+    parent_dir=""
     case "${model}" in
       sup_imnet)
+        parent_dir="sun_baselines"
         parent_rel="exp1_sup_imnet_seed${seed}/sup_imnet__SUNFull_s${seed}.pth"
         ;;
       ssl_imnet)
+        parent_dir="sun_baselines"
         parent_rel="exp1_ssl_imnet_seed${seed}/ssl_imnet__SUNFull_s${seed}.pth"
         ;;
       ssl_colon)
+        parent_dir="sun_baselines"
         parent_rel="exp2_ssl_colon_seed${seed}/ssl_colon__SUNFull_s${seed}.pth"
         ;;
       *)
@@ -45,9 +50,19 @@ for seed in ${SEEDS}; do
         exit 1
         ;;
     esac
-    parent_ckpt="${PARENT_ROOT}/${parent_rel}"
+    if [[ -n "${parent_dir}" ]]; then
+      parent_ckpt="${PARENT_ROOT}/${parent_dir}/${parent_rel}"
+    else
+      parent_ckpt="${PARENT_ROOT}/${parent_rel}"
+    fi
     if [[ ! -f "${parent_ckpt}" ]]; then
-      echo "Warning: expected parent checkpoint '${parent_ckpt}' not found." >&2
+      cat >&2 <<EOF
+Error: expected parent checkpoint '${parent_ckpt}' not found.
+Each SUN checkpoint should follow the layout:
+  \${PARENT_ROOT}/sun_baselines/exp{N}_<model>_seed{seed}/<model>__SUNFull_s{seed}.pth
+Ensure the dataset-specific directory exists and contains the required files before rerunning.
+EOF
+      exit 1
     fi
     python -m ssl4polyp.classification.train_classification \
       --exp-config exp/exp5a.yaml \
