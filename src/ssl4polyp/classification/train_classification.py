@@ -443,6 +443,12 @@ def _resolve_dataset_layout(
     percent = _as_int(dataset_cfg.get("percent"))
     dataset_seed = _as_int(dataset_cfg.get("seed"))
     size = _as_int(dataset_cfg.get("size"))
+    if percent is None:
+        percent = _as_int(dataset_resolved.get("percent"))
+    if dataset_seed is None:
+        dataset_seed = _as_int(dataset_resolved.get("seed"))
+    if size is None:
+        size = _as_int(dataset_resolved.get("size"))
     train_pack = dataset_resolved.get("train_pack") if dataset_resolved else None
     if not train_pack:
         train_pack = getattr(args, "train_pack", None)
@@ -726,7 +732,13 @@ def _select_model_config(models, desired_key: str | None):
     )
 
 
-def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
+def _resolve_dataset_specs(
+    dataset_cfg: Dict[str, Any],
+    *,
+    percent_override: Optional[float] = None,
+    seed_override: Optional[int] = None,
+    size_override: Optional[int] = None,
+):
     splits = dataset_cfg.get("splits", {})
     train_split = splits.get("train")
     val_split = splits.get("val")
@@ -744,9 +756,27 @@ def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
     if test_pack is None:
         test_pack = fallback_pack
 
+    percent = dataset_cfg.get("percent")
+    seed = dataset_cfg.get("seed")
+    size = dataset_cfg.get("size")
+
+    if percent is None and percent_override is not None:
+        percent = percent_override
+    if seed is None and seed_override is not None:
+        seed = seed_override
+    if size is None and size_override is not None:
+        size = size_override
+
+    if percent is not None:
+        if isinstance(percent, float) and not float(percent).is_integer():
+            raise ValueError("Dataset percent must be an integer when resolving train patterns")
+        percent = int(percent)
+    if seed is not None:
+        seed = int(seed)
+    if size is not None:
+        size = int(size)
+
     if "train_pattern" in dataset_cfg:
-        percent = dataset_cfg.get("percent")
-        seed = dataset_cfg.get("seed")
         if percent is None or seed is None:
             raise ValueError(
                 "Dataset configuration requires 'percent' and 'seed' values to resolve train_pattern"
@@ -754,8 +784,6 @@ def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
         train_pack = dataset_cfg["train_pattern"].format(percent=percent, seed=seed)
 
     if "pack_pattern" in dataset_cfg:
-        size = dataset_cfg.get("size")
-        seed = dataset_cfg.get("seed")
         if size is None or seed is None:
             raise ValueError(
                 "Dataset configuration requires 'size' and 'seed' values to resolve pack_pattern"
@@ -766,6 +794,13 @@ def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
             test_pack = resolved_pack
         dataset_cfg.setdefault("pack", resolved_pack)
 
+    if percent is not None:
+        dataset_cfg["percent"] = percent
+    if seed is not None:
+        dataset_cfg["seed"] = seed
+    if size is not None:
+        dataset_cfg["size"] = size
+
     return {
         "train_pack": train_pack,
         "val_pack": val_pack,
@@ -773,6 +808,9 @@ def _resolve_dataset_specs(dataset_cfg: Dict[str, Any]):
         "train_split": train_split,
         "val_split": val_split,
         "test_split": test_split,
+        "percent": percent,
+        "seed": seed,
+        "size": size,
     }
 
 
@@ -861,6 +899,17 @@ def _apply_config_overrides(
 
 def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     dataset_cfg = extract_dataset_config(experiment_cfg)
+    dataset_cfg = copy.deepcopy(dataset_cfg)
+
+    cli_percent = getattr(args, "dataset_percent", None)
+    cli_seed = getattr(args, "dataset_seed", None)
+    cli_size = getattr(args, "dataset_size", None)
+    if cli_percent is not None:
+        dataset_cfg["percent"] = cli_percent
+    if cli_seed is not None:
+        dataset_cfg["seed"] = cli_seed
+    if cli_size is not None:
+        dataset_cfg["size"] = cli_size
     model_cfgs = resolve_model_entries(experiment_cfg.get("models", []))
     selected_model = _select_model_config(model_cfgs, getattr(args, "model_key", None))
 
@@ -973,7 +1022,12 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
             canonical_root = Path("checkpoints") / "classification"
             args.parent_checkpoint = str(canonical_root / relative_path)
 
-    dataset_resolved = _resolve_dataset_specs(dataset_cfg)
+    dataset_resolved = _resolve_dataset_specs(
+        dataset_cfg,
+        percent_override=cli_percent,
+        seed_override=cli_seed,
+        size_override=cli_size,
+    )
     args.train_pack = (
         str(dataset_resolved["train_pack"]) if dataset_resolved["train_pack"] else None
     )
@@ -1011,18 +1065,51 @@ def train_epoch(
     *,
     device: torch.device,
     distributed: bool,
+    max_batches: Optional[int] = None,
+    max_steps: Optional[int] = None,
 ):
-    t = time.time()
     model.train()
+    seed_value = int(seed) if seed is not None else None
     if train_sampler is not None:
-        train_sampler.set_epoch(seed + epoch - 1)
-    loss_accumulator = []
+        if seed_value is not None:
+            train_sampler.set_epoch(seed_value + epoch - 1)
+        else:
+            train_sampler.set_epoch(epoch)
+
+    remaining_steps = None
+    if max_steps is not None:
+        remaining_steps = max_steps - int(global_step)
+        if remaining_steps <= 0:
+            if rank == 0:
+                print(
+                    f"Skipping training epoch {epoch}: reached max training steps ({max_steps})."
+                )
+            return float("nan"), global_step
+
+    t = time.time()
+    non_blocking = device.type == "cuda"
+    use_amp = use_amp and device.type == "cuda"
+    scaler = scaler if use_amp else nullcontext()
+    if not isinstance(scaler, torch.cuda.amp.GradScaler):
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    loss_accumulator: list[float] = []
+
+    total_batches = len(train_loader)
+    if max_batches is not None:
+        total_batches = min(total_batches, max_batches)
+    if remaining_steps is not None:
+        total_batches = min(total_batches, max(remaining_steps, 0))
+
+    batches_processed = 0
+    sample_count = 0
+
     for batch_idx, batch in enumerate(train_loader):
+        if batches_processed >= total_batches:
+            break
         if len(batch) == 3:
             data, target, _ = batch
         else:
             data, target = batch
-        non_blocking = device.type == "cuda"
         data = data.to(device, non_blocking=non_blocking)
         target = target.to(device, non_blocking=non_blocking)
         optimizer.zero_grad()
@@ -1039,31 +1126,40 @@ def train_epoch(
         if distributed:
             dist.all_reduce(loss)
             loss /= world_size
-        loss_accumulator.append(loss.item())
+        loss_value = loss.item()
+        loss_accumulator.append(loss_value)
+        batches_processed += 1
+        sample_count += len(data) * world_size
+
         if rank == 0:
             if tb_logger and global_step % log_interval == 0:
                 lr = optimizer.param_groups[0]["lr"]
-                tb_logger.log_scalar("loss", loss.item(), global_step)
+                tb_logger.log_scalar("loss", loss_value, global_step)
                 tb_logger.log_scalar("lr", lr, global_step)
-            if batch_idx + 1 < len(train_loader):
+            progress_pct = (
+                100.0 * batches_processed / total_batches if total_batches else 0.0
+            )
+            if batches_processed < total_batches:
                 print(
                     "\rTrain Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}\tTime: {:.6f}".format(
                         epoch,
-                        (batch_idx + 1) * len(data) * world_size,
+                        sample_count,
                         len(train_loader.dataset),
-                        100.0 * (batch_idx + 1) / len(train_loader),
-                        loss.item(),
+                        progress_pct,
+                        loss_value,
                         time.time() - t,
                     ),
                     end="",
                 )
             else:
-                printout = "Train Epoch: {} [{}/{} ({:.1f}%)]\tAverage loss: {:.6f}\tTime: {:.6f}".format(
+                printout = (
+                    "Train Epoch: {} [{}/{} ({:.1f}%)]\tAverage loss: {:.6f}\tTime: {:.6f}"
+                ).format(
                     epoch,
-                    (batch_idx + 1) * len(data) * world_size,
+                    sample_count,
                     len(train_loader.dataset),
-                    100.0 * (batch_idx + 1) / len(train_loader),
-                    np.mean(loss_accumulator),
+                    progress_pct,
+                    np.mean(loss_accumulator) if loss_accumulator else float("nan"),
                     time.time() - t,
                 )
                 print("\r" + printout)
@@ -1073,8 +1169,11 @@ def train_epoch(
         if distributed:
             dist.barrier()
         global_step += 1
+        if remaining_steps is not None and global_step >= max_steps:
+            break
 
-    return np.mean(loss_accumulator), global_step
+    mean_loss = np.mean(loss_accumulator) if loss_accumulator else float("nan")
+    return mean_loss, global_step
 
 
 @torch.no_grad()
@@ -1089,6 +1188,7 @@ def test(
     split_name: str = "Test",
     return_outputs: bool = False,
     tau: Optional[float] = None,
+    max_batches: Optional[int] = None,
 ):
     if test_loader is None:
         return float("nan")
@@ -1100,7 +1200,14 @@ def test(
     N = 0
     logits = None
     targets = None
+    total_batches = len(test_loader)
+    if max_batches is not None:
+        total_batches = min(total_batches, max_batches)
+    batches_processed = 0
+
     for batch_idx, batch in enumerate(test_loader):
+        if batches_processed >= total_batches:
+            break
         if len(batch) == 3:
             data, target, _ = batch
         elif len(batch) == 2:
@@ -1118,6 +1225,7 @@ def test(
         else:
             logits = torch.cat((logits, output), 0)
             targets = torch.cat((targets, target_cpu), 0)
+        batches_processed += 1
 
         # (Removed per-batch AUROC to avoid single-class crash.)
         # Compute inexpensive interim progress metric(s):
@@ -1146,14 +1254,17 @@ def test(
             bal_display,
         ])
 
-        if batch_idx + 1 < len(test_loader):
+        progress_pct = (
+            100.0 * batches_processed / total_batches if total_batches else 0.0
+        )
+        if batches_processed < total_batches:
             print(
                 "\r{}  Epoch: {} [{}/{} ({:.1f}%)]\t{}\tTime: {:.6f}".format(
                     split_name,
                     epoch,
                     N,
                     len(test_loader.dataset),
-                    100.0 * (batch_idx + 1) / len(test_loader),
+                    progress_pct,
                     metrics_display,
                     time.time() - t,
                 ),
@@ -1165,7 +1276,7 @@ def test(
                 epoch,
                 N,
                 len(test_loader.dataset),
-                100.0 * (batch_idx + 1) / len(test_loader),
+                progress_pct,
                 metrics_display,
                 time.time() - t,
             )
@@ -1284,6 +1395,12 @@ def build(args, rank, device: torch.device, distributed: bool):
         class_weights = [float(w) for w in args.class_weights.split(",")]
         if len(class_weights) != n_class:
             raise ValueError("Number of class weights must match number of classes")
+
+    args.loader_limits = {
+        "train": getattr(args, "limit_train_batches", None),
+        "val": getattr(args, "limit_val_batches", None),
+        "test": getattr(args, "limit_test_batches", None),
+    }
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
         assert os.path.exists(args.ckpt)
@@ -1517,6 +1634,7 @@ def train(rank, args):
                     metric_fns=aux_metric_fns,
                     split_name="Val",
                     tau=eval_tau,
+                    max_batches=args.limit_val_batches,
                 )
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, eval_epoch)
@@ -1531,6 +1649,7 @@ def train(rank, args):
                     metric_fns=aux_metric_fns,
                     split_name="Test",
                     tau=eval_tau,
+                    max_batches=args.limit_test_batches,
                 )
                 if tb_logger:
                     tb_logger.log_metrics("test", test_metrics, eval_epoch)
@@ -1577,6 +1696,8 @@ def train(rank, args):
                 _get_active_seed(args),
                 device=device,
                 distributed=distributed,
+                max_batches=args.limit_train_batches,
+                max_steps=args.max_train_steps,
             )
             if rank == 0:
                 eval_tau = resolve_eval_tau(threshold_key, sun_threshold_key)
@@ -1591,6 +1712,7 @@ def train(rank, args):
                     split_name="Val",
                     return_outputs=compute_threshold,
                     tau=eval_tau,
+                    max_batches=args.limit_val_batches,
                 )
                 test_metrics = test(
                     _unwrap_model(model),
@@ -1602,6 +1724,7 @@ def train(rank, args):
                     metric_fns=aux_metric_fns,
                     split_name="Test",
                     tau=eval_tau,
+                    max_batches=args.limit_test_batches,
                 )
                 val_metrics_export = _prepare_metric_export(
                     val_metrics, drop={"logits", "probabilities", "targets"}
