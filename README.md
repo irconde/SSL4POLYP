@@ -180,6 +180,27 @@ python -m ssl4polyp.classification.train_classification \
     --seed 42
 ```
 
+For quick smoke tests, `config/exp/exp1_smoke.yaml` layers the standard
+experiment with the SUN subset manifest (`config/data/sun_subsets.yaml`),
+shrinking the run to 5 % of the data, two epochs and a handful of batches per
+split by default. The CLI exposes matching knobs: `--dataset-percent` and
+`--dataset-seed` pick one of the subset packs declared in
+`config/data/sun_subsets.yaml`, while `--limit-train-batches`,
+`--limit-val-batches` and `--limit-test-batches` cap the number of batches per
+epoch. A fully constrained invocation therefore looks like:
+
+```
+python -m ssl4polyp.classification.train_classification \
+    --exp-config exp/exp1_smoke.yaml \
+    --model-key sup_imnet \
+    --dataset-percent 10 \
+    --dataset-seed 29 \
+    --limit-train-batches 2 \
+    --limit-val-batches 1 \
+    --limit-test-batches 2 \
+    --output-dir checkpoints/classification/exp1_smoke_demo
+```
+
 Choose a different `--model-key` to fine-tune the MAE variants defined in
 `config/model/*.yaml`.  You can still override individual knobs on the command
 line (for example `--batch-size` or `--lr`) and they will overwrite values from

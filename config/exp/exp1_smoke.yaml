@@ -1,0 +1,12 @@
+defaults:
+  - exp1
+  - data/sun_subsets
+
+dataset:
+  percent: 5
+  seed: 13
+
+epochs: 2
+limit_train_batches: 4
+limit_val_batches: 2
+limit_test_batches: 2
