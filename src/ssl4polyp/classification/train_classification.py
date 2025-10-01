@@ -313,6 +313,115 @@ def _compute_threshold_statistics(
     return metrics
 
 
+def _safe_min(delta: float) -> float:
+    """Return a finite minimum delta suitable for comparisons."""
+
+    if math.isnan(delta):
+        return 0.0
+    return float(delta)
+
+
+def _resolve_monitor_mode(monitor: Optional[str], mode: Optional[str]) -> str:
+    """Infer the comparison mode for early stopping."""
+
+    if mode:
+        resolved = mode.lower()
+        if resolved not in {"min", "max", "auto"}:
+            raise ValueError(f"Unsupported early-stop mode: {mode!r}")
+    else:
+        resolved = "auto"
+    if resolved != "auto":
+        return resolved
+    monitor = (monitor or "").lower()
+    if monitor.endswith("loss") or monitor.endswith("_loss"):
+        return "min"
+    if monitor.startswith("loss"):
+        return "min"
+    return "max"
+
+
+def _improved(
+    current: float,
+    best: Optional[float],
+    *,
+    mode: str,
+    min_delta: float,
+) -> bool:
+    """Return ``True`` when ``current`` improves over ``best``."""
+
+    if best is None or math.isnan(best):
+        return True
+    if math.isnan(current):
+        return False
+    if mode == "min":
+        return current < (best - min_delta)
+    if mode == "max":
+        return current > (best + min_delta)
+    raise ValueError(f"Unexpected monitor mode: {mode}")
+
+
+def _resolve_monitor_key(raw_key: Optional[str]) -> str:
+    """Normalise monitor names to match metric dictionary keys."""
+
+    if not raw_key:
+        return "loss"
+    key = raw_key.lower()
+    if key.startswith("val_"):
+        key = key[4:]
+    return key
+
+
+def _binary_logits_from_multiclass(logits: torch.Tensor) -> torch.Tensor:
+    """Collapse two-class logits into a single positive-class logit."""
+
+    if logits.ndim == 1:
+        return logits
+    if logits.ndim != 2:
+        raise ValueError("Binary BCE loss expects logits with shape (N,) or (N, 2)")
+    if logits.size(1) == 1:
+        return logits.squeeze(1)
+    if logits.size(1) == 2:
+        return logits[:, 1] - logits[:, 0]
+    raise ValueError("Binary BCE loss received logits with more than two classes")
+
+
+def _compute_supervised_loss(
+    loss_fn: nn.Module,
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    *,
+    mode: str,
+) -> torch.Tensor:
+    """Evaluate ``loss_fn`` handling binary BCE special cases."""
+
+    if mode == "binary_bce":
+        binary_logits = _binary_logits_from_multiclass(logits)
+        target_float = targets.to(dtype=binary_logits.dtype)
+        return loss_fn(binary_logits, target_float)
+    return loss_fn(logits, targets)
+
+
+def _prepare_binary_probabilities(logits: torch.Tensor) -> torch.Tensor:
+    """Return class probabilities for a binary classifier from raw logits."""
+
+    if logits.ndim == 1:
+        pos = torch.sigmoid(logits)
+        neg = 1.0 - pos
+        return torch.stack((neg, pos), dim=1)
+    if logits.ndim != 2:
+        raise ValueError("Binary probability preparation expects rank-1 or rank-2 logits")
+    if logits.size(1) == 1:
+        pos = torch.sigmoid(logits.squeeze(1))
+        neg = 1.0 - pos
+        return torch.stack((neg, pos), dim=1)
+    if logits.size(1) == 2:
+        binary_logits = _binary_logits_from_multiclass(logits)
+        pos = torch.sigmoid(binary_logits)
+        neg = 1.0 - pos
+        return torch.stack((neg, pos), dim=1)
+    return torch.softmax(logits, dim=1)
+
+
 def _build_threshold_payload(
     args,
     *,
@@ -953,9 +1062,17 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
         )
 
     early_cfg = experiment_cfg.get("early_stop", {}) or {}
-    args.early_stop_monitor = early_cfg.get("monitor", getattr(args, "early_stop_monitor", "val_auroc"))
+    args.early_stop_monitor = early_cfg.get(
+        "monitor", getattr(args, "early_stop_monitor", "val_loss")
+    )
     args.early_stop_patience = early_cfg.get(
         "patience", getattr(args, "early_stop_patience", 0)
+    )
+    args.early_stop_mode = early_cfg.get(
+        "mode", getattr(args, "early_stop_mode", None)
+    )
+    args.early_stop_min_delta = early_cfg.get(
+        "min_delta", getattr(args, "early_stop_min_delta", 0.0)
     )
 
     args.threshold_policy = experiment_cfg.get(
@@ -1078,6 +1195,7 @@ def train_epoch(
     distributed: bool,
     max_batches: Optional[int] = None,
     max_steps: Optional[int] = None,
+    loss_mode: str = "multiclass_ce",
 ):
     model.train()
     seed_value = int(seed) if seed is not None else None
@@ -1130,7 +1248,7 @@ def train_epoch(
             autocast_context = nullcontext()
         with autocast_context:
             output = model(data)
-            loss = loss_fn(output, target)
+            loss = _compute_supervised_loss(loss_fn, output, target, mode=loss_mode)
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
@@ -1196,6 +1314,8 @@ def test(
     perf_fn,
     log_path,
     metric_fns: Optional[Dict[str, Any]] = None,
+    loss_fn: Optional[nn.Module] = None,
+    loss_mode: str = "multiclass_ce",
     split_name: str = "Test",
     return_outputs: bool = False,
     tau: Optional[float] = None,
@@ -1206,6 +1326,8 @@ def test(
     t = time.time()
     model.eval()
     metric_fns = metric_fns or {}
+    loss_sum = 0.0
+    loss_count = 0
     device = next(model.parameters()).device
     non_blocking = device.type == "cuda"
     N = 0
@@ -1236,7 +1358,12 @@ def test(
         data = data.to(device, non_blocking=non_blocking)
         target = target.to(device, non_blocking=non_blocking)
         N += len(data)
-        output = model(data).detach().cpu()
+        logits_batch = model(data)
+        if loss_fn is not None:
+            loss_tensor = _compute_supervised_loss(loss_fn, logits_batch, target, mode=loss_mode)
+            loss_sum += float(loss_tensor.item()) * len(data)
+            loss_count += len(data)
+        output = logits_batch.detach().cpu()
         target_cpu = target.detach().cpu()
         if batch_idx == 0:
             logits = output
@@ -1276,7 +1403,7 @@ def test(
 
         # (Removed per-batch AUROC to avoid single-class crash.)
         # Compute inexpensive interim progress metric(s):
-        probs_cumulative = torch.softmax(logits, dim=1)
+        probs_cumulative = _prepare_binary_probabilities(logits)
         if tau is not None and probs_cumulative.size(1) == 2:
             preds_cumulative = (probs_cumulative[:, 1] >= tau).to(dtype=torch.long)
         else:
@@ -1296,10 +1423,16 @@ def test(
         else:
             bal_display = "BALACC: (pending)"
 
-        metrics_display = "\t".join([
-            "AUROC: (pending)",  # final AUROC printed after loop
-            bal_display,
-        ])
+        if loss_count > 0:
+            loss_display = f"Loss: {loss_sum / loss_count:.6f}"
+        elif loss_fn is not None:
+            loss_display = "Loss: (pending)"
+        else:
+            loss_display = None
+        metrics_parts = ["AUROC: (pending)", bal_display]
+        if loss_display is not None:
+            metrics_parts.append(loss_display)
+        metrics_display = "\t".join(metrics_parts)
 
         progress_reference = planned_batches if planned_batches else max(1, hard_batch_limit)
         progress_measure = (
@@ -1344,12 +1477,17 @@ def test(
             with open(log_path, "a") as f:
                 f.write(printout + "\n")
             break
-    probs = torch.softmax(logits, dim=1)
+    probs = _prepare_binary_probabilities(logits)
     n_classes = probs.size(1) if probs.ndim == 2 else 1
     binary_tau = tau if (tau is not None and n_classes == 2) else None
     results = {
         "auroc": perf_fn(probs, targets).item(),
     }
+    if loss_fn is not None and loss_count > 0:
+        mean_loss = loss_sum / loss_count
+        results["loss"] = mean_loss
+    else:
+        mean_loss = float("nan")
     if binary_tau is not None:
         preds = (probs[:, 1] >= binary_tau).to(dtype=torch.long)
     else:
@@ -1360,7 +1498,10 @@ def test(
         except TypeError:
             results[name] = fn(preds, targets).item()
 
-    print(f"{split_name} final AUROC: {results['auroc']:.6f}")
+    summary = f"{split_name} final AUROC: {results['auroc']:.6f}"
+    if loss_fn is not None and not math.isnan(mean_loss):
+        summary += f" | Loss: {mean_loss:.6f}"
+    print(summary)
 
     if return_outputs:
         results["logits"] = logits
@@ -1441,6 +1582,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         raise ValueError("No classes found in available datasets.")
 
     class_weights: list[float]
+    class_counts: Optional[list[int]] = None
     if train_dataset is not None and train_dataset.labels_list is not None:
         train_labels = list(train_dataset.labels_list)
         counts = np.bincount(train_labels, minlength=n_class)
@@ -1448,6 +1590,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         class_weights = [
             (N_total / (n_class * count)) if count > 0 else 0.0 for count in counts
         ]
+        class_counts = counts.tolist()
     else:
         class_weights = [1.0 for _ in range(n_class)]
 
@@ -1462,6 +1605,11 @@ def build(args, rank, device: torch.device, distributed: bool):
         "val": getattr(args, "limit_val_batches", None),
         "test": getattr(args, "limit_test_batches", None),
     }
+
+    if class_counts is not None:
+        args.class_counts = list(class_counts)
+    else:
+        args.class_counts = None
 
     if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
         assert os.path.exists(args.ckpt)
@@ -1488,11 +1636,19 @@ def build(args, rank, device: torch.device, distributed: bool):
     thresholds_map: Dict[str, Any] = {}
     existing_ckpt, pointer_valid = _find_existing_checkpoint(stem_path)
     parent_reference = getattr(args, "parent_checkpoint", None)
+    resume_monitor_available = False
     if existing_ckpt is not None:
         main_dict = torch.load(existing_ckpt, map_location="cpu")
         model.load_state_dict(main_dict["model_state_dict"])
         start_epoch = main_dict["epoch"] + 1
-        best_val_perf = main_dict.get("val_perf")
+        monitor_value = main_dict.get("monitor_value")
+        if monitor_value is None and "val_loss" in main_dict:
+            monitor_value = main_dict.get("val_loss")
+        if monitor_value is None:
+            monitor_value = main_dict.get("val_perf")
+        else:
+            resume_monitor_available = True
+        best_val_perf = monitor_value
         random.setstate(main_dict["py_state"])
         np.random.set_state(main_dict["np_state"])
         torch.set_rng_state(main_dict["torch_state"])
@@ -1577,6 +1733,8 @@ def build(args, rank, device: torch.device, distributed: bool):
         if scheduler is not None and "scheduler_state_dict" in main_dict:
             scheduler.load_state_dict(main_dict["scheduler_state_dict"])
 
+    args.resume_monitor_available = bool(resume_monitor_available)
+
     return (
         train_dataloader,
         test_dataloader,
@@ -1634,7 +1792,7 @@ def train(rank, args):
         ckpt_path,
         log_path,
         start_epoch,
-        best_val_perf,
+        best_monitor_value,
         class_weights,
         scaler,
         scheduler,
@@ -1645,9 +1803,31 @@ def train(rank, args):
     eval_only = train_dataloader is None
     use_amp = args.precision == "amp" and device.type == "cuda"
 
-    class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32)
-    loss_fn = nn.CrossEntropyLoss(weight=class_weights_tensor)
+    if best_monitor_value is not None:
+        try:
+            best_monitor_value = float(best_monitor_value)
+        except (TypeError, ValueError):
+            best_monitor_value = None
+
     n_classes = len(class_weights)
+    class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32)
+    class_counts = getattr(args, "class_counts", None) or []
+    loss_mode = "multiclass_ce"
+    if n_classes == 2:
+        neg_count = float(class_counts[0]) if len(class_counts) >= 1 else None
+        pos_count = float(class_counts[1]) if len(class_counts) >= 2 else None
+        if pos_count and pos_count > 0:
+            pos_weight_value = neg_count / pos_count if neg_count is not None else 1.0
+        elif class_weights_tensor.numel() >= 2 and class_weights_tensor[0] > 0 and class_weights_tensor[1] > 0:
+            pos_weight_value = float(class_weights_tensor[1] / class_weights_tensor[0])
+        else:
+            pos_weight_value = 1.0
+        loss_fn = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor(pos_weight_value, device=device, dtype=torch.float32)
+        )
+        loss_mode = "binary_bce"
+    else:
+        loss_fn = nn.CrossEntropyLoss(weight=class_weights_tensor)
     perf_fn = performance.meanAUROC(n_class=n_classes)
     aux_metric_fns = {
         "f1": performance.meanF1Score(n_class=n_classes),
@@ -1679,6 +1859,18 @@ def train(rank, args):
     if distributed:
         dist.barrier()
 
+    monitor_name = getattr(args, "early_stop_monitor", None) or "val_loss"
+    monitor_mode = _resolve_monitor_mode(monitor_name, getattr(args, "early_stop_mode", None))
+    monitor_key = _resolve_monitor_key(monitor_name)
+    min_delta = _safe_min(float(getattr(args, "early_stop_min_delta", 0.0)))
+    if (
+        not getattr(args, "resume_monitor_available", False)
+        and best_monitor_value is not None
+        and monitor_mode == "min"
+    ):
+        # Old checkpoints tracked AUROC; fall back to reselecting best using the new monitor.
+        best_monitor_value = None
+
     if eval_only:
         eval_epoch = max(start_epoch - 1, 0)
         if rank == 0:
@@ -1693,6 +1885,8 @@ def train(rank, args):
                     perf_fn,
                     log_path,
                     metric_fns=aux_metric_fns,
+                    loss_fn=loss_fn,
+                    loss_mode=loss_mode,
                     split_name="Val",
                     tau=eval_tau,
                     max_batches=args.limit_val_batches,
@@ -1708,6 +1902,8 @@ def train(rank, args):
                     perf_fn,
                     log_path,
                     metric_fns=aux_metric_fns,
+                    loss_fn=loss_fn,
+                    loss_mode=loss_mode,
                     split_name="Test",
                     tau=eval_tau,
                     max_batches=args.limit_test_batches,
@@ -1731,6 +1927,10 @@ def train(rank, args):
     last_loss: Optional[float] = None
     last_val_perf: Optional[float] = None
     last_test_perf: Optional[float] = None
+    last_monitor_value: Optional[float] = None
+    last_val_loss: Optional[float] = None
+    last_test_loss: Optional[float] = None
+    last_test_monitor: Optional[float] = None
     last_val_metrics_export: Optional[Dict[str, float]] = None
     last_test_metrics_export: Optional[Dict[str, float]] = None
     latest_threshold_file_relpath: Optional[str] = None
@@ -1760,6 +1960,7 @@ def train(rank, args):
                 distributed=distributed,
                 max_batches=args.limit_train_batches,
                 max_steps=args.max_train_steps,
+                loss_mode=loss_mode,
             )
             if rank == 0:
                 eval_tau = resolve_eval_tau(threshold_key, sun_threshold_key)
@@ -1771,6 +1972,8 @@ def train(rank, args):
                     perf_fn,
                     log_path,
                     metric_fns=aux_metric_fns,
+                    loss_fn=loss_fn,
+                    loss_mode=loss_mode,
                     split_name="Val",
                     return_outputs=compute_threshold,
                     tau=eval_tau,
@@ -1784,6 +1987,8 @@ def train(rank, args):
                     perf_fn,
                     log_path,
                     metric_fns=aux_metric_fns,
+                    loss_fn=loss_fn,
+                    loss_mode=loss_mode,
                     split_name="Test",
                     tau=eval_tau,
                     max_batches=args.limit_test_batches,
@@ -1795,8 +2000,17 @@ def train(rank, args):
                 val_logits = val_metrics.pop("logits", None)
                 val_metrics.pop("probabilities", None)
                 val_targets = val_metrics.pop("targets", None)
-                val_perf = val_metrics["auroc"]
-                test_perf = test_metrics["auroc"]
+                val_loss_value = val_metrics.get("loss")
+                test_loss_value = test_metrics.get("loss")
+                monitor_value = val_metrics.get(monitor_key)
+                if monitor_value is None:
+                    available = ", ".join(sorted(val_metrics.keys()))
+                    raise KeyError(
+                        f"Validation metrics do not contain monitor '{monitor_key}'. Available: {available}"
+                    )
+                test_monitor_value = test_metrics.get(monitor_key)
+                val_perf = float(val_metrics["auroc"])
+                test_perf = float(test_metrics["auroc"])
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, epoch)
                     tb_logger.log_metrics("test", test_metrics, epoch)
@@ -1804,25 +2018,43 @@ def train(rank, args):
                 last_loss = float(loss)
                 last_val_perf = float(val_perf)
                 last_test_perf = float(test_perf)
+                last_monitor_value = float(monitor_value)
+                last_val_loss = float(val_loss_value) if val_loss_value is not None else None
+                last_test_loss = (
+                    float(test_loss_value) if test_loss_value is not None else None
+                )
+                last_test_monitor = (
+                    float(test_monitor_value)
+                    if test_monitor_value is not None
+                    else None
+                )
                 last_val_metrics_export = dict(val_metrics_export)
                 last_test_metrics_export = dict(test_metrics_export)
             else:
                 val_perf = 0.0
                 test_perf = 0.0
+                monitor_value = 0.0
+                test_monitor_value = 0.0
+                val_loss_value = None
+                test_loss_value = None
+                last_test_monitor = None
 
             steps_this_epoch = global_step - prev_global_step
             should_step = steps_this_epoch > 0
             if scheduler is not None:
                 if scheduler_name == "plateau":
+                    plateau_metric = (
+                        float(monitor_value) if monitor_value is not None else float(val_perf)
+                    )
                     if distributed:
                         metric_tensor = torch.tensor(
-                            [val_perf if rank == 0 else 0.0], device=device
+                            [plateau_metric if rank == 0 else 0.0], device=device
                         )
                         dist.broadcast(metric_tensor, src=0)
                         if should_step:
                             scheduler.step(metric_tensor.item())
                     elif should_step:
-                        scheduler.step(val_perf)
+                        scheduler.step(plateau_metric)
                 elif should_step:
                     scheduler.step()
             if distributed:
@@ -1832,7 +2064,12 @@ def train(rank, args):
             sys.exit(0)
 
         if rank == 0:
-            improved = best_val_perf is None or val_perf > best_val_perf
+            improved = _improved(
+                float(monitor_value),
+                best_monitor_value,
+                mode=monitor_mode,
+                min_delta=min_delta,
+            )
             if improved:
                 print("Saving...")
                 with open(log_path, "a") as f:
@@ -1906,10 +2143,23 @@ def train(rank, args):
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scaler_state_dict": scaler.state_dict(),
                     "loss": loss,
-                    "val_perf": val_perf,
-                    "val_auroc": val_perf,
-                    "test_perf": test_perf,
-                    "test_auroc": test_perf,
+                    "val_perf": float(monitor_value),
+                    "val_loss": float(val_loss_value)
+                    if val_loss_value is not None
+                    else None,
+                    "val_auroc": float(val_perf),
+                    "test_perf": float(test_monitor_value)
+                    if test_monitor_value is not None
+                    else float(test_perf),
+                    "test_loss": float(test_loss_value)
+                    if test_loss_value is not None
+                    else None,
+                    "test_auroc": float(test_perf),
+                    "monitor_value": float(monitor_value),
+                    "monitor_metric": monitor_name,
+                    "test_monitor_value": float(test_monitor_value)
+                    if test_monitor_value is not None
+                    else None,
                     "py_state": random.getstate(),
                     "np_state": np.random.get_state(),
                     "torch_state": torch.get_rng_state(),
@@ -1955,6 +2205,8 @@ def train(rank, args):
                     "train_loss": float(loss),
                     "val": val_metrics_export,
                     "test": test_metrics_export,
+                    "monitor_value": float(monitor_value),
+                    "monitor_metric": monitor_name,
                 }
                 if threshold_file_relpath:
                     metrics_payload["threshold_files"] = {
@@ -1967,7 +2219,7 @@ def train(rank, args):
                 if threshold_file_relpath:
                     latest_threshold_file_relpath = threshold_file_relpath
                     latest_threshold_record = threshold_record
-                best_val_perf = val_perf
+                best_monitor_value = float(monitor_value)
                 thresholds_map = updated_thresholds
                 no_improve_epochs = 0
             else:
@@ -1998,10 +2250,20 @@ def train(rank, args):
             "optimizer_state_dict": optimizer.state_dict(),
             "scaler_state_dict": scaler.state_dict(),
             "loss": float(last_loss) if last_loss is not None else None,
-            "val_perf": last_val_perf,
-            "val_auroc": last_val_perf,
-            "test_perf": last_test_perf,
-            "test_auroc": last_test_perf,
+            "val_perf": float(last_monitor_value)
+            if last_monitor_value is not None
+            else None,
+            "val_loss": float(last_val_loss) if last_val_loss is not None else None,
+            "val_auroc": float(last_val_perf) if last_val_perf is not None else None,
+            "test_perf": float(last_test_monitor)
+            if last_test_monitor is not None
+            else (float(last_test_perf) if last_test_perf is not None else None),
+            "test_loss": float(last_test_loss) if last_test_loss is not None else None,
+            "test_auroc": float(last_test_perf) if last_test_perf is not None else None,
+            "monitor_value": float(last_monitor_value)
+            if last_monitor_value is not None
+            else None,
+            "monitor_metric": monitor_name,
             "py_state": random.getstate(),
             "np_state": np.random.get_state(),
             "torch_state": torch.get_rng_state(),
@@ -2028,8 +2290,12 @@ def train(rank, args):
             digest_payload = {
                 "epoch": int(last_epoch),
                 "seed": _get_active_seed(args),
-                "val": float(last_val_perf) if last_val_perf is not None else None,
-                "test": float(last_test_perf) if last_test_perf is not None else None,
+                "val": float(last_monitor_value)
+                if last_monitor_value is not None
+                else None,
+                "test": float(last_test_monitor)
+                if last_test_monitor is not None
+                else (float(last_test_perf) if last_test_perf is not None else None),
             }
             digest = hashlib.sha1(
                 json.dumps(digest_payload, sort_keys=True).encode("utf-8")
@@ -2047,6 +2313,10 @@ def train(rank, args):
             "train_loss": float(last_loss) if last_loss is not None else None,
             "val": dict(last_val_metrics_export or {}),
             "test": dict(last_test_metrics_export or {}),
+            "monitor_value": float(last_monitor_value)
+            if last_monitor_value is not None
+            else None,
+            "monitor_metric": monitor_name,
         }
         if latest_threshold_file_relpath and threshold_key is not None:
             last_metrics_payload["threshold_files"] = {
@@ -2212,8 +2482,21 @@ def get_args():
     parser.add_argument("--min-lr", type=float, default=1e-6)
     parser.add_argument("--scheduler-patience", type=int, default=2)
     parser.add_argument("--scheduler-factor", type=float, default=0.5)
-    parser.add_argument("--early-stop-monitor", type=str, default="val_auroc")
+    parser.add_argument("--early-stop-monitor", type=str, default="val_loss")
     parser.add_argument("--early-stop-patience", type=int, default=0)
+    parser.add_argument(
+        "--early-stop-mode",
+        type=str,
+        default="auto",
+        choices=["min", "max", "auto"],
+        help="Direction for monitoring comparisons (default: auto)",
+    )
+    parser.add_argument(
+        "--early-stop-min-delta",
+        type=float,
+        default=0.0,
+        help="Minimum change in the monitored metric to reset patience.",
+    )
     parser.add_argument(
         "--threshold-policy",
         type=str,
