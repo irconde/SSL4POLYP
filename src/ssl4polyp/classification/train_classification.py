@@ -1811,17 +1811,19 @@ def train(rank, args):
                 test_perf = 0.0
 
             steps_this_epoch = global_step - prev_global_step
-            if scheduler is not None and steps_this_epoch > 0:
+            should_step = steps_this_epoch > 0
+            if scheduler is not None:
                 if scheduler_name == "plateau":
                     if distributed:
                         metric_tensor = torch.tensor(
                             [val_perf if rank == 0 else 0.0], device=device
                         )
                         dist.broadcast(metric_tensor, src=0)
-                        scheduler.step(metric_tensor.item())
-                    else:
+                        if should_step:
+                            scheduler.step(metric_tensor.item())
+                    elif should_step:
                         scheduler.step(val_perf)
-                else:
+                elif should_step:
                     scheduler.step()
             if distributed:
                 dist.barrier()
