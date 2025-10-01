@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from typing import Optional
+import warnings
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -174,13 +176,23 @@ class meanAUROC(nn.Module):
 
         preds_np = preds.detach().cpu().numpy()
         targets_np = targets.detach().cpu().numpy()
+
+        unique_targets = np.unique(targets_np)
+        if unique_targets.size < 2:
+            warnings.warn(
+                "AUROC is undefined when only one class is present in the targets; returning NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return torch.tensor(float("nan"), dtype=torch.float32, device=preds.device)
+
         if self.n_class == 2:
             score = roc_auc_score(targets_np, preds_np[:, 1])
         else:
             score = roc_auc_score(
                 targets_np, preds_np, multi_class="ovr", average="macro"
             )
-        return torch.tensor(score)
+        return torch.tensor(score, dtype=torch.float32, device=preds.device)
 
 
 class meanBalancedAccuracy(nn.Module):
