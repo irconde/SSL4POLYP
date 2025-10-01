@@ -216,4 +216,8 @@ def test_cli_subset_overrides_and_batch_limits(monkeypatch, tmp_path):
     )
 
     assert "auroc" in results
-    assert test_loader.yielded == args.limit_test_batches
+    expected_batches = min(
+        len(test_loader),
+        args.limit_test_batches + train_classification.EVAL_MAX_ADDITIONAL_BATCHES,
+    )
+    assert test_loader.yielded == expected_batches
