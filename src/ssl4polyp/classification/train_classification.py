@@ -959,6 +959,14 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
         "threshold_policy", getattr(args, "threshold_policy", None)
     )
 
+    for limit_key in ("limit_train_batches", "limit_val_batches", "limit_test_batches"):
+        limit_value = experiment_cfg.get(limit_key)
+        if limit_value is None:
+            continue
+        current_value = getattr(args, limit_key, None)
+        if current_value is None:
+            setattr(args, limit_key, int(limit_value))
+
     amp_enabled = experiment_cfg.get("amp")
     if amp_enabled is not None:
         args.precision = "amp" if amp_enabled else "fp32"
