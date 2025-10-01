@@ -11,6 +11,7 @@
 
 import builtins
 import datetime
+import math
 import os
 import time
 from collections import defaultdict, deque
@@ -351,12 +352,187 @@ def load_model(args, model_without_ddp, optimizer, loss_scaler):
             print("With optim & sched!")
 
 
+def _get_reduce_device():
+    return 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
 def all_reduce_mean(x):
     world_size = get_world_size()
     if world_size > 1:
-        x_reduce = torch.tensor(x).cuda()
+        x_reduce = torch.tensor(x, dtype=torch.float64, device=_get_reduce_device())
         dist.all_reduce(x_reduce)
         x_reduce /= world_size
         return x_reduce.item()
-    else:
-        return x
+    return x
+
+
+def all_reduce_sum(x):
+    world_size = get_world_size()
+    if world_size > 1:
+        tensor = torch.tensor(x, dtype=torch.float64, device=_get_reduce_device())
+        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+        return tensor.item()
+    return x
+
+
+def all_reduce_max(x):
+    world_size = get_world_size()
+    if world_size > 1:
+        tensor = torch.tensor(x, dtype=torch.float64, device=_get_reduce_device())
+        dist.all_reduce(tensor, op=dist.ReduceOp.MAX)
+        return tensor.item()
+    return x
+
+
+def detect_grad_anomalies(parameters):
+    has_nan = False
+    has_inf = False
+    for param in parameters:
+        grad = param.grad
+        if grad is None:
+            continue
+        if torch.isnan(grad).any():
+            has_nan = True
+        if torch.isinf(grad).any():
+            has_inf = True
+        if has_nan and has_inf:
+            break
+    return has_nan, has_inf
+
+
+class EpochSummary:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self._start_time = time.time()
+        self._loss_sum = 0.0
+        self._loss_sq_sum = 0.0
+        self._loss_count = 0
+        self._batch_count = 0
+        self._sample_count = 0
+        self._nan_loss_steps = 0
+        self._inf_loss_steps = 0
+        self._nan_grad_steps = 0
+        self._inf_grad_steps = 0
+
+    def update(self, loss_value, batch_size, *, grad_nan=False, grad_inf=False):
+        if loss_value is None:
+            return
+        loss_value = float(loss_value)
+        if math.isfinite(loss_value):
+            self._loss_sum += loss_value
+            self._loss_sq_sum += loss_value * loss_value
+            self._loss_count += 1
+        self._batch_count += 1
+        self._sample_count += int(batch_size)
+
+        if math.isnan(loss_value):
+            self._nan_loss_steps += 1
+        if math.isinf(loss_value):
+            self._inf_loss_steps += 1
+        if grad_nan:
+            self._nan_grad_steps += 1
+        if grad_inf:
+            self._inf_grad_steps += 1
+
+    def finalize(self, epoch, lr_values, *, prefix="Train"):
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+        epoch_time = time.time() - self._start_time
+        device = _get_reduce_device()
+
+        stats_tensor = torch.tensor([
+            self._loss_sum,
+            self._loss_sq_sum,
+            self._loss_count,
+            self._sample_count,
+            self._batch_count,
+            self._nan_loss_steps,
+            self._inf_loss_steps,
+            self._nan_grad_steps,
+            self._inf_grad_steps,
+        ], dtype=torch.float64, device=device)
+
+        if get_world_size() > 1:
+            dist.all_reduce(stats_tensor, op=dist.ReduceOp.SUM)
+
+        (loss_sum, loss_sq_sum, loss_count, sample_count, batch_count,
+         nan_loss_steps, inf_loss_steps, nan_grad_steps, inf_grad_steps) = stats_tensor.tolist()
+
+        loss_count = int(round(loss_count))
+        sample_count = int(round(sample_count))
+        batch_count = int(round(batch_count))
+        nan_loss_steps = int(round(nan_loss_steps))
+        inf_loss_steps = int(round(inf_loss_steps))
+        nan_grad_steps = int(round(nan_grad_steps))
+        inf_grad_steps = int(round(inf_grad_steps))
+
+        epoch_time_tensor = torch.tensor([epoch_time], dtype=torch.float64, device=device)
+        if get_world_size() > 1:
+            dist.all_reduce(epoch_time_tensor, op=dist.ReduceOp.MAX)
+        epoch_time = epoch_time_tensor.item()
+
+        loss_mean = loss_sum / loss_count if loss_count else float('nan')
+        loss_std = 0.0
+        if loss_count > 1:
+            variance = (loss_sq_sum / loss_count) - (loss_mean ** 2)
+            if variance < 0.0:
+                variance = 0.0
+            loss_std = math.sqrt(variance)
+
+        throughput = sample_count / epoch_time if epoch_time > 0 else 0.0
+
+        lr_values = list(lr_values) if lr_values is not None else []
+        lr_values = [float(lr) for lr in lr_values]
+        lr_line = "N/A"
+        if lr_values:
+            min_lr = min(lr_values)
+            max_lr = max(lr_values)
+            if math.isclose(min_lr, max_lr, rel_tol=1e-12, abs_tol=1e-12):
+                lr_line = f"{min_lr:.6f}"
+            else:
+                lr_line = f"min={min_lr:.6f}, max={max_lr:.6f}"
+
+        if is_main_process():
+            header = f"{prefix} epoch {epoch} summary:"
+            print(header)
+            if loss_count:
+                loss_msg = f"  loss: mean={loss_mean:.6f}"
+                if loss_count > 1:
+                    loss_msg += f", std={loss_std:.6f}"
+            else:
+                loss_msg = "  loss: mean=N/A"
+            print(loss_msg)
+            print(f"  lr: {lr_line}")
+            print(f"  throughput: {throughput:.2f} samples/s")
+            print(f"  wall clock: {epoch_time:.2f} s")
+            print(f"  data: batches={batch_count}, samples={sample_count}")
+            anomaly_lines = []
+            if nan_loss_steps:
+                anomaly_lines.append(f"    loss NaN steps: {nan_loss_steps}")
+            if inf_loss_steps:
+                anomaly_lines.append(f"    loss Inf steps: {inf_loss_steps}")
+            if nan_grad_steps:
+                anomaly_lines.append(f"    grad NaN steps: {nan_grad_steps}")
+            if inf_grad_steps:
+                anomaly_lines.append(f"    grad Inf steps: {inf_grad_steps}")
+            if anomaly_lines:
+                print("  NaN/Inf counters:")
+                for line in anomaly_lines:
+                    print(line)
+
+        return {
+            "loss_mean": loss_mean,
+            "loss_std": loss_std,
+            "throughput": throughput,
+            "epoch_time": epoch_time,
+            "batches": batch_count,
+            "samples": sample_count,
+            "nan_loss_steps": nan_loss_steps,
+            "inf_loss_steps": inf_loss_steps,
+            "nan_grad_steps": nan_grad_steps,
+            "inf_grad_steps": inf_grad_steps,
+            "lr": lr_values,
+        }
