@@ -1953,6 +1953,24 @@ def get_args():
     parser.add_argument("--val-split", type=str, default="val")
     parser.add_argument("--test-split", type=str, default="test")
     parser.add_argument(
+        "--dataset-percent",
+        type=float,
+        default=None,
+        help=(
+            "Optional percentage of the dataset to sample for constrained smoke tests. "
+            "Values <= 0 disable subsetting."
+        ),
+    )
+    parser.add_argument(
+        "--dataset-seed",
+        type=int,
+        default=None,
+        help=(
+            "Seed used when randomly subsetting the dataset for smoke tests. "
+            "Negative values disable deterministic subsetting."
+        ),
+    )
+    parser.add_argument(
         "--pack-root",
         type=str,
         default=str(data_packs_root()),
@@ -1992,6 +2010,15 @@ def get_args():
         type=str,
         choices=["none", "cosine", "plateau"],
         default="none",
+    )
+    parser.add_argument(
+        "--max-train-steps",
+        type=int,
+        default=None,
+        help=(
+            "Optional hard limit on total training steps for fast smoke tests. "
+            "Values <= 0 disable the limit."
+        ),
     )
     parser.add_argument("--warmup-epochs", type=int, default=0)
     parser.add_argument("--min-lr", type=float, default=1e-6)
@@ -2034,6 +2061,33 @@ def get_args():
         action="store_false",
         help="Shut down dataloader workers at the end of each epoch",
     )
+    parser.add_argument(
+        "--limit-train-batches",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of training batches per epoch for quick smoke tests. "
+            "Values <= 0 disable this cap."
+        ),
+    )
+    parser.add_argument(
+        "--limit-val-batches",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of validation batches per epoch for smoke tests. "
+            "Values <= 0 disable this cap."
+        ),
+    )
+    parser.add_argument(
+        "--limit-test-batches",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of test batches per epoch for smoke tests. "
+            "Values <= 0 disable this cap."
+        ),
+    )
     parser.add_argument("--precision", choices=["amp", "fp32"], default="amp")
     parser.add_argument("--log-interval", type=int, default=10)
     parser.add_argument(
@@ -2067,6 +2121,57 @@ def main():
         args.finetune_mode = "none"
     args.frozen = args.finetune_mode == "none"
     args.seeds = _normalize_seeds(getattr(args, "seeds", None))
+    
+    def _warn_disable(flag: str, value: Any, reason: str) -> None:
+        warnings.warn(
+            f"{reason} (received {value!r}). Disabling --{flag}.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    def _coerce_positive_int(value: Optional[int], flag: str) -> Optional[int]:
+        if value is None:
+            return None
+        if value <= 0:
+            _warn_disable(flag, value, "Expected a positive integer")
+            return None
+        return int(value)
+
+    dataset_percent = getattr(args, "dataset_percent", None)
+    if dataset_percent is not None:
+        if dataset_percent <= 0:
+            _warn_disable("dataset-percent", dataset_percent, "Dataset percentage must be > 0")
+            dataset_percent = None
+        elif dataset_percent > 100:
+            warnings.warn(
+                f"--dataset-percent {dataset_percent} exceeds 100; clamping to 100 for smoke tests.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            dataset_percent = 100.0
+        else:
+            dataset_percent = float(dataset_percent)
+    args.dataset_percent = dataset_percent
+
+    dataset_seed = getattr(args, "dataset_seed", None)
+    if dataset_seed is not None and dataset_seed < 0:
+        _warn_disable("dataset-seed", dataset_seed, "Dataset seed must be >= 0")
+        dataset_seed = None
+    args.dataset_seed = dataset_seed
+
+    args.limit_train_batches = _coerce_positive_int(
+        getattr(args, "limit_train_batches", None), "limit-train-batches"
+    )
+    args.limit_val_batches = _coerce_positive_int(
+        getattr(args, "limit_val_batches", None), "limit-val-batches"
+    )
+    args.limit_test_batches = _coerce_positive_int(
+        getattr(args, "limit_test_batches", None), "limit-test-batches"
+    )
+    args.max_train_steps = _coerce_positive_int(
+        getattr(args, "max_train_steps", None), "max-train-steps"
+    )
+
     experiment_cfg = None
     dataset_cfg = None
     dataset_resolved = None
@@ -2169,6 +2274,17 @@ def main():
         yaml.safe_dump(run_config, f)
     device_count = torch.cuda.device_count()
     args.world_size = device_count if device_count > 0 else 1
+    if (
+        getattr(args, "max_train_steps", None) is not None
+        and args.frozen
+        and args.world_size > 1
+    ):
+        warnings.warn(
+            "--max-train-steps is ignored for distributed evaluation-only runs.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        args.max_train_steps = None
     assert args.batch_size % args.world_size == 0
     if args.world_size > 1:
         mp.spawn(train, nprocs=args.world_size, args=(args,), join=True)
