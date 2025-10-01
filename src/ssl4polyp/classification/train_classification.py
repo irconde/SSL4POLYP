@@ -907,11 +907,11 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     cli_percent = getattr(args, "dataset_percent", None)
     cli_seed = getattr(args, "dataset_seed", None)
     cli_size = getattr(args, "dataset_size", None)
-    if cli_percent is not None:
+    if cli_percent is not None and "percent" not in dataset_cfg:
         dataset_cfg["percent"] = cli_percent
-    if cli_seed is not None:
+    if cli_seed is not None and "seed" not in dataset_cfg:
         dataset_cfg["seed"] = cli_seed
-    if cli_size is not None:
+    if cli_size is not None and "size" not in dataset_cfg:
         dataset_cfg["size"] = cli_size
     model_cfgs = resolve_model_entries(experiment_cfg.get("models", []))
     selected_model = _select_model_config(model_cfgs, getattr(args, "model_key", None))
