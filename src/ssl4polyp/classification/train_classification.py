@@ -1739,6 +1739,7 @@ def train(rank, args):
 
     for epoch in range(start_epoch, args.epochs + 1):
         try:
+            prev_global_step = global_step
             loss, global_step = train_epoch(
                 model,
                 rank,
@@ -1809,7 +1810,8 @@ def train(rank, args):
                 val_perf = 0.0
                 test_perf = 0.0
 
-            if scheduler is not None:
+            steps_this_epoch = global_step - prev_global_step
+            if scheduler is not None and steps_this_epoch > 0:
                 if scheduler_name == "plateau":
                     if distributed:
                         metric_tensor = torch.tensor(
