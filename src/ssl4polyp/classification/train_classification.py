@@ -48,6 +48,102 @@ import numpy as np
 EVAL_MAX_ADDITIONAL_BATCHES = 3
 
 
+def _format_eta(seconds: Optional[float]) -> str:
+    """Format seconds as a zero-padded HH:MM:SS string."""
+
+    if seconds is None or not math.isfinite(seconds) or seconds <= 0:
+        return "--:--:--"
+    seconds_int = int(round(seconds))
+    hours, remainder = divmod(seconds_int, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _collect_param_group_lrs(optimizer: torch.optim.Optimizer) -> list[float]:
+    """Return all learning rates from an optimizer's parameter groups."""
+
+    lrs: list[float] = []
+    for group in optimizer.param_groups:
+        lr = group.get("lr")
+        if lr is not None:
+            lrs.append(float(lr))
+    return lrs
+
+
+def _format_lr_values(lrs: Iterable[float]) -> str:
+    lrs = list(lrs)
+    if not lrs:
+        return "--"
+    if len(lrs) == 1:
+        return f"{lrs[0]:.3e}"
+    return f"{min(lrs):.3e}-{max(lrs):.3e}"
+
+
+def _compute_grad_norm(parameters: Iterable[torch.nn.Parameter]) -> Optional[float]:
+    total_sq = 0.0
+    has_grad = False
+    for param in parameters:
+        if param is None or param.grad is None:
+            continue
+        grad = param.grad.detach()
+        if grad.is_sparse:
+            grad = grad.coalesce()
+            values = grad._values()
+            param_norm = values.norm(2)
+        else:
+            param_norm = grad.norm(2)
+        total_sq += float(param_norm * param_norm)
+        has_grad = True
+    if not has_grad:
+        return None
+    return math.sqrt(total_sq)
+
+
+def _format_train_progress(
+    *,
+    epoch: int,
+    sample_count: int,
+    dataset_size: int,
+    progress_pct: float,
+    loss_value: float,
+    loss_label: str,
+    lrs: Iterable[float],
+    throughput: float,
+    eta_seconds: Optional[float],
+    grad_norm: Optional[float],
+    loss_scale: Optional[float],
+    mem_allocated: Optional[float],
+    mem_reserved: Optional[float],
+    accum_step: int,
+    accum_steps: int,
+    elapsed_time: float,
+) -> str:
+    lr_display = _format_lr_values(lrs)
+    throughput_display = (
+        f"{throughput:.1f} samples/s" if throughput > 0 else "-- samples/s"
+    )
+    eta_display = _format_eta(eta_seconds)
+    grad_display = f"{grad_norm:.2f}" if grad_norm is not None else "--"
+    parts = [
+        f"Train Epoch: {epoch} [{sample_count}/{dataset_size} ({progress_pct:.1f}%)]",
+        f"{loss_label}: {loss_value:.6f}",
+        f"LR: {lr_display}",
+        f"Throughput: {throughput_display}",
+        f"ETA: {eta_display}",
+        f"GradNorm: {grad_display}",
+        f"Elapsed: {elapsed_time:.1f}s",
+    ]
+    if loss_scale is not None:
+        parts.append(f"Scale: {loss_scale:.1f}")
+    if mem_allocated is not None and mem_reserved is not None:
+        parts.append(f"GPU Mem: {mem_allocated:.1f}/{mem_reserved:.1f} MiB")
+    if accum_steps > 1:
+        parts.append(f"Accum: {accum_step}/{accum_steps}")
+    else:
+        parts.append("Accum: 1/1")
+    return "\t".join(parts)
+
+
 class TensorboardLogger:
     """Centralised TensorBoard logging with failure detection."""
 
@@ -1223,6 +1319,9 @@ def train_epoch(
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     loss_accumulator: list[float] = []
 
+    dataset_size = len(train_loader.dataset)
+    grad_accum_steps = int(getattr(optimizer, "grad_accum_steps", 1)) or 1
+
     total_batches = len(train_loader)
     if max_batches is not None:
         total_batches = min(total_batches, max_batches)
@@ -1250,8 +1349,14 @@ def train_epoch(
             output = model(data)
             loss = _compute_supervised_loss(loss_fn, output, target, mode=loss_mode)
         scaler.scale(loss).backward()
+        if use_amp:
+            scaler.unscale_(optimizer)
+        grad_norm_value = _compute_grad_norm(
+            param for group in optimizer.param_groups for param in group["params"]
+        )
         scaler.step(optimizer)
         scaler.update()
+        loss_scale_value = scaler.get_scale() if use_amp else None
         if distributed:
             dist.all_reduce(loss)
             loss /= world_size
@@ -1268,28 +1373,63 @@ def train_epoch(
             progress_pct = (
                 100.0 * batches_processed / total_batches if total_batches else 0.0
             )
+            elapsed = time.time() - t
+            throughput = sample_count / elapsed if elapsed > 0 else 0.0
+            eta_seconds = None
+            if batches_processed < total_batches and batches_processed > 0:
+                remaining_batches = total_batches - batches_processed
+                eta_seconds = (elapsed / batches_processed) * remaining_batches
+            lrs = _collect_param_group_lrs(optimizer)
+            mem_allocated = None
+            mem_reserved = None
+            if device.type == "cuda":
+                mem_allocated = torch.cuda.memory_allocated(device) / (1024**2)
+                mem_reserved = torch.cuda.memory_reserved(device) / (1024**2)
+            accum_step = ((batches_processed - 1) % grad_accum_steps) + 1
             if batches_processed < total_batches:
                 print(
-                    "\rTrain Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}\tTime: {:.6f}".format(
-                        epoch,
-                        sample_count,
-                        len(train_loader.dataset),
-                        progress_pct,
-                        loss_value,
-                        time.time() - t,
+                    "\r"
+                    + _format_train_progress(
+                        epoch=epoch,
+                        sample_count=sample_count,
+                        dataset_size=dataset_size,
+                        progress_pct=progress_pct,
+                        loss_value=loss_value,
+                        loss_label="Loss",
+                        lrs=lrs,
+                        throughput=throughput,
+                        eta_seconds=eta_seconds,
+                        grad_norm=grad_norm_value,
+                        loss_scale=loss_scale_value,
+                        mem_allocated=mem_allocated,
+                        mem_reserved=mem_reserved,
+                        accum_step=accum_step,
+                        accum_steps=grad_accum_steps,
+                        elapsed_time=elapsed,
                     ),
                     end="",
                 )
             else:
-                printout = (
-                    "Train Epoch: {} [{}/{} ({:.1f}%)]\tAverage loss: {:.6f}\tTime: {:.6f}"
-                ).format(
-                    epoch,
-                    sample_count,
-                    len(train_loader.dataset),
-                    progress_pct,
-                    np.mean(loss_accumulator) if loss_accumulator else float("nan"),
-                    time.time() - t,
+                mean_loss_value = (
+                    np.mean(loss_accumulator) if loss_accumulator else float("nan")
+                )
+                printout = _format_train_progress(
+                    epoch=epoch,
+                    sample_count=sample_count,
+                    dataset_size=dataset_size,
+                    progress_pct=progress_pct,
+                    loss_value=mean_loss_value,
+                    loss_label="Average loss",
+                    lrs=lrs,
+                    throughput=throughput,
+                    eta_seconds=0.0,
+                    grad_norm=grad_norm_value,
+                    loss_scale=loss_scale_value,
+                    mem_allocated=mem_allocated,
+                    mem_reserved=mem_reserved,
+                    accum_step=accum_step,
+                    accum_steps=grad_accum_steps,
+                    elapsed_time=elapsed,
                 )
                 print("\r" + printout)
                 with open(log_path, "a") as f:
