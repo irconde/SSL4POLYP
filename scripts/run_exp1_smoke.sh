@@ -5,7 +5,9 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 EXP_CONFIG=${EXP_CONFIG:-exp/exp1_smoke.yaml}
 ROOTS=${ROOTS:-data/roots.json}
 OUTPUT_ROOT=${OUTPUT_ROOT:-checkpoints/classification}
-MODELS=${MODELS:-sup_imnet}
+DEFAULT_MODELS=$("${SCRIPT_DIR}/print_config_models.py" "${EXP_CONFIG}")
+# Override MODELS in the environment to adjust the selection; defaults track the config.
+MODELS=${MODELS:-${DEFAULT_MODELS}}
 DATASET_PERCENT=${DATASET_PERCENT:-10}
 DATASET_SEED=${DATASET_SEED:-13}
 LIMIT_TRAIN=${LIMIT_TRAIN:-8}
