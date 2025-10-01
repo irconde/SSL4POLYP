@@ -7,8 +7,10 @@ EXP_CONFIG=${EXP_CONFIG:-exp/exp5b.yaml}
 ROOTS=${ROOTS:-data/roots.json}
 OUTPUT_ROOT=${OUTPUT_ROOT:-checkpoints/classification}
 DEFAULT_SEEDS=$("${SCRIPT_DIR}/print_config_seeds.py" "${EXP_CONFIG}")
+DEFAULT_MODELS=$("${SCRIPT_DIR}/print_config_models.py" "${EXP_CONFIG}")
 SEEDS=${SEEDS:-${DEFAULT_SEEDS}}
-MODELS=${MODELS:-sup_imnet ssl_imnet ssl_colon}
+# Override MODELS in the environment to adjust the selection; defaults track the config.
+MODELS=${MODELS:-${DEFAULT_MODELS}}
 
 python - <<'PY'
 import torch
