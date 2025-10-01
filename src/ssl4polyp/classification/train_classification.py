@@ -45,6 +45,9 @@ from ssl4polyp.configs.layered import (
 import numpy as np
 
 
+EVAL_MAX_ADDITIONAL_BATCHES = 3
+
+
 class TensorboardLogger:
     """Centralised TensorBoard logging with failure detection."""
 
@@ -1208,13 +1211,21 @@ def test(
     N = 0
     logits = None
     targets = None
-    total_batches = len(test_loader)
+    dataset_batches = len(test_loader)
+    dataset_size = len(test_loader.dataset)
+    planned_batches = dataset_batches
     if max_batches is not None:
-        total_batches = min(total_batches, max_batches)
+        planned_batches = min(planned_batches, max_batches)
+    extra_batch_buffer = EVAL_MAX_ADDITIONAL_BATCHES if max_batches is not None else 0
+    hard_batch_limit = min(dataset_batches, planned_batches + extra_batch_buffer)
     batches_processed = 0
+    observed_labels: set[int] = set()
+    expected_label_count: Optional[int] = None
+    expected_labels: Optional[set[int]] = None
+    warned_extra_batches = False
 
     for batch_idx, batch in enumerate(test_loader):
-        if batches_processed >= total_batches:
+        if batches_processed >= hard_batch_limit:
             break
         if len(batch) == 3:
             data, target, _ = batch
@@ -1234,6 +1245,34 @@ def test(
             logits = torch.cat((logits, output), 0)
             targets = torch.cat((targets, target_cpu), 0)
         batches_processed += 1
+
+        if expected_label_count is None:
+            if output.ndim == 1:
+                expected_label_count = 1
+            else:
+                expected_label_count = int(output.size(1))
+            if expected_label_count is not None and expected_label_count > 0:
+                expected_labels = set(range(expected_label_count))
+        observed_labels.update(target_cpu.unique().tolist())
+        has_all_expected_labels = False
+        if expected_labels is not None:
+            has_all_expected_labels = expected_labels.issubset(observed_labels)
+        elif expected_label_count is not None:
+            has_all_expected_labels = len(observed_labels) >= expected_label_count
+        else:
+            has_all_expected_labels = True
+
+        if (
+            max_batches is not None
+            and not has_all_expected_labels
+            and batches_processed >= planned_batches
+            and not warned_extra_batches
+        ):
+            print(
+                f"{split_name} evaluation consumed extra batches to observe all labels "
+                f"(max_batches={max_batches}, observed={sorted(observed_labels)})."
+            )
+            warned_extra_batches = True
 
         # (Removed per-batch AUROC to avoid single-class crash.)
         # Compute inexpensive interim progress metric(s):
@@ -1262,16 +1301,29 @@ def test(
             bal_display,
         ])
 
-        progress_pct = (
-            100.0 * batches_processed / total_batches if total_batches else 0.0
+        progress_reference = planned_batches if planned_batches else max(1, hard_batch_limit)
+        progress_measure = (
+            min(batches_processed, planned_batches)
+            if planned_batches
+            else batches_processed
         )
-        if batches_processed < total_batches:
+        progress_pct = 100.0 * progress_measure / progress_reference
+        reached_planned_batches = batches_processed >= planned_batches
+        reached_hard_limit = batches_processed >= hard_batch_limit
+        dataset_exhausted = (batch_idx + 1) >= dataset_batches
+        can_stop_for_labels = max_batches is not None
+        should_stop = (
+            dataset_exhausted
+            or reached_hard_limit
+            or (can_stop_for_labels and has_all_expected_labels and reached_planned_batches)
+        )
+        if not should_stop:
             print(
                 "\r{}  Epoch: {} [{}/{} ({:.1f}%)]\t{}\tTime: {:.6f}".format(
                     split_name,
                     epoch,
                     N,
-                    len(test_loader.dataset),
+                    dataset_size,
                     progress_pct,
                     metrics_display,
                     time.time() - t,
@@ -1283,7 +1335,7 @@ def test(
                 split_name,
                 epoch,
                 N,
-                len(test_loader.dataset),
+                dataset_size,
                 progress_pct,
                 metrics_display,
                 time.time() - t,
@@ -1291,6 +1343,7 @@ def test(
             print("\r" + printout)
             with open(log_path, "a") as f:
                 f.write(printout + "\n")
+            break
     probs = torch.softmax(logits, dim=1)
     n_classes = probs.size(1) if probs.ndim == 2 else 1
     binary_tau = tau if (tau is not None and n_classes == 2) else None
