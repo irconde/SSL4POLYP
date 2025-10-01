@@ -29,6 +29,7 @@ def train_one_epoch(model: torch.nn.Module,
                     time_save_sec=None):
     model.train(True)
     metric_logger = misc.MetricLogger(delimiter="  ")
+    epoch_summary = misc.EpochSummary()
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 20
@@ -53,12 +54,18 @@ def train_one_epoch(model: torch.nn.Module,
 
         loss_value = loss.item()
 
+        batch_size = samples.shape[0]
+
         if not math.isfinite(loss_value):
+            epoch_summary.update(loss_value, batch_size)
             print("Loss is {}, stopping training".format(loss_value))
             sys.exit(1)
 
         loss /= accum_iter
         loss_scaler.scale(loss).backward()
+
+        grad_nan, grad_inf = misc.detect_grad_anomalies(model.parameters())
+        epoch_summary.update(loss_value, batch_size, grad_nan=grad_nan, grad_inf=grad_inf)
         if (data_iter_step + 1) % accum_iter == 0:
             loss_scaler.step(optimizer)
             loss_scaler.update()
@@ -89,4 +96,5 @@ def train_one_epoch(model: torch.nn.Module,
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
+    epoch_summary.finalize(epoch, [group["lr"] for group in optimizer.param_groups])
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
