@@ -3,10 +3,10 @@ defaults:
   - data/sun_subsets
 
 dataset:
-  percent: 5
+  percent: 10
   seed: 13
 
-epochs: 2
-limit_train_batches: 4
-limit_val_batches: 2
-limit_test_batches: 2
+epochs: 3
+limit_train_batches: 8
+limit_val_batches: 4
+limit_test_batches: 4
