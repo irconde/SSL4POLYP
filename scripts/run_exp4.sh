@@ -9,7 +9,7 @@ OUTPUT_ROOT=${OUTPUT_ROOT:-checkpoints/classification}
 DEFAULT_SEEDS=$("${SCRIPT_DIR}/print_config_seeds.py" "${EXP_CONFIG}")
 SEEDS=${SEEDS:-${DEFAULT_SEEDS}}
 PERCENTS=${PERCENTS:-5 10 25 50 100}
-MODEL=${MODEL:-ssl_imnet}
+MODELS=${MODELS:-sup_imnet ssl_imnet ssl_colon}
 
 python - <<'PY'
 import torch
@@ -25,13 +25,15 @@ PY
 
 for seed in ${SEEDS}; do
   for pct in ${PERCENTS}; do
-    out_dir="${OUTPUT_ROOT}/exp4_${MODEL}_seed${seed}_p${pct}"
-    python -m ssl4polyp.classification.train_classification \
-      --exp-config "${EXP_CONFIG}" \
-      --model-key "${MODEL}" \
-      --seed "${seed}" \
-      --roots "${ROOTS}" \
-      --override dataset.percent="${pct}" dataset.seed="${seed}" \
-      --output-dir "${out_dir}" "${@}"
+    for model in ${MODELS}; do
+      out_dir="${OUTPUT_ROOT}/exp4_${model}_seed${seed}_p${pct}"
+      python -m ssl4polyp.classification.train_classification \
+        --exp-config "${EXP_CONFIG}" \
+        --model-key "${model}" \
+        --seed "${seed}" \
+        --roots "${ROOTS}" \
+        --override dataset.percent="${pct}" dataset.seed="${seed}" \
+        --output-dir "${out_dir}" "${@}"
+    done
   done
 done
