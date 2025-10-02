@@ -31,7 +31,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from ssl4polyp.utils.tensorboard import SummaryWriter
 
 from ssl4polyp import utils
-from ssl4polyp.classification.data import create_classification_dataloaders
+from ssl4polyp.classification.data import (
+    PackDataset,
+    create_classification_dataloaders,
+)
 from ssl4polyp.classification.finetune import (
     configure_finetune_parameters,
     normalise_finetune_mode,
@@ -83,6 +86,19 @@ class Experiment4SubsetTrace:
     manifest: Optional[str]
 
 
+@dataclass(frozen=True)
+class EvalLoggingContext:
+    """Metadata describing how to log evaluation progress for a dataset."""
+
+    tag: str
+    start_lines: Tuple[str, ...]
+    sample_display: str
+
+    @property
+    def prefix(self) -> str:
+        return f"[eval: {self.tag}]"
+
+
 def _resolve_case_identifier(row: Mapping[str, Any]) -> Optional[str]:
     """Extract a case identifier from metadata ``row`` if available."""
 
@@ -113,6 +129,187 @@ def _compute_case_digest(case_ids: Sequence[str]) -> str:
         hasher.update(str(case_id).encode("utf-8"))
         hasher.update(b"\0")
     return hasher.hexdigest()[:8]
+
+
+def _summarize_case_counts(dataset: "PackDataset") -> Optional[Dict[str, int]]:
+    """Return positive/negative case counts when metadata provides case IDs."""
+
+    labels = getattr(dataset, "labels_list", None)
+    metadata = getattr(dataset, "metadata", None)
+    if labels is None or metadata is None:
+        return None
+    case_frames: Dict[str, int] = {}
+    case_labels: Dict[str, int] = {}
+    for label, row in zip(labels, metadata):
+        case_id = _resolve_case_identifier(row)
+        if not case_id:
+            continue
+        try:
+            label_int = int(label)
+        except (TypeError, ValueError):
+            continue
+        case_frames[case_id] = case_frames.get(case_id, 0) + 1
+        case_labels.setdefault(case_id, label_int)
+    if not case_frames:
+        return None
+    pos_cases = sum(1 for cid, lbl in case_labels.items() if int(lbl) == 1)
+    neg_cases = sum(1 for cid, lbl in case_labels.items() if int(lbl) == 0)
+    total_frames = int(sum(case_frames.values()))
+    return {
+        "pos_cases": int(pos_cases),
+        "neg_cases": int(neg_cases),
+        "total_frames": total_frames,
+    }
+
+
+def _summarize_frame_counts(labels: Optional[Sequence[object]]) -> Dict[int, int]:
+    """Return frame counts keyed by class label."""
+
+    counts: Counter[int] = Counter()
+    if labels is None:
+        return {}
+    for label in labels:
+        try:
+            counts[int(label)] += 1
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            continue
+    return {int(key): int(value) for key, value in counts.items()}
+
+
+def _format_frame_summary(total_frames: int, counts: Mapping[int, int]) -> str:
+    """Format ``counts`` into a human-readable frame summary string."""
+
+    if counts and set(counts.keys()).issubset({0, 1}):
+        pos = counts.get(1, 0)
+        neg = counts.get(0, 0)
+        return f"frames(total={total_frames}, pos={pos}, neg={neg})"
+    if counts:
+        per_class = ", ".join(
+            f"{label}:{counts.get(label, 0)}" for label in sorted(counts.keys())
+        )
+        return f"frames(total={total_frames}, per-class={{ {per_class} }})"
+    return f"frames(total={total_frames})"
+
+
+def _derive_eval_tag(
+    split_alias: str,
+    pack_spec: Optional[str],
+    dataset_layout: Mapping[str, Any],
+) -> Optional[str]:
+    """Infer a dataset tag for evaluation logging."""
+
+    candidates = [pack_spec, dataset_layout.get("name") if dataset_layout else None]
+    base_tag: Optional[str] = None
+    for candidate in candidates:
+        if not candidate:
+            continue
+        lower = str(candidate).lower()
+        if "polypgen_clean_test" in lower:
+            base_tag = "PolypGen-clean"
+            break
+        if "sun_full" in lower:
+            base_tag = "SUN"
+            break
+    if base_tag is None:
+        return None
+    alias = split_alias.lower()
+    if base_tag == "SUN":
+        if alias in {"val", "validation"}:
+            return "SUN-val"
+        if alias in {"train", "training"}:
+            return "SUN-train"
+        return "SUN-test"
+    return base_tag
+
+
+def _build_eval_logging_context(
+    *,
+    split_alias: str,
+    dataset: Optional["PackDataset"],
+    pack_spec: Optional[str],
+    dataset_layout: Mapping[str, Any],
+) -> Optional[EvalLoggingContext]:
+    """Construct logging context for evaluation over ``dataset`` if recognised."""
+
+    if dataset is None:
+        return None
+    dataset_tag = _derive_eval_tag(split_alias, pack_spec, dataset_layout)
+    if dataset_tag is None:
+        return None
+
+    total_frames = len(dataset)
+    labels = getattr(dataset, "labels_list", None)
+    frame_counts = _summarize_frame_counts(labels)
+    frame_summary = _format_frame_summary(total_frames, frame_counts)
+    start_lines: list[str] = []
+    sample_display = frame_summary
+
+    if dataset_tag.startswith("SUN"):
+        case_summary = _summarize_case_counts(dataset)
+        if case_summary is not None:
+            pos_cases = case_summary["pos_cases"]
+            neg_cases = case_summary["neg_cases"]
+            case_frame_total = case_summary["total_frames"]
+            case_frame_summary = _format_frame_summary(
+                case_frame_total, frame_counts
+            )
+            start_lines.append(
+                f"Composition: cases(pos={pos_cases}, neg={neg_cases}) | {case_frame_summary}"
+            )
+            sample_display = (
+                f"cases pos={pos_cases} neg={neg_cases} | {case_frame_summary}"
+            )
+        else:
+            start_lines.append(f"Composition: {frame_summary}")
+            sample_display = frame_summary
+    elif dataset_tag.startswith("PolypGen"):
+        start_lines.append(f"Composition: {frame_summary}")
+        sample_display = frame_summary
+    else:  # pragma: no cover - defensive future-proofing
+        start_lines.append(f"Composition: {frame_summary}")
+        sample_display = frame_summary
+
+    return EvalLoggingContext(
+        tag=dataset_tag,
+        start_lines=tuple(start_lines),
+        sample_display=sample_display,
+    )
+
+
+def _prepare_eval_contexts(
+    args,
+    datasets: Mapping[str, "PackDataset"],
+) -> Dict[str, EvalLoggingContext]:
+    """Build evaluation logging contexts for recognised validation/test datasets."""
+
+    dataset_layout = getattr(args, "dataset_layout", {}) or {}
+    contexts: Dict[str, EvalLoggingContext] = {}
+
+    val_split = getattr(args, "val_split", None)
+    if val_split:
+        val_dataset = datasets.get(val_split)
+        context = _build_eval_logging_context(
+            split_alias="val",
+            dataset=val_dataset,
+            pack_spec=getattr(args, "val_pack", None),
+            dataset_layout=dataset_layout,
+        )
+        if context is not None:
+            contexts["Val"] = context
+
+    test_split = getattr(args, "test_split", None)
+    if test_split:
+        test_dataset = datasets.get(test_split)
+        context = _build_eval_logging_context(
+            split_alias="test",
+            dataset=test_dataset,
+            pack_spec=getattr(args, "test_pack", None),
+            dataset_layout=dataset_layout,
+        )
+        if context is not None:
+            contexts["Test"] = context
+
+    return contexts
 
 
 def _collect_experiment4_trace(
@@ -1706,12 +1903,14 @@ def test(
     tau_info: Optional[str] = None,
     max_batches: Optional[int] = None,
     morphology_eval: Optional[Iterable[str]] = None,
+    eval_context: Optional[EvalLoggingContext] = None,
 ):
     if test_loader is None:
         return float("nan")
     t = time.time()
     model.eval()
     metric_fns = metric_fns or {}
+    log_path_obj = Path(log_path)
     loss_sum = 0.0
     loss_count = 0
     device = next(model.parameters()).device
@@ -1736,6 +1935,17 @@ def test(
     track_morphology = bool(morphology_eval_list)
     morphology_values: list[str] = []
     morphology_counter: Counter[str] = Counter()
+
+    def _with_prefix(text: str) -> str:
+        if eval_context is None:
+            return text
+        return f"{eval_context.prefix} {text}"
+
+    if eval_context is not None and eval_context.start_lines:
+        prefixed = [_with_prefix(line) for line in eval_context.start_lines]
+        _log_lines(log_path_obj, prefixed)
+
+    progress_label = _with_prefix(split_name)
 
     for batch_idx, batch in enumerate(test_loader):
         if batches_processed >= hard_batch_limit:
@@ -1793,10 +2003,11 @@ def test(
             and batches_processed >= planned_batches
             and not warned_extra_batches
         ):
-            print(
+            extra_note = (
                 f"{split_name} evaluation consumed extra batches to observe all labels "
                 f"(max_batches={max_batches}, observed={sorted(observed_labels)})."
             )
+            print(_with_prefix(extra_note))
             warned_extra_batches = True
 
         # (Removed per-batch AUROC to avoid single-class crash.)
@@ -1867,7 +2078,7 @@ def test(
         if not should_stop:
             print(
                 "\r{}  Epoch: {} [{}/{} ({:.1f}%)]\t{}\tTime: {:.6f}".format(
-                    split_name,
+                    progress_label,
                     epoch,
                     N,
                     dataset_size,
@@ -1879,7 +2090,7 @@ def test(
             )
         else:
             printout = "{}  Epoch: {} [{}/{} ({:.1f}%)]\t{}\tTime: {:.6f}".format(
-                split_name,
+                progress_label,
                 epoch,
                 N,
                 dataset_size,
@@ -1888,7 +2099,7 @@ def test(
                 time.time() - t,
             )
             print("\r" + printout)
-            with open(log_path, "a") as f:
+            with open(log_path_obj, "a") as f:
                 f.write(printout + "\n")
             break
     probs = _prepare_binary_probabilities(logits)
@@ -1944,7 +2155,7 @@ def test(
         class_flag = f"⚠ single-class (labels={{" + ", ".join(map(str, observed_sorted)) + "}})"
     else:
         class_flag = "⚠ no labels observed"
-    class_presence_line = f"{split_name} class presence: {class_flag}"
+    class_presence_line = _with_prefix(f"{split_name} class presence: {class_flag}")
 
     metric_line_parts: list[str] = []
     bal_value = results.get("balanced_accuracy")
@@ -1962,29 +2173,37 @@ def test(
         metric_line_parts.append("AUROC: —")
     if loss_fn is not None and not math.isnan(mean_loss):
         metric_line_parts.append(f"Loss: {mean_loss:.6f}")
-    metrics_line = f"{split_name} metrics: " + " | ".join(metric_line_parts)
+    metric_body = " | ".join(metric_line_parts)
+    if eval_context is not None:
+        metrics_header = f"{split_name} metrics [{eval_context.sample_display}]"
+    else:
+        metrics_header = f"{split_name} metrics"
+    metrics_line = _with_prefix(f"{metrics_header}: {metric_body}")
 
     if binary_tau is not None:
-        tau_line = f"{split_name} τ info: τ={binary_tau:.4f}"
+        tau_text = f"{split_name} τ info: τ={binary_tau:.4f}"
         if tau_info:
-            tau_line += f" ({tau_info})"
+            tau_text += f" ({tau_info})"
+        tau_line = _with_prefix(tau_text)
     elif tau is not None:
-        tau_line = f"{split_name} τ info: τ={tau:.4f}"
+        tau_line = _with_prefix(f"{split_name} τ info: τ={tau:.4f}")
     else:
-        tau_line = f"{split_name} τ info: argmax"
+        tau_line = _with_prefix(f"{split_name} τ info: argmax")
 
     total_count = int(class_counts_tensor.sum().item())
     if n_classes == 2:
         neg_count = int(class_counts[0]) if len(class_counts) > 0 else 0
         pos_count = int(class_counts[1]) if len(class_counts) > 1 else 0
-        counts_line = (
+        counts_line = _with_prefix(
             f"{split_name} counts: total={total_count}, negatives={neg_count}, positives={pos_count}"
         )
     else:
         per_class = ", ".join(
             f"{idx}:{int(count)}" for idx, count in enumerate(class_counts) if count
         )
-        counts_line = f"{split_name} counts: total={total_count}, per-class={{ {per_class} }}"
+        counts_line = _with_prefix(
+            f"{split_name} counts: total={total_count}, per-class={{ {per_class} }}"
+        )
 
     morph_counts_line: Optional[str] = None
     morph_metrics_line: Optional[str] = None
@@ -2020,7 +2239,7 @@ def test(
             key for key in sorted(morphology_counter.keys()) if key not in morphology_eval_lookup
         ]
         display_parts.extend(f"{key}:{morphology_counter[key]}" for key in extra_keys)
-        morph_counts_line = (
+        morph_counts_line = _with_prefix(
             f"{split_name} morphology counts: {{ " + ", ".join(display_parts) + " }}"
         )
         metric_parts: list[str] = []
@@ -2039,16 +2258,18 @@ def test(
             metric_parts.append(
                 f"{name}: recall={recall_display}, F1={f1_display}"
             )
-        morph_metrics_line = f"{split_name} morphology metrics: " + " | ".join(metric_parts)
+        morph_metrics_line = _with_prefix(
+            f"{split_name} morphology metrics: " + " | ".join(metric_parts)
+        )
 
     if threshold_stats and all(key in threshold_stats for key in ("tp", "fp", "fn", "tn")):
-        confusion_line = (
+        confusion_line = _with_prefix(
             f"{split_name} confusion @τ: TP={int(threshold_stats['tp'])} "
             f"FP={int(threshold_stats['fp'])} FN={int(threshold_stats['fn'])} "
             f"TN={int(threshold_stats['tn'])}"
         )
     else:
-        confusion_line = f"{split_name} confusion @τ: n/a"
+        confusion_line = _with_prefix(f"{split_name} confusion @τ: n/a")
 
     output_lines = [class_presence_line, metrics_line, tau_line, counts_line]
     if morph_counts_line:
@@ -2058,7 +2279,7 @@ def test(
     output_lines.append(confusion_line)
     for line in output_lines:
         print(line)
-    with open(log_path, "a") as f:
+    with open(log_path_obj, "a") as f:
         for line in output_lines:
             f.write(line + "\n")
 
@@ -2113,6 +2334,8 @@ def build(args, rank, device: torch.device, distributed: bool):
     if test_dataloader is None:
         raise RuntimeError("Test dataloader missing; specify --test-pack/--test-split.")
     train_sampler = samplers.get("train")
+
+    eval_context_lookup = _prepare_eval_contexts(args, datasets)
 
     train_dataset = (
         datasets.get(args.train_split) if getattr(args, "train_split", None) else None
@@ -2509,6 +2732,7 @@ def train(rank, args):
                     tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
                     morphology_eval=morphology_eval,
+                    eval_context=eval_context_lookup.get("Val"),
                 )
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, eval_epoch)
@@ -2528,6 +2752,7 @@ def train(rank, args):
                     tau_info=eval_tau_info,
                     max_batches=args.limit_test_batches,
                     morphology_eval=morphology_eval,
+                    eval_context=eval_context_lookup.get("Test"),
                 )
                 if tb_logger:
                     tb_logger.log_metrics("test", test_metrics, eval_epoch)
@@ -2615,6 +2840,7 @@ def train(rank, args):
                     tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
                     morphology_eval=morphology_eval,
+                    eval_context=eval_context_lookup.get("Val"),
                 )
                 test_metrics = test(
                     _unwrap_model(model),
@@ -2631,6 +2857,7 @@ def train(rank, args):
                     tau_info=eval_tau_info,
                     max_batches=args.limit_test_batches,
                     morphology_eval=morphology_eval,
+                    eval_context=eval_context_lookup.get("Test"),
                 )
                 val_metrics_export = _prepare_metric_export(
                     val_metrics, drop={"logits", "probabilities", "targets"}
