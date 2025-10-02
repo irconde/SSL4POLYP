@@ -25,6 +25,7 @@ from contextlib import nullcontext
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -1003,6 +1004,27 @@ def _compute_supervised_loss(
         target_float = targets.to(dtype=binary_logits.dtype)
         return loss_fn(binary_logits, target_float)
     return loss_fn(logits, targets)
+
+
+def _compute_sample_losses(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    *,
+    mode: str,
+) -> torch.Tensor:
+    """Return per-sample losses compatible with :func:`_compute_supervised_loss`."""
+
+    if mode == "binary_bce":
+        binary_logits = _binary_logits_from_multiclass(logits)
+        target_float = targets.to(dtype=binary_logits.dtype)
+        return F.binary_cross_entropy_with_logits(
+            binary_logits,
+            target_float,
+            reduction="none",
+        )
+    if mode == "multiclass_ce":
+        return F.cross_entropy(logits, targets, reduction="none")
+    raise ValueError(f"Unsupported loss mode '{mode}' for per-sample loss computation")
 
 
 def _prepare_binary_probabilities(logits: torch.Tensor) -> torch.Tensor:
@@ -2039,6 +2061,9 @@ def test(
     track_perturbations = _dataset_supports_perturbations(dataset_obj)
     perturbation_counter: Counter[str] = Counter()
     perturbation_metadata_rows: list[Mapping[str, Any]] = []
+    perturbation_tags: list[str] = []
+    perturbation_sample_losses: list[torch.Tensor] = []
+    perturbation_tags_aligned: Optional[List[str]] = None
 
     def _with_prefix(text: str) -> str:
         if eval_context is None:
@@ -2050,6 +2075,22 @@ def test(
         _log_lines(log_path_obj, prefixed)
 
     progress_label = _with_prefix(split_name)
+
+    tau_breadcrumb: Optional[str]
+    if tau is not None:
+        tau_breadcrumb = f"τ={tau:.4f}"
+        if tau_info:
+            tau_breadcrumb += f" ({tau_info})"
+        prediction_mode = "prob>=τ"
+    else:
+        tau_breadcrumb = "argmax"
+        prediction_mode = "argmax"
+    breadcrumb_text = _with_prefix(
+        f"{split_name} prediction mode: {prediction_mode} [{tau_breadcrumb}]"
+    )
+    print(breadcrumb_text)
+    with open(log_path_obj, "a") as f:
+        f.write(breadcrumb_text + "\n")
 
     for batch_idx, batch in enumerate(test_loader):
         if batches_processed >= hard_batch_limit:
@@ -2069,20 +2110,35 @@ def test(
                 morph_value = str(morph_label).strip().lower() if morph_label not in (None, "") else "unknown"
                 morphology_values.append(morph_value)
                 morphology_counter[morph_value] += 1
-        if track_perturbations and metadata_batch is not None:
-            for row in metadata_batch:
-                if not isinstance(row, Mapping):
-                    continue
-                perturbation_metadata_rows.append(row)
-                tag = _canonicalize_perturbation_tag(row)
-                if tag:
-                    perturbation_counter[tag] += 1
+        if track_perturbations:
+            if metadata_batch is not None and len(metadata_batch) == len(data):
+                for row in metadata_batch:
+                    tag_value = "clean"
+                    if isinstance(row, Mapping):
+                        perturbation_metadata_rows.append(row)
+                        tag = _canonicalize_perturbation_tag(row)
+                        if tag:
+                            perturbation_counter[tag] += 1
+                            tag_value = tag
+                    perturbation_tags.append(tag_value)
+            else:
+                perturbation_tags.extend(["clean"] * len(data))
         N += len(data)
         logits_batch = model(data)
         if loss_fn is not None:
             loss_tensor = _compute_supervised_loss(loss_fn, logits_batch, target, mode=loss_mode)
             loss_sum += float(loss_tensor.item()) * len(data)
             loss_count += len(data)
+        if track_perturbations:
+            try:
+                batch_losses = (
+                    _compute_sample_losses(logits_batch.detach(), target, mode=loss_mode)
+                    .detach()
+                    .cpu()
+                )
+            except Exception:
+                batch_losses = torch.full((len(data),), float("nan"))
+            perturbation_sample_losses.append(batch_losses)
         output = logits_batch.detach().cpu()
         target_cpu = target.detach().cpu()
         if batch_idx == 0:
@@ -2271,6 +2327,29 @@ def test(
         results["perturbation_tag_counts"] = dict(sorted(perturbation_counter.items()))
     if track_perturbations and perturbation_metadata_rows:
         results["perturbation_metadata"] = list(perturbation_metadata_rows)
+    if track_perturbations and perturbation_tags and logits is not None:
+        per_sample_losses_tensor = (
+            torch.cat(perturbation_sample_losses, dim=0)
+            if perturbation_sample_losses
+            else torch.full((logits.size(0),), float("nan"))
+        )
+        if per_sample_losses_tensor.numel() < logits.size(0):
+            padding = torch.full(
+                (logits.size(0) - per_sample_losses_tensor.numel(),), float("nan")
+            )
+            per_sample_losses_tensor = torch.cat((per_sample_losses_tensor, padding), dim=0)
+        elif per_sample_losses_tensor.numel() > logits.size(0):
+            per_sample_losses_tensor = per_sample_losses_tensor[: logits.size(0)]
+        if len(perturbation_tags) < logits.size(0):
+            perturbation_tags.extend(["clean"] * (logits.size(0) - len(perturbation_tags)))
+        perturbation_tags_aligned = list(perturbation_tags[: logits.size(0)])
+        results["perturbation_samples"] = {
+            "tags": perturbation_tags_aligned,
+            "logits": logits,
+            "probabilities": probs,
+            "targets": targets,
+            "losses": per_sample_losses_tensor,
+        }
 
     observed_sorted = results["observed_labels"]
     if len(observed_sorted) >= 2:
@@ -2401,6 +2480,157 @@ def test(
     if morph_metrics_line:
         output_lines.append(morph_metrics_line)
     output_lines.append(confusion_line)
+
+    if (
+        track_perturbations
+        and perturbation_tags_aligned is not None
+        and logits is not None
+        and targets is not None
+    ):
+        per_sample_losses_tensor = results["perturbation_samples"]["losses"]
+        metrics_lookup = {
+            "recall": performance.meanRecall(n_class=n_classes),
+            "precision": performance.meanPrecision(n_class=n_classes),
+            "f1": performance.meanF1Score(n_class=n_classes),
+            "balanced_accuracy": performance.meanBalancedAccuracy(n_class=n_classes),
+            "auroc": performance.meanAUROC(n_class=n_classes),
+            "auprc": performance.meanAUPRC(n_class=n_classes),
+        }
+
+        def _perturbation_tag_sort_key(tag: str) -> Tuple[Any, ...]:
+            if tag == "clean":
+                return (0,)
+            components: list[Tuple[str, int, Any]] = []
+            for segment in str(tag).split("|"):
+                name, _, value = segment.partition("=")
+                name = name.strip()
+                value = value.strip()
+                if not name and not value:
+                    continue
+                try:
+                    numeric = float(value)
+                except (TypeError, ValueError):
+                    components.append((name, 1, value))
+                else:
+                    components.append((name, 0, numeric))
+            return (1, tuple(components))
+
+        tags_array = np.array(perturbation_tags_aligned)
+        unique_tags = sorted(set(tags_array.tolist()), key=_perturbation_tag_sort_key)
+        per_tag_metrics: Dict[str, Dict[str, float]] = {}
+
+        def compute_metrics_for_indices(indices: torch.Tensor) -> Dict[str, float]:
+            subset_metrics: Dict[str, float] = {}
+            if indices.numel() == 0:
+                return subset_metrics
+            subset_probs = probs.index_select(0, indices)
+            subset_targets = targets.index_select(0, indices)
+            subset_losses = per_sample_losses_tensor.index_select(0, indices)
+            subset_metrics["count"] = int(indices.numel())
+            for key, fn in metrics_lookup.items():
+                try:
+                    if key in {"recall", "precision", "f1", "balanced_accuracy"}:
+                        value = fn(subset_probs, subset_targets, tau=binary_tau)
+                    else:
+                        value = fn(subset_probs, subset_targets)
+                    subset_metrics[key] = float(value.item())
+                except Exception:
+                    subset_metrics[key] = float("nan")
+            if subset_losses.numel() > 0:
+                subset_metrics["mean_loss"] = float(subset_losses.mean().item())
+            else:
+                subset_metrics["mean_loss"] = float("nan")
+            return subset_metrics
+
+        clean_metrics: Optional[Dict[str, float]] = None
+        for tag in unique_tags:
+            indices_np = np.flatnonzero(tags_array == tag)
+            if indices_np.size == 0:
+                continue
+            indices_tensor = torch.from_numpy(indices_np).to(dtype=torch.long)
+            metrics_for_tag = compute_metrics_for_indices(indices_tensor)
+            if metrics_for_tag:
+                per_tag_metrics[tag] = metrics_for_tag
+                if tag == "clean":
+                    clean_metrics = metrics_for_tag
+
+        non_clean_mask = tags_array != "clean"
+        if np.any(non_clean_mask):
+            indices_np = np.flatnonzero(non_clean_mask)
+            indices_tensor = torch.from_numpy(indices_np).to(dtype=torch.long)
+            metrics_for_tag = compute_metrics_for_indices(indices_tensor)
+            if metrics_for_tag:
+                per_tag_metrics["ALL-perturbed"] = metrics_for_tag
+
+        def _format_metric_display(
+            metric_key: str,
+            metric_label: str,
+            value: float,
+            reference: Optional[float],
+        ) -> str:
+            if value is None or math.isnan(value):
+                value_text = "—"
+            else:
+                value_text = f"{value:.6f}"
+            if reference is None or math.isnan(reference):
+                retention_text = "ret=—"
+                delta_text = "Δ=—"
+            else:
+                if reference == 0:
+                    retention_text = "ret=—"
+                else:
+                    retention = value / reference if math.isfinite(value) else float("nan")
+                    retention_text = (
+                        f"ret={retention * 100:.1f}%" if math.isfinite(retention) else "ret=—"
+                    )
+                delta = value - reference if math.isfinite(value) else float("nan")
+                delta_text = f"Δ={delta:+.6f}" if math.isfinite(delta) else "Δ=—"
+            return f"{metric_label}={value_text} ({retention_text}, {delta_text})"
+
+        metric_print_order = [
+            ("recall", "Recall"),
+            ("precision", "Precision"),
+            ("f1", "F1@τ"),
+            ("balanced_accuracy", "Balanced Acc"),
+            ("auroc", "AUROC"),
+            ("auprc", "AP"),
+            ("mean_loss", "Loss"),
+        ]
+
+        ordered_tags: list[str] = []
+        if "clean" in per_tag_metrics:
+            ordered_tags.append("clean")
+        for tag in unique_tags:
+            if tag == "clean":
+                continue
+            ordered_tags.append(tag)
+        if "ALL-perturbed" in per_tag_metrics:
+            ordered_tags.append("ALL-perturbed")
+
+        perturbation_output_lines: list[str] = []
+        for tag in ordered_tags:
+            metrics_for_tag = per_tag_metrics.get(tag)
+            if not metrics_for_tag:
+                continue
+            reference_metrics = clean_metrics or {}
+            metric_parts = []
+            for metric_key, metric_label in metric_print_order:
+                value = metrics_for_tag.get(metric_key)
+                reference = reference_metrics.get(metric_key)
+                metric_parts.append(
+                    _format_metric_display(metric_key, metric_label, value, reference)
+                )
+            count_value = int(metrics_for_tag.get("count", 0))
+            line = _with_prefix(
+                f"{split_name} perturbation[{tag}]: n={count_value} | "
+                + " | ".join(metric_parts)
+            )
+            perturbation_output_lines.append(line)
+
+        if perturbation_output_lines:
+            output_lines.extend(perturbation_output_lines)
+        results["perturbation_metrics"] = per_tag_metrics
+
     for line in output_lines:
         print(line)
     with open(log_path_obj, "a") as f:
