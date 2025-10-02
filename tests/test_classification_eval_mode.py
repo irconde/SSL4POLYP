@@ -125,7 +125,7 @@ def test_cli_subset_overrides_and_batch_limits(monkeypatch, tmp_path):
 
     experiment_cfg = load_layered_config("exp/exp1_smoke.yaml")
     _, dataset_cfg, dataset_resolved = train_classification.apply_experiment_config(
-        args, experiment_cfg
+        args, experiment_cfg, resolved_overrides=None
     )
 
     assert dataset_cfg["name"] == "sun_subsets"
