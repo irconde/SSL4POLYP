@@ -6,9 +6,40 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 EXP_CONFIG=${EXP_CONFIG:-exp/exp4.yaml}
 ROOTS=${ROOTS:-data/roots.json}
 OUTPUT_ROOT=${OUTPUT_ROOT:-checkpoints/classification}
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+export PYTHONPATH="${REPO_ROOT}:${REPO_ROOT}/src:${PYTHONPATH:-}"
 DEFAULT_SEEDS=$("${SCRIPT_DIR}/print_config_seeds.py" "${EXP_CONFIG}")
 DEFAULT_MODELS=$("${SCRIPT_DIR}/print_config_models.py" "${EXP_CONFIG}")
+DEFAULT_SUBSET_SEED=$(python - "${EXP_CONFIG}" <<'PY'
+import sys
+
+from ssl4polyp.configs.layered import load_layered_config
+
+
+def _pick_seed(value):
+    if isinstance(value, (list, tuple)):
+        return value[0] if value else None
+    return value
+
+
+cfg = load_layered_config(sys.argv[1])
+protocol = (cfg.get("protocol") or {})
+dataset = (cfg.get("dataset") or {})
+
+subset_seed = protocol.get("subset_seed")
+if subset_seed is None:
+    subset_seed = _pick_seed(protocol.get("subset_seeds"))
+if subset_seed is None:
+    subset_seed = _pick_seed(dataset.get("seed"))
+if subset_seed is None:
+    subset_seed = _pick_seed(dataset.get("seeds"))
+
+if subset_seed is not None:
+    print(subset_seed)
+PY
+)
 SEEDS=${SEEDS:-${DEFAULT_SEEDS}}
+SUBSET_SEED=${SUBSET_SEED:-${DEFAULT_SUBSET_SEED:-13}}
 PERCENTS=${PERCENTS:-5 10 25 50 100}
 # Override MODELS in the environment to adjust the selection; defaults track the config.
 MODELS=${MODELS:-${DEFAULT_MODELS}}
@@ -34,7 +65,7 @@ for seed in ${SEEDS}; do
         --model-key "${model}" \
         --seed "${seed}" \
         --roots "${ROOTS}" \
-        --override dataset.percent="${pct}" dataset.seed="${seed}" \
+        --override dataset.percent="${pct}" dataset.seed="${SUBSET_SEED}" \
         --output-dir "${out_dir}" "${@}"
     done
   done
