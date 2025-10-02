@@ -70,6 +70,37 @@ PERTURBATION_METADATA_FIELDS: Tuple[str, ...] = (
 )
 
 
+def _is_placeholder_perturbation_value(value: Any) -> bool:
+    """Return ``True`` when ``value`` represents a placeholder sentinel."""
+
+    if value in (None, ""):
+        return True
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, np.integer)):
+        return int(value) == -1
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            return True
+        return numeric == -1.0
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return True
+        lowered = text.lower()
+        if lowered in {"nan", "none", "null"}:
+            return True
+        try:
+            numeric = float(text)
+        except ValueError:
+            return False
+        if not math.isfinite(numeric):
+            return True
+        return numeric == -1.0
+    return False
+
+
 @dataclass
 class TrainEpochStats:
     """Aggregate statistics returned by :func:`train_epoch`."""
@@ -224,7 +255,7 @@ def _canonicalize_perturbation_tag(row: Mapping[str, Any]) -> Optional[str]:
     if not isinstance(row, Mapping):
         return None
     candidate = row.get("perturbation_id")
-    if candidate not in (None, ""):
+    if not _is_placeholder_perturbation_value(candidate):
         text = str(candidate).strip()
         if text:
             return text
@@ -239,13 +270,13 @@ def _canonicalize_perturbation_tag(row: Mapping[str, Any]) -> Optional[str]:
     )
     for field, label in numeric_fields:
         value = row.get(field)
-        if value in (None, ""):
+        if _is_placeholder_perturbation_value(value):
             continue
         components.append(f"{label}={_format_numeric_token(value)}")
     if components:
         return "|".join(components)
     variant = row.get("variant")
-    if variant not in (None, ""):
+    if not _is_placeholder_perturbation_value(variant):
         text = str(variant).strip()
         if text:
             return text
@@ -268,7 +299,7 @@ def _dataset_supports_perturbations(dataset: Optional["PackDataset"]) -> bool:
             return True
         for field in PERTURBATION_METADATA_FIELDS:
             value = row.get(field)
-            if value not in (None, ""):
+            if not _is_placeholder_perturbation_value(value):
                 return True
         if index + 1 >= max_rows_to_probe:
             break
