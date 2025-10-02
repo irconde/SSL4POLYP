@@ -3169,6 +3169,8 @@ def train(rank, args):
     last_test_monitor: Optional[float] = None
     last_val_metrics_export: Optional[Dict[str, float]] = None
     last_test_metrics_export: Optional[Dict[str, float]] = None
+    val_logits: Optional[np.ndarray] = None
+    val_targets: Optional[np.ndarray] = None
     latest_threshold_file_relpath: Optional[str] = None
     latest_threshold_record: Optional[Dict[str, Any]] = None
     latest_thresholds_root: Optional[str] = None
@@ -3227,65 +3229,41 @@ def train(rank, args):
                     morphology_eval=morphology_eval,
                     eval_context=eval_context_lookup.get("Val"),
                 )
-                test_metrics = test(
-                    _unwrap_model(model),
-                    rank,
-                    test_dataloader,
-                    epoch,
-                    perf_fn,
-                    log_path,
-                    metric_fns=aux_metric_fns,
-                    loss_fn=loss_fn,
-                    loss_mode=loss_mode,
-                    split_name="Test",
-                    tau=eval_tau,
-                    tau_info=eval_tau_info,
-                    max_batches=args.limit_test_batches,
-                    morphology_eval=morphology_eval,
-                    eval_context=eval_context_lookup.get("Test"),
-                )
                 val_metrics_export = _prepare_metric_export(
                     val_metrics, drop={"logits", "probabilities", "targets"}
                 )
-                test_metrics_export = _prepare_metric_export(test_metrics)
+                test_metrics_export: Dict[str, float] = {}
                 val_logits = val_metrics.pop("logits", None)
                 val_metrics.pop("probabilities", None)
                 val_targets = val_metrics.pop("targets", None)
                 val_loss_value = val_metrics.get("loss")
-                test_loss_value = test_metrics.get("loss")
                 monitor_value = val_metrics.get(monitor_key)
                 if monitor_value is None:
                     available = ", ".join(sorted(val_metrics.keys()))
                     raise KeyError(
                         f"Validation metrics do not contain monitor '{monitor_key}'. Available: {available}"
                     )
-                test_monitor_value = test_metrics.get(monitor_key)
+                test_monitor_value = None
+                test_loss_value = None
+                test_perf = None
                 val_perf = float(val_metrics["auroc"])
-                test_perf = float(test_metrics["auroc"])
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, epoch)
-                    tb_logger.log_metrics("test", test_metrics, epoch)
                 last_epoch = int(epoch)
                 last_loss = float(loss)
                 last_val_perf = float(val_perf)
-                last_test_perf = float(test_perf)
                 last_monitor_value = float(monitor_value)
                 last_val_loss = float(val_loss_value) if val_loss_value is not None else None
-                last_test_loss = (
-                    float(test_loss_value) if test_loss_value is not None else None
-                )
-                last_test_monitor = (
-                    float(test_monitor_value)
-                    if test_monitor_value is not None
-                    else None
-                )
+                last_test_loss = None
+                last_test_monitor = None
+                last_test_perf = None
                 last_val_metrics_export = dict(val_metrics_export)
                 last_test_metrics_export = dict(test_metrics_export)
             else:
                 val_perf = 0.0
-                test_perf = 0.0
+                test_perf = None
                 monitor_value = 0.0
-                test_monitor_value = 0.0
+                test_monitor_value = None
                 val_loss_value = None
                 test_loss_value = None
                 last_test_monitor = None
@@ -3413,11 +3391,13 @@ def train(rank, args):
                     "val_auroc": float(val_perf),
                     "test_perf": float(test_monitor_value)
                     if test_monitor_value is not None
-                    else float(test_perf),
+                    else (
+                        float(test_perf) if test_perf is not None else None
+                    ),
                     "test_loss": float(test_loss_value)
                     if test_loss_value is not None
                     else None,
-                    "test_auroc": float(test_perf),
+                    "test_auroc": float(test_perf) if test_perf is not None else None,
                     "monitor_value": float(monitor_value),
                     "monitor_metric": monitor_name,
                     "test_monitor_value": float(test_monitor_value)
@@ -3451,7 +3431,7 @@ def train(rank, args):
                         "epoch": int(epoch),
                         "seed": _get_active_seed(args),
                         "val": float(val_perf),
-                        "test": float(test_perf),
+                        "test": float(test_perf) if test_perf is not None else None,
                     }
                     digest = hashlib.sha1(
                         json.dumps(digest_payload, sort_keys=True).encode("utf-8")
@@ -3530,6 +3510,68 @@ def train(rank, args):
 
         if distributed:
             dist.barrier()
+    final_test_metrics: Optional[Dict[str, Any]] = None
+    if (
+        rank == 0
+        and not eval_only
+        and test_dataloader is not None
+        and (last_epoch is not None or args.epochs is not None)
+    ):
+        final_eval_epoch = int(last_epoch) if last_epoch is not None else int(args.epochs)
+        final_tau, final_tau_key = resolve_eval_tau(threshold_key, sun_threshold_key)
+        final_tau_info = describe_tau_source(final_tau_key)
+        if (
+            final_tau is None
+            and compute_threshold
+            and threshold_key is not None
+            and val_logits is not None
+            and val_targets is not None
+        ):
+            try:
+                final_tau = thresholds.compute_youden_j_threshold(
+                    val_logits, val_targets
+                )
+            except ValueError as exc:
+                print(
+                    f"Warning: unable to compute final threshold '{threshold_key}': {exc}"
+                )
+            else:
+                final_tau_info = describe_tau_source(threshold_key) or final_tau_info
+                thresholds_map = dict(thresholds_map or {})
+                thresholds_map[threshold_key] = float(final_tau)
+        final_test_metrics = test(
+            _unwrap_model(model),
+            rank,
+            test_dataloader,
+            final_eval_epoch,
+            perf_fn,
+            log_path,
+            metric_fns=aux_metric_fns,
+            loss_fn=loss_fn,
+            loss_mode=loss_mode,
+            split_name="Test",
+            tau=final_tau,
+            tau_info=final_tau_info,
+            max_batches=args.limit_test_batches,
+            morphology_eval=morphology_eval,
+            eval_context=eval_context_lookup.get("Test"),
+        )
+        if tb_logger:
+            tb_logger.log_metrics("test", final_test_metrics, final_eval_epoch)
+        last_test_metrics_export = dict(
+            _prepare_metric_export(final_test_metrics)
+        )
+        test_loss_value = final_test_metrics.get("loss")
+        last_test_loss = float(test_loss_value) if test_loss_value is not None else None
+        test_monitor_value = final_test_metrics.get(monitor_key)
+        last_test_monitor = (
+            float(test_monitor_value) if test_monitor_value is not None else None
+        )
+        final_test_auroc = final_test_metrics.get("auroc")
+        last_test_perf = (
+            float(final_test_auroc) if final_test_auroc is not None else None
+        )
+
     if rank == 0 and experiment4_trace is not None and not eval_only:
         limit_train_batches = getattr(args, "limit_train_batches", None)
         final_lines = [
