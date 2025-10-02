@@ -16,11 +16,12 @@ import copy
 import warnings
 from pathlib import Path
 from collections import Counter
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import yaml
 
 from contextlib import nullcontext
-from typing import Any, Dict, Iterable, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -53,6 +54,209 @@ from sklearn.metrics import (
 
 
 EVAL_MAX_ADDITIONAL_BATCHES = 3
+
+
+@dataclass
+class TrainEpochStats:
+    """Aggregate statistics returned by :func:`train_epoch`."""
+
+    mean_loss: float
+    global_step: int
+    samples_processed: int
+    batches_processed: int
+
+
+@dataclass
+class Experiment4SubsetTrace:
+    """Metadata describing SUN subset selections for experiment 4 logging."""
+
+    percent: Optional[int]
+    seed: Optional[int]
+    train_pos_cases: int
+    train_neg_cases: int
+    frames_per_case: Optional[int]
+    total_frames: int
+    pos_case_ids: Tuple[str, ...]
+    neg_case_ids: Tuple[str, ...]
+    pos_digest: str
+    neg_digest: str
+    manifest: Optional[str]
+
+
+def _resolve_case_identifier(row: Mapping[str, Any]) -> Optional[str]:
+    """Extract a case identifier from metadata ``row`` if available."""
+
+    if not isinstance(row, Mapping):
+        return None
+    candidate_keys = (
+        "case_id",
+        "caseid",
+        "case",
+        "sequence_id",
+        "seq_id",
+        "study_id",
+    )
+    for key in candidate_keys:
+        value = row.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def _compute_case_digest(case_ids: Sequence[str]) -> str:
+    """Return a short SHA1 digest summarising ``case_ids``."""
+
+    if not case_ids:
+        return "n/a"
+    hasher = hashlib.sha1()
+    for case_id in case_ids:
+        hasher.update(str(case_id).encode("utf-8"))
+        hasher.update(b"\0")
+    return hasher.hexdigest()[:8]
+
+
+def _collect_experiment4_trace(
+    args,
+    datasets: Mapping[str, "PackDataset"],
+) -> Optional[Experiment4SubsetTrace]:
+    """Build metadata used for experiment 4 logging if applicable."""
+
+    layout = getattr(args, "dataset_layout", {}) or {}
+    if str(layout.get("name", "")).lower() != "sun_subsets":
+        return None
+
+    train_split = getattr(args, "train_split", "train")
+    train_dataset = datasets.get(train_split)
+    if train_dataset is None:
+        return None
+
+    labels: Optional[Sequence[int]] = getattr(train_dataset, "labels_list", None)
+    metadata: Optional[Sequence[MutableMapping[str, Any]]] = getattr(
+        train_dataset, "metadata", None
+    )
+    if labels is None or metadata is None:
+        return None
+
+    case_frames: Dict[str, int] = {}
+    case_labels: Dict[str, int] = {}
+    for label, row in zip(labels, metadata):
+        case_id = _resolve_case_identifier(row)
+        if not case_id:
+            continue
+        case_frames[case_id] = case_frames.get(case_id, 0) + 1
+        case_labels.setdefault(case_id, int(label))
+
+    if not case_frames:
+        return None
+
+    pos_case_ids = sorted(
+        case_id for case_id, lbl in case_labels.items() if int(lbl) == 1
+    )
+    neg_case_ids = sorted(
+        case_id for case_id, lbl in case_labels.items() if int(lbl) == 0
+    )
+
+    frame_counts = {case_frames[cid] for cid in case_frames}
+    frames_per_case = frame_counts.pop() if len(frame_counts) == 1 else None
+    total_frames = int(sum(case_frames.values()))
+
+    percent = layout.get("percent")
+    percent_int = int(percent) if isinstance(percent, (int, float)) else None
+    seed = layout.get("dataset_seed")
+    seed_int = int(seed) if isinstance(seed, (int, float)) else None
+
+    return Experiment4SubsetTrace(
+        percent=percent_int,
+        seed=seed_int,
+        train_pos_cases=len(pos_case_ids),
+        train_neg_cases=len(neg_case_ids),
+        frames_per_case=frames_per_case,
+        total_frames=total_frames,
+        pos_case_ids=tuple(pos_case_ids),
+        neg_case_ids=tuple(neg_case_ids),
+        pos_digest=_compute_case_digest(pos_case_ids),
+        neg_digest=_compute_case_digest(neg_case_ids),
+        manifest=getattr(args, "train_pack", None),
+    )
+
+
+def _format_subset_summary_lines(trace: Experiment4SubsetTrace) -> List[str]:
+    """Return human-readable lines describing subset selection."""
+
+    percent_display = (
+        f"{trace.percent}%" if trace.percent is not None else "unknown%"
+    )
+    seed_display = trace.seed if trace.seed is not None else "unknown"
+    frames_display = (
+        str(trace.frames_per_case) if trace.frames_per_case is not None else "n/a"
+    )
+    subset_size = trace.train_pos_cases + trace.train_neg_cases
+    first_line = (
+        "Subset percent={percent} | seed={seed} | cases(pos/neg)={pos}/{neg} "
+        "(total={total}) | frames_per_case={frames} | total_frames={frames_total}"
+    ).format(
+        percent=percent_display,
+        seed=seed_display,
+        pos=trace.train_pos_cases,
+        neg=trace.train_neg_cases,
+        total=subset_size,
+        frames=frames_display,
+        frames_total=trace.total_frames,
+    )
+    second_line = (
+        f"Case digests: pos={trace.pos_digest} ({trace.train_pos_cases}), "
+        f"neg={trace.neg_digest} ({trace.train_neg_cases})"
+    )
+    third_line = f"Manifest: {trace.manifest}" if trace.manifest else "Manifest: n/a"
+    return [first_line, second_line, third_line]
+
+
+def _format_subset_tag(trace: Experiment4SubsetTrace) -> str:
+    """Return a compact subset descriptor suitable for inline logging."""
+
+    if trace.percent is None:
+        percent_token = "percent=unknown"
+    else:
+        percent_token = f"percent={trace.percent}%"
+    seed_token = (
+        f"seed={trace.seed}" if trace.seed is not None else "seed=unknown"
+    )
+    cases_token = (
+        f"cases(pos/neg)={trace.train_pos_cases}/{trace.train_neg_cases}"
+    )
+    digest_token = f"digests(pos/neg)={trace.pos_digest}/{trace.neg_digest}"
+    return " | ".join((percent_token, seed_token, cases_token, digest_token))
+
+
+def _resolve_grad_accum_steps(optimizer: torch.optim.Optimizer) -> int:
+    """Return gradient accumulation steps configured on ``optimizer``."""
+
+    raw_value = getattr(optimizer, "grad_accum_steps", 1)
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        value = 1
+    return max(value, 1)
+
+
+def _compute_optimizer_steps(global_step: int, grad_accum_steps: int) -> int:
+    """Compute optimizer steps after accounting for gradient accumulation."""
+
+    if grad_accum_steps <= 1:
+        return int(global_step)
+    return int(global_step) // int(grad_accum_steps)
+
+
+def _log_lines(log_path: Path, lines: Sequence[str]) -> None:
+    """Print ``lines`` and append them to ``log_path``."""
+
+    for line in lines:
+        print(line)
+    if log_path:
+        with open(log_path, "a") as handle:
+            for line in lines:
+                handle.write(line)
+                handle.write("\n")
 
 
 def _format_eta(seconds: Optional[float]) -> str:
@@ -1339,7 +1543,12 @@ def train_epoch(
                 print(
                     f"Skipping training epoch {epoch}: reached max training steps ({max_steps})."
                 )
-            return float("nan"), global_step
+            return TrainEpochStats(
+                mean_loss=float("nan"),
+                global_step=int(global_step),
+                samples_processed=0,
+                batches_processed=0,
+            )
 
     t = time.time()
     non_blocking = device.type == "cuda"
@@ -1472,7 +1681,12 @@ def train_epoch(
             break
 
     mean_loss = np.mean(loss_accumulator) if loss_accumulator else float("nan")
-    return mean_loss, global_step
+    return TrainEpochStats(
+        mean_loss=float(mean_loss),
+        global_step=int(global_step),
+        samples_processed=int(sample_count),
+        batches_processed=int(batches_processed),
+    )
 
 
 @torch.no_grad()
@@ -1884,6 +2098,8 @@ def build(args, rank, device: torch.device, distributed: bool):
         snapshot_dir=Path(args.output_dir) if rank == 0 else None,
     )
 
+    experiment4_trace = _collect_experiment4_trace(args, datasets)
+
     train_dataloader = loaders.get("train")
     eval_only = train_dataloader is None
     if train_dataloader is None and not getattr(args, "frozen", False):
@@ -2097,6 +2313,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         thresholds_map,
         compute_threshold,
         threshold_key,
+        experiment4_trace,
     )
 
 
@@ -2144,6 +2361,7 @@ def train(rank, args):
         thresholds_map,
         compute_threshold,
         threshold_key,
+        experiment4_trace,
     ) = build(args, rank, device, distributed)
     eval_only = train_dataloader is None
     use_amp = args.precision == "amp" and device.type == "cuda"
@@ -2218,6 +2436,42 @@ def train(rank, args):
         tb_logger = TensorboardLogger.create(None)
     if distributed:
         dist.barrier()
+
+    grad_accum_steps = _resolve_grad_accum_steps(optimizer)
+    total_seen_samples = 0
+    total_batches_processed = 0
+    epochs_run = 0
+
+    if rank == 0 and experiment4_trace is not None and not eval_only:
+        subset_lines = ["Experiment4 subset summary (run start):"]
+        subset_lines.extend(_format_subset_summary_lines(experiment4_trace))
+        per_rank_batch = getattr(train_dataloader, "batch_size", None)
+        global_batch = (
+            per_rank_batch * args.world_size if per_rank_batch is not None else None
+        )
+        samples_per_opt = (
+            global_batch * grad_accum_steps if global_batch is not None else None
+        )
+        epochs_planned = getattr(args, "epochs", "n/a")
+        max_steps = getattr(args, "max_train_steps", None)
+        global_arg_batch = getattr(args, "batch_size", None)
+        budget_parts = [
+            f"epochs={epochs_planned}",
+            f"max_steps={max_steps if max_steps is not None else 'n/a'}",
+            f"grad_accum={grad_accum_steps}",
+        ]
+        if global_arg_batch is not None:
+            budget_parts.append(f"batch_size(global_arg)={global_arg_batch}")
+        if per_rank_batch is not None:
+            budget_parts.append(f"batch_size(per_rank)={per_rank_batch}")
+        if global_batch is not None:
+            budget_parts.append(f"samples_per_step={global_batch}")
+        if samples_per_opt is not None:
+            budget_parts.append(
+                f"samples_per_optimizer_step={samples_per_opt}"
+            )
+        subset_lines.append("Planned optimizer budget: " + " | ".join(budget_parts))
+        _log_lines(log_path, subset_lines)
 
     monitor_name = getattr(args, "early_stop_monitor", None) or "val_loss"
     monitor_mode = _resolve_monitor_mode(monitor_name, getattr(args, "early_stop_mode", None))
@@ -2312,7 +2566,7 @@ def train(rank, args):
     for epoch in range(start_epoch, args.epochs + 1):
         try:
             prev_global_step = global_step
-            loss, global_step = train_epoch(
+            epoch_stats = train_epoch(
                 model,
                 rank,
                 args.world_size,
@@ -2334,6 +2588,12 @@ def train(rank, args):
                 max_steps=args.max_train_steps,
                 loss_mode=loss_mode,
             )
+            loss = float(epoch_stats.mean_loss)
+            global_step = int(epoch_stats.global_step)
+            total_seen_samples += int(epoch_stats.samples_processed)
+            total_batches_processed += int(epoch_stats.batches_processed)
+            if epoch_stats.batches_processed > 0:
+                epochs_run += 1
             if rank == 0:
                 eval_tau, eval_tau_key = resolve_eval_tau(
                     threshold_key, sun_threshold_key
@@ -2451,6 +2711,17 @@ def train(rank, args):
             )
             checkpoint_saved = False
             if improved:
+                if experiment4_trace is not None:
+                    checkpoint_lines = [
+                        "Experiment4 checkpoint update:",
+                        "Steps: global_step={gs} | optimizer_steps={os} | seen_samples={ss}".format(
+                            gs=int(global_step),
+                            os=_compute_optimizer_steps(global_step, grad_accum_steps),
+                            ss=int(total_seen_samples),
+                        ),
+                        "Subset tag: " + _format_subset_tag(experiment4_trace),
+                    ]
+                    _log_lines(log_path, checkpoint_lines)
                 print("Saving...")
                 with open(log_path, "a") as f:
                     f.write("Saving...")
@@ -2647,6 +2918,25 @@ def train(rank, args):
 
         if distributed:
             dist.barrier()
+    if rank == 0 and experiment4_trace is not None and not eval_only:
+        limit_train_batches = getattr(args, "limit_train_batches", None)
+        final_lines = [
+            "Experiment4 final summary:",
+            "Run summary: epochs_run={epochs} | final_global_step={gs} | optimizer_steps={os} | final_seen_samples={samples}".format(
+                epochs=int(epochs_run),
+                gs=int(global_step),
+                os=_compute_optimizer_steps(global_step, grad_accum_steps),
+                samples=int(total_seen_samples),
+            ),
+            "Train loader: actual_batches={batches} | drop_last={drop_last} | limit_train_batches={limit_batches}".format(
+                batches=int(total_batches_processed),
+                drop_last=getattr(train_dataloader, "drop_last", "n/a"),
+                limit_batches=limit_train_batches if limit_train_batches is not None else "n/a",
+            ),
+            "Subset tag: " + _format_subset_tag(experiment4_trace),
+        ]
+        _log_lines(log_path, final_lines)
+
     tb_logger.close()
     if rank == 0 and last_epoch is not None:
         last_payload: Dict[str, Any] = {
