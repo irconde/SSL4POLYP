@@ -40,10 +40,6 @@ This repository hosts the reference implementation for the paper *Evaluating Dom
    - Evaluation: `python -m ssl4polyp.classification.eval_classification ...`
 4. Use `scripts/run_exps.sh` for batch execution of experiment manifests.
 
-## Testing & Quality Checks
-- Python unit tests are located under `tests/`. Run them with `pytest` after installing the project in editable mode.
-- Ensure new configs maintain compatibility with existing manifests by running smoke tests on representative training/evaluation commands when possible.
-
 ## Contribution Notes
 - Follow existing module structure when adding new training or evaluation scripts (place classification-centric utilities under `src/ssl4polyp/classification/`, MAE pretraining logic under `src/ssl4polyp/models/mae/`, etc.).
 - Keep new dataset descriptors in `config/data/` and register their CSVs under `data_packs/`.
