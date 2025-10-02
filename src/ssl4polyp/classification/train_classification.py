@@ -19,7 +19,7 @@ from pathlib import Path
 import yaml
 
 from contextlib import nullcontext
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -43,6 +43,7 @@ from ssl4polyp.configs.layered import (
 )
 
 import numpy as np
+from sklearn.metrics import average_precision_score, balanced_accuracy_score, f1_score
 
 
 EVAL_MAX_ADDITIONAL_BATCHES = 3
@@ -1459,6 +1460,7 @@ def test(
     split_name: str = "Test",
     return_outputs: bool = False,
     tau: Optional[float] = None,
+    tau_info: Optional[str] = None,
     max_batches: Optional[int] = None,
 ):
     if test_loader is None:
@@ -1544,24 +1546,40 @@ def test(
         # (Removed per-batch AUROC to avoid single-class crash.)
         # Compute inexpensive interim progress metric(s):
         probs_cumulative = _prepare_binary_probabilities(logits)
-        if tau is not None and probs_cumulative.size(1) == 2:
+        binary_progress = probs_cumulative.size(1) == 2
+        if tau is not None and binary_progress:
             preds_cumulative = (probs_cumulative[:, 1] >= tau).to(dtype=torch.long)
         else:
             preds_cumulative = torch.argmax(probs_cumulative, dim=1)
         targets_cumulative = targets  # already CPU
-        # Running (cumulative) balanced accuracy (safe with single class)
         unique_classes = torch.unique(targets_cumulative)
         if unique_classes.numel() >= 2:
-            # You could compute balanced accuracy; re-use existing helper if desired.
-            # Simple implementation here:
-            from sklearn.metrics import balanced_accuracy_score
             running_bal_acc = balanced_accuracy_score(
-                targets_cumulative.numpy(),
-                preds_cumulative.numpy()
+                targets_cumulative.numpy(), preds_cumulative.numpy()
             )
             bal_display = f"BALACC: {running_bal_acc:.6f}"
         else:
             bal_display = "BALACC: (pending)"
+
+        if binary_progress:
+            try:
+                running_f1 = f1_score(
+                    targets_cumulative.numpy(), preds_cumulative.numpy()
+                )
+                f1_display = f"F1@τ: {running_f1:.6f}"
+            except ValueError:
+                f1_display = "F1@τ: (pending)"
+            try:
+                ap_value = average_precision_score(
+                    targets_cumulative.numpy(),
+                    probs_cumulative[:, 1].numpy(),
+                )
+                ap_display = f"AP: {ap_value:.6f}"
+            except ValueError:
+                ap_display = "AP: (pending)"
+        else:
+            f1_display = "F1@τ: n/a"
+            ap_display = "AP: n/a"
 
         if loss_count > 0:
             loss_display = f"Loss: {loss_sum / loss_count:.6f}"
@@ -1569,7 +1587,7 @@ def test(
             loss_display = "Loss: (pending)"
         else:
             loss_display = None
-        metrics_parts = ["AUROC: (pending)", bal_display]
+        metrics_parts = [bal_display, f1_display, ap_display]
         if loss_display is not None:
             metrics_parts.append(loss_display)
         metrics_display = "\t".join(metrics_parts)
@@ -1620,9 +1638,11 @@ def test(
     probs = _prepare_binary_probabilities(logits)
     n_classes = probs.size(1) if probs.ndim == 2 else 1
     binary_tau = tau if (tau is not None and n_classes == 2) else None
-    results = {
-        "auroc": perf_fn(probs, targets).item(),
-    }
+    if logits is not None and targets is not None and len(observed_labels) >= 2:
+        auroc_value = float(perf_fn(probs, targets).item())
+    else:
+        auroc_value = float("nan")
+    results: Dict[str, Any] = {"auroc": auroc_value}
     if loss_fn is not None and loss_count > 0:
         mean_loss = loss_sum / loss_count
         results["loss"] = mean_loss
@@ -1638,10 +1658,93 @@ def test(
         except TypeError:
             results[name] = fn(preds, targets).item()
 
-    summary = f"{split_name} final AUROC: {results['auroc']:.6f}"
+    class_counts_tensor = torch.bincount(
+        targets.to(dtype=torch.long), minlength=n_classes
+    )
+    class_counts = class_counts_tensor.tolist()
+    results["class_counts"] = class_counts
+    results["observed_labels"] = sorted(int(x) for x in observed_labels)
+    if binary_tau is not None:
+        threshold_stats = _compute_threshold_statistics(
+            logits, targets, float(binary_tau)
+        )
+    else:
+        threshold_stats = {}
+    if threshold_stats:
+        results["threshold_metrics"] = threshold_stats
+    if binary_tau is not None:
+        results["tau"] = float(binary_tau)
+    elif tau is not None:
+        results["tau"] = float(tau)
+    else:
+        results["tau"] = None
+    if tau_info:
+        results["tau_info"] = tau_info
+
+    observed_sorted = results["observed_labels"]
+    if len(observed_sorted) >= 2:
+        class_flag = f"classes={{" + ", ".join(map(str, observed_sorted)) + "}}"
+    elif observed_sorted:
+        class_flag = f"⚠ single-class (labels={{" + ", ".join(map(str, observed_sorted)) + "}})"
+    else:
+        class_flag = "⚠ no labels observed"
+    class_presence_line = f"{split_name} class presence: {class_flag}"
+
+    metric_line_parts: list[str] = []
+    bal_value = results.get("balanced_accuracy")
+    if isinstance(bal_value, (float, np.floating)) and not math.isnan(bal_value):
+        metric_line_parts.append(f"Balanced Acc: {bal_value:.6f}")
+    f1_value = results.get("f1")
+    if isinstance(f1_value, (float, np.floating)) and not math.isnan(f1_value):
+        metric_line_parts.append(f"F1@τ: {f1_value:.6f}")
+    ap_value = results.get("auprc")
+    if isinstance(ap_value, (float, np.floating)) and not math.isnan(ap_value):
+        metric_line_parts.append(f"AP (PR-AUC): {ap_value:.6f}")
+    if not math.isnan(auroc_value):
+        metric_line_parts.append(f"AUROC: {auroc_value:.6f}")
+    else:
+        metric_line_parts.append("AUROC: —")
     if loss_fn is not None and not math.isnan(mean_loss):
-        summary += f" | Loss: {mean_loss:.6f}"
-    print(summary)
+        metric_line_parts.append(f"Loss: {mean_loss:.6f}")
+    metrics_line = f"{split_name} metrics: " + " | ".join(metric_line_parts)
+
+    if binary_tau is not None:
+        tau_line = f"{split_name} τ info: τ={binary_tau:.4f}"
+        if tau_info:
+            tau_line += f" ({tau_info})"
+    elif tau is not None:
+        tau_line = f"{split_name} τ info: τ={tau:.4f}"
+    else:
+        tau_line = f"{split_name} τ info: argmax"
+
+    total_count = int(class_counts_tensor.sum().item())
+    if n_classes == 2:
+        neg_count = int(class_counts[0]) if len(class_counts) > 0 else 0
+        pos_count = int(class_counts[1]) if len(class_counts) > 1 else 0
+        counts_line = (
+            f"{split_name} counts: total={total_count}, negatives={neg_count}, positives={pos_count}"
+        )
+    else:
+        per_class = ", ".join(
+            f"{idx}:{int(count)}" for idx, count in enumerate(class_counts) if count
+        )
+        counts_line = f"{split_name} counts: total={total_count}, per-class={{ {per_class} }}"
+
+    if threshold_stats and all(key in threshold_stats for key in ("tp", "fp", "fn", "tn")):
+        confusion_line = (
+            f"{split_name} confusion @τ: TP={int(threshold_stats['tp'])} "
+            f"FP={int(threshold_stats['fp'])} FN={int(threshold_stats['fn'])} "
+            f"TN={int(threshold_stats['tn'])}"
+        )
+    else:
+        confusion_line = f"{split_name} confusion @τ: n/a"
+
+    output_lines = [class_presence_line, metrics_line, tau_line, counts_line, confusion_line]
+    for line in output_lines:
+        print(line)
+    with open(log_path, "a") as f:
+        for line in output_lines:
+            f.write(line + "\n")
 
     if return_outputs:
         results["logits"] = logits
@@ -1970,22 +2073,36 @@ def train(rank, args):
         loss_fn = nn.CrossEntropyLoss(weight=class_weights_tensor)
     perf_fn = performance.meanAUROC(n_class=n_classes)
     aux_metric_fns = {
+        "balanced_accuracy": performance.meanBalancedAccuracy(n_class=n_classes),
         "f1": performance.meanF1Score(n_class=n_classes),
         "precision": performance.meanPrecision(n_class=n_classes),
         "recall": performance.meanRecall(n_class=n_classes),
+        "auprc": performance.meanAUPRC(n_class=n_classes),
     }
     sun_threshold_key = thresholds.format_threshold_key(
         "sun_full", args.val_split or "val", "youden"
     )
 
-    def resolve_eval_tau(*keys: Optional[str]) -> Optional[float]:
+    def resolve_eval_tau(*keys: Optional[str]) -> Tuple[Optional[float], Optional[str]]:
         for key in keys:
             if not key:
                 continue
             tau_value = thresholds.resolve_threshold(thresholds_map, key)
             if tau_value is not None:
-                return tau_value
-        return None
+                return float(tau_value), key
+        return None, None
+
+    def describe_tau_source(key: Optional[str]) -> Optional[str]:
+        if not key:
+            return None
+        parts = [segment for segment in str(key).split("_") if segment]
+        if not parts:
+            return None
+        policy_raw = parts[-1]
+        split_raw = parts[-2] if len(parts) >= 2 else (args.val_split or "val")
+        policy_map = {"youden": "Youden J"}
+        policy_label = policy_map.get(policy_raw, policy_raw.replace("_", " ").title())
+        return f"{policy_label} on {split_raw}"
 
     if rank == 0:
         tb_dir = getattr(args, "tensorboard_dir", None)
@@ -2015,7 +2132,10 @@ def train(rank, args):
         eval_epoch = max(start_epoch - 1, 0)
         if rank == 0:
             print("No training data provided; running evaluation-only mode.")
-            eval_tau = resolve_eval_tau(threshold_key, sun_threshold_key)
+            eval_tau, eval_tau_key = resolve_eval_tau(
+                threshold_key, sun_threshold_key
+            )
+            eval_tau_info = describe_tau_source(eval_tau_key)
             if val_dataloader is not None:
                 val_metrics = test(
                     _unwrap_model(model),
@@ -2029,6 +2149,7 @@ def train(rank, args):
                     loss_mode=loss_mode,
                     split_name="Val",
                     tau=eval_tau,
+                    tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
                 )
                 if tb_logger:
@@ -2046,6 +2167,7 @@ def train(rank, args):
                     loss_mode=loss_mode,
                     split_name="Test",
                     tau=eval_tau,
+                    tau_info=eval_tau_info,
                     max_batches=args.limit_test_batches,
                 )
                 if tb_logger:
@@ -2063,6 +2185,11 @@ def train(rank, args):
     no_improve_epochs = 0
     scheduler_name = getattr(args, "scheduler", "none").lower()
     early_patience = getattr(args, "early_stop_patience", 0) or 0
+    best_epoch: Optional[int] = None
+    if best_monitor_value is not None:
+        prior_epoch = start_epoch - 1
+        if prior_epoch >= 1:
+            best_epoch = int(prior_epoch)
     last_epoch: Optional[int] = None
     last_loss: Optional[float] = None
     last_val_perf: Optional[float] = None
@@ -2103,7 +2230,10 @@ def train(rank, args):
                 loss_mode=loss_mode,
             )
             if rank == 0:
-                eval_tau = resolve_eval_tau(threshold_key, sun_threshold_key)
+                eval_tau, eval_tau_key = resolve_eval_tau(
+                    threshold_key, sun_threshold_key
+                )
+                eval_tau_info = describe_tau_source(eval_tau_key)
                 val_metrics = test(
                     _unwrap_model(model),
                     rank,
@@ -2117,6 +2247,7 @@ def train(rank, args):
                     split_name="Val",
                     return_outputs=compute_threshold,
                     tau=eval_tau,
+                    tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
                 )
                 test_metrics = test(
@@ -2131,6 +2262,7 @@ def train(rank, args):
                     loss_mode=loss_mode,
                     split_name="Test",
                     tau=eval_tau,
+                    tau_info=eval_tau_info,
                     max_batches=args.limit_test_batches,
                 )
                 val_metrics_export = _prepare_metric_export(
@@ -2210,6 +2342,7 @@ def train(rank, args):
                 mode=monitor_mode,
                 min_delta=min_delta,
             )
+            checkpoint_saved = False
             if improved:
                 print("Saving...")
                 with open(log_path, "a") as f:
@@ -2360,10 +2493,35 @@ def train(rank, args):
                     latest_threshold_file_relpath = threshold_file_relpath
                     latest_threshold_record = threshold_record
                 best_monitor_value = float(monitor_value)
+                best_epoch = int(epoch)
                 thresholds_map = updated_thresholds
                 no_improve_epochs = 0
+                checkpoint_saved = True
             else:
                 no_improve_epochs += 1
+
+            if best_monitor_value is not None and math.isnan(best_monitor_value):
+                best_monitor_value = None
+                best_epoch = None
+            if best_monitor_value is not None:
+                if best_epoch is not None:
+                    best_display = f"{best_monitor_value:.3f} (epoch {best_epoch})"
+                else:
+                    best_display = f"{best_monitor_value:.3f}"
+            else:
+                best_display = "—"
+            if early_patience > 0:
+                patience_display = f"{no_improve_epochs}/{early_patience}"
+            else:
+                patience_display = "—"
+            checkpoint_note = "checkpoint saved" if checkpoint_saved else "no checkpoint"
+            patience_line = (
+                f"Patience tracker: best={best_display} | patience={patience_display} | {checkpoint_note}"
+            )
+            print(patience_line)
+            with open(log_path, "a") as f:
+                f.write(patience_line)
+                f.write("\n")
 
         if early_patience > 0:
             if distributed:
