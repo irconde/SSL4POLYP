@@ -1112,7 +1112,12 @@ def _apply_config_overrides(
     return updated, applied
 
 
-def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
+def apply_experiment_config(
+    args,
+    experiment_cfg: Dict[str, Any],
+    *,
+    resolved_overrides: Optional[Dict[str, Any]] = None,
+):
     dataset_cfg = extract_dataset_config(experiment_cfg)
     dataset_cfg = copy.deepcopy(dataset_cfg)
 
@@ -1202,6 +1207,16 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     args.ckpt = selected_model.get("checkpoint", args.ckpt)
     args.frozen = selected_model.get("frozen", args.frozen)
     protocol_cfg = (experiment_cfg or {}).get("protocol") or {}
+    protocol_overrides = {}
+    if resolved_overrides and isinstance(resolved_overrides, dict):
+        protocol_overrides = resolved_overrides.get("protocol") or {}
+    if not isinstance(protocol_overrides, dict):
+        protocol_overrides = {}
+    config_sources = experiment_cfg.get("__sources__", []) or []
+    contains_exp3_source = any(
+        Path(str(source)).name == "exp3.yaml" for source in config_sources
+    )
+    override_requests_morphology = "morphology_eval" in protocol_overrides
     finetune_mode = protocol_cfg.get("finetune")
     default_mode = getattr(args, "finetune_mode", None)
     if not default_mode:
@@ -1212,7 +1227,12 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
     args.frozen = args.finetune_mode == "none"
     morphology_eval_cfg = protocol_cfg.get("morphology_eval")
     if morphology_eval_cfg is not None:
-        args.morphology_eval = list(morphology_eval_cfg)
+        cli_morphology = getattr(args, "morphology_eval", None)
+        cli_requested = bool(cli_morphology)
+        if cli_requested:
+            args.morphology_eval = list(cli_morphology)
+        elif contains_exp3_source or override_requests_morphology:
+            args.morphology_eval = list(morphology_eval_cfg)
     args.ss_framework = selected_model.get("ss_framework", args.ss_framework)
     args.dataset = dataset_cfg.get("name", args.dataset)
 
@@ -2796,6 +2816,16 @@ def get_args():
     parser.add_argument("--val-split", type=str, default="val")
     parser.add_argument("--test-split", type=str, default="test")
     parser.add_argument(
+        "--morphology-eval",
+        nargs="+",
+        dest="morphology_eval",
+        default=None,
+        help=(
+            "Optional list of morphology categories (e.g. flat polypoid) to "
+            "enable morphology-aware logging."
+        ),
+    )
+    parser.add_argument(
         "--dataset-percent",
         type=float,
         default=None,
@@ -3038,7 +3068,11 @@ def main():
         experiment_cfg, resolved_overrides = _apply_config_overrides(
             experiment_cfg, overrides
         )
-        selected_model, dataset_cfg, dataset_resolved = apply_experiment_config(args, experiment_cfg)
+        selected_model, dataset_cfg, dataset_resolved = apply_experiment_config(
+            args,
+            experiment_cfg,
+            resolved_overrides=resolved_overrides,
+        )
 
     args.active_seed = _resolve_active_seed(args)
     args.seed = args.active_seed
