@@ -15,6 +15,7 @@ import time
 import copy
 import warnings
 from pathlib import Path
+from collections import Counter
 
 import yaml
 
@@ -43,7 +44,12 @@ from ssl4polyp.configs.layered import (
 )
 
 import numpy as np
-from sklearn.metrics import average_precision_score, balanced_accuracy_score, f1_score
+from sklearn.metrics import (
+    average_precision_score,
+    balanced_accuracy_score,
+    f1_score,
+    recall_score,
+)
 
 
 EVAL_MAX_ADDITIONAL_BATCHES = 3
@@ -1204,6 +1210,9 @@ def apply_experiment_config(args, experiment_cfg: Dict[str, Any]):
         finetune_mode, default=default_mode
     )
     args.frozen = args.finetune_mode == "none"
+    morphology_eval_cfg = protocol_cfg.get("morphology_eval")
+    if morphology_eval_cfg is not None:
+        args.morphology_eval = list(morphology_eval_cfg)
     args.ss_framework = selected_model.get("ss_framework", args.ss_framework)
     args.dataset = dataset_cfg.get("name", args.dataset)
 
@@ -1462,6 +1471,7 @@ def test(
     tau: Optional[float] = None,
     tau_info: Optional[str] = None,
     max_batches: Optional[int] = None,
+    morphology_eval: Optional[Iterable[str]] = None,
 ):
     if test_loader is None:
         return float("nan")
@@ -1487,18 +1497,30 @@ def test(
     expected_label_count: Optional[int] = None
     expected_labels: Optional[set[int]] = None
     warned_extra_batches = False
+    morphology_eval_list = [str(m).strip() for m in (morphology_eval or []) if str(m).strip()]
+    morphology_eval_lookup = [m.lower() for m in morphology_eval_list]
+    track_morphology = bool(morphology_eval_list)
+    morphology_values: list[str] = []
+    morphology_counter: Counter[str] = Counter()
 
     for batch_idx, batch in enumerate(test_loader):
         if batches_processed >= hard_batch_limit:
             break
+        metadata_batch = None
         if len(batch) == 3:
-            data, target, _ = batch
+            data, target, metadata_batch = batch
         elif len(batch) == 2:
             raise ValueError("Test dataloader does not provide labels; enable metadata return with labels.")
         else:  # pragma: no cover - defensive
             raise ValueError("Unexpected batch structure returned by dataloader")
         data = data.to(device, non_blocking=non_blocking)
         target = target.to(device, non_blocking=non_blocking)
+        if track_morphology and metadata_batch is not None:
+            for row in metadata_batch:
+                morph_label = row.get("morphology") if isinstance(row, dict) else None
+                morph_value = str(morph_label).strip().lower() if morph_label not in (None, "") else "unknown"
+                morphology_values.append(morph_value)
+                morphology_counter[morph_value] += 1
         N += len(data)
         logits_batch = model(data)
         if loss_fn is not None:
@@ -1730,6 +1752,61 @@ def test(
         )
         counts_line = f"{split_name} counts: total={total_count}, per-class={{ {per_class} }}"
 
+    morph_counts_line: Optional[str] = None
+    morph_metrics_line: Optional[str] = None
+    if track_morphology and morphology_values and targets is not None:
+        requested_counts: Dict[str, int] = {}
+        requested_metrics: Dict[str, Dict[str, float]] = {}
+        morph_array = np.array(morphology_values)
+        targets_np = targets.numpy()
+        preds_np = preds.numpy()
+        for display, lookup in zip(morphology_eval_list, morphology_eval_lookup):
+            mask = morph_array == lookup
+            count = int(mask.sum())
+            requested_counts[display] = count
+            if count > 0 and n_classes == 2:
+                recall_val = recall_score(
+                    targets_np[mask], preds_np[mask], zero_division=0
+                )
+                f1_val = f1_score(
+                    targets_np[mask], preds_np[mask], zero_division=0
+                )
+                requested_metrics[display] = {
+                    "recall": float(recall_val),
+                    "f1": float(f1_val),
+                }
+            else:
+                requested_metrics[display] = {"recall": float("nan"), "f1": float("nan")}
+        full_counts = {name: int(count) for name, count in morphology_counter.items()}
+        results["morphology_counts"] = requested_counts
+        results["morphology_metrics"] = requested_metrics
+        results["observed_morphology_counts"] = full_counts
+        display_parts = [f"{name}:{requested_counts.get(name, 0)}" for name in morphology_eval_list]
+        extra_keys = [
+            key for key in sorted(morphology_counter.keys()) if key not in morphology_eval_lookup
+        ]
+        display_parts.extend(f"{key}:{morphology_counter[key]}" for key in extra_keys)
+        morph_counts_line = (
+            f"{split_name} morphology counts: {{ " + ", ".join(display_parts) + " }}"
+        )
+        metric_parts: list[str] = []
+        for name in morphology_eval_list:
+            metrics = requested_metrics.get(name, {})
+            recall_val = metrics.get("recall")
+            f1_val = metrics.get("f1")
+            if recall_val is None or math.isnan(recall_val):
+                recall_display = "—"
+            else:
+                recall_display = f"{recall_val:.6f}"
+            if f1_val is None or math.isnan(f1_val):
+                f1_display = "—"
+            else:
+                f1_display = f"{f1_val:.6f}"
+            metric_parts.append(
+                f"{name}: recall={recall_display}, F1={f1_display}"
+            )
+        morph_metrics_line = f"{split_name} morphology metrics: " + " | ".join(metric_parts)
+
     if threshold_stats and all(key in threshold_stats for key in ("tp", "fp", "fn", "tn")):
         confusion_line = (
             f"{split_name} confusion @τ: TP={int(threshold_stats['tp'])} "
@@ -1739,7 +1816,12 @@ def test(
     else:
         confusion_line = f"{split_name} confusion @τ: n/a"
 
-    output_lines = [class_presence_line, metrics_line, tau_line, counts_line, confusion_line]
+    output_lines = [class_presence_line, metrics_line, tau_line, counts_line]
+    if morph_counts_line:
+        output_lines.append(morph_counts_line)
+    if morph_metrics_line:
+        output_lines.append(morph_metrics_line)
+    output_lines.append(confusion_line)
     for line in output_lines:
         print(line)
     with open(log_path, "a") as f:
@@ -2079,6 +2161,7 @@ def train(rank, args):
         "recall": performance.meanRecall(n_class=n_classes),
         "auprc": performance.meanAUPRC(n_class=n_classes),
     }
+    morphology_eval = getattr(args, "morphology_eval", None)
     sun_threshold_key = thresholds.format_threshold_key(
         "sun_full", args.val_split or "val", "youden"
     )
@@ -2151,6 +2234,7 @@ def train(rank, args):
                     tau=eval_tau,
                     tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
+                    morphology_eval=morphology_eval,
                 )
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, eval_epoch)
@@ -2169,6 +2253,7 @@ def train(rank, args):
                     tau=eval_tau,
                     tau_info=eval_tau_info,
                     max_batches=args.limit_test_batches,
+                    morphology_eval=morphology_eval,
                 )
                 if tb_logger:
                     tb_logger.log_metrics("test", test_metrics, eval_epoch)
@@ -2249,6 +2334,7 @@ def train(rank, args):
                     tau=eval_tau,
                     tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
+                    morphology_eval=morphology_eval,
                 )
                 test_metrics = test(
                     _unwrap_model(model),
@@ -2264,6 +2350,7 @@ def train(rank, args):
                     tau=eval_tau,
                     tau_info=eval_tau_info,
                     max_batches=args.limit_test_batches,
+                    morphology_eval=morphology_eval,
                 )
                 val_metrics_export = _prepare_metric_export(
                     val_metrics, drop={"logits", "probabilities", "targets"}
