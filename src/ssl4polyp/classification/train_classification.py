@@ -59,6 +59,16 @@ from sklearn.metrics import (
 EVAL_MAX_ADDITIONAL_BATCHES = 3
 
 
+PERTURBATION_METADATA_FIELDS: Tuple[str, ...] = (
+    "perturbation_id",
+    "blur_sigma",
+    "jpeg_q",
+    "brightness",
+    "contrast",
+    "bbox_area_frac",
+)
+
+
 @dataclass
 class TrainEpochStats:
     """Aggregate statistics returned by :func:`train_epoch`."""
@@ -189,6 +199,96 @@ def _format_frame_summary(total_frames: int, counts: Mapping[int, int]) -> str:
         )
         return f"frames(total={total_frames}, per-class={{ {per_class} }})"
     return f"frames(total={total_frames})"
+
+
+def _format_numeric_token(value: Any) -> str:
+    """Return a compact textual representation of ``value`` for tagging."""
+
+    if isinstance(value, (bool, np.bool_)):
+        return str(bool(value)).lower()
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if math.isnan(numeric) or math.isinf(numeric):
+            return str(numeric)
+        formatted = f"{numeric:.4f}".rstrip("0").rstrip(".")
+        return formatted or "0"
+    return str(value)
+
+
+def _canonicalize_perturbation_tag(row: Mapping[str, Any]) -> Optional[str]:
+    """Normalise ``row`` metadata into a canonical perturbation tag."""
+
+    if not isinstance(row, Mapping):
+        return None
+    candidate = row.get("perturbation_id")
+    if candidate not in (None, ""):
+        text = str(candidate).strip()
+        if text:
+            return text
+    # Fall back to composing from known manifest fields.
+    components: list[str] = []
+    numeric_fields = (
+        ("blur_sigma", "blur_sigma"),
+        ("jpeg_q", "jpeg_q"),
+        ("brightness", "brightness"),
+        ("contrast", "contrast"),
+        ("bbox_area_frac", "bbox_area_frac"),
+    )
+    for field, label in numeric_fields:
+        value = row.get(field)
+        if value in (None, ""):
+            continue
+        components.append(f"{label}={_format_numeric_token(value)}")
+    if components:
+        return "|".join(components)
+    variant = row.get("variant")
+    if variant not in (None, ""):
+        text = str(variant).strip()
+        if text:
+            return text
+    return None
+
+
+def _dataset_supports_perturbations(dataset: Optional["PackDataset"]) -> bool:
+    """Return ``True`` when ``dataset`` exposes perturbation metadata."""
+
+    if dataset is None:
+        return False
+    metadata = getattr(dataset, "metadata", None)
+    if not metadata:
+        return False
+    max_rows_to_probe = 10
+    for index, row in enumerate(metadata):
+        if not isinstance(row, Mapping):
+            continue
+        if _canonicalize_perturbation_tag(row):
+            return True
+        for field in PERTURBATION_METADATA_FIELDS:
+            value = row.get(field)
+            if value not in (None, ""):
+                return True
+        if index + 1 >= max_rows_to_probe:
+            break
+    return False
+
+
+def _format_top_perturbation_summary(
+    counter: Mapping[str, int], limit: int = 3
+) -> Optional[str]:
+    """Return a compact summary of perturbation tag counts."""
+
+    if not counter:
+        return None
+    ordered = sorted(counter.items(), key=lambda kv: (-kv[1], str(kv[0])))
+    display_items = ordered[:limit]
+    remainder = max(0, len(ordered) - len(display_items))
+    parts = [f"{tag}×{count}" for tag, count in display_items]
+    summary = ", ".join(parts)
+    if remainder > 0:
+        summary += f" (+{remainder} more)"
+    return f"tags: {summary}"
 
 
 def _derive_eval_tag(
@@ -1935,6 +2035,10 @@ def test(
     track_morphology = bool(morphology_eval_list)
     morphology_values: list[str] = []
     morphology_counter: Counter[str] = Counter()
+    dataset_obj = getattr(test_loader, "dataset", None)
+    track_perturbations = _dataset_supports_perturbations(dataset_obj)
+    perturbation_counter: Counter[str] = Counter()
+    perturbation_metadata_rows: list[Mapping[str, Any]] = []
 
     def _with_prefix(text: str) -> str:
         if eval_context is None:
@@ -1965,6 +2069,14 @@ def test(
                 morph_value = str(morph_label).strip().lower() if morph_label not in (None, "") else "unknown"
                 morphology_values.append(morph_value)
                 morphology_counter[morph_value] += 1
+        if track_perturbations and metadata_batch is not None:
+            for row in metadata_batch:
+                if not isinstance(row, Mapping):
+                    continue
+                perturbation_metadata_rows.append(row)
+                tag = _canonicalize_perturbation_tag(row)
+                if tag:
+                    perturbation_counter[tag] += 1
         N += len(data)
         logits_batch = model(data)
         if loss_fn is not None:
@@ -2058,6 +2170,14 @@ def test(
         if loss_display is not None:
             metrics_parts.append(loss_display)
         metrics_display = "\t".join(metrics_parts)
+        progress_metrics_display = metrics_display
+        if track_perturbations:
+            tag_summary = _format_top_perturbation_summary(perturbation_counter)
+            if tag_summary:
+                if progress_metrics_display:
+                    progress_metrics_display = f"{progress_metrics_display}\t{tag_summary}"
+                else:
+                    progress_metrics_display = tag_summary
 
         progress_reference = planned_batches if planned_batches else max(1, hard_batch_limit)
         progress_measure = (
@@ -2083,7 +2203,7 @@ def test(
                     N,
                     dataset_size,
                     progress_pct,
-                    metrics_display,
+                    progress_metrics_display,
                     time.time() - t,
                 ),
                 end="",
@@ -2095,7 +2215,7 @@ def test(
                 N,
                 dataset_size,
                 progress_pct,
-                metrics_display,
+                progress_metrics_display,
                 time.time() - t,
             )
             print("\r" + printout)
@@ -2147,6 +2267,10 @@ def test(
         results["tau"] = None
     if tau_info:
         results["tau_info"] = tau_info
+    if track_perturbations and perturbation_counter:
+        results["perturbation_tag_counts"] = dict(sorted(perturbation_counter.items()))
+    if track_perturbations and perturbation_metadata_rows:
+        results["perturbation_metadata"] = list(perturbation_metadata_rows)
 
     observed_sorted = results["observed_labels"]
     if len(observed_sorted) >= 2:
