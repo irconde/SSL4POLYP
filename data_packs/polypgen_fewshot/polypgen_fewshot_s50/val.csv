@@ -1,0 +1,5 @@
+dataset,split,case_id,frame_id,frame_path,label,store_id,morphology,source_video,frame_index,width,height,variant,synthetic_case_id,source_case_id,chunk_start,chunk_end,split_unit,synthetic_case,orig_frame_id,perturbation_id,rng_seed,render_in_pipeline,blur_sigma,jpeg_q,brightness,contrast,bbox_area_frac
+PolypGen,val,C2,POLYPGEN_NOCASE.000426,images/POLYPGEN_NOCASE.000426.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C3,POLYPGEN_NOCASE.000774,images/POLYPGEN_NOCASE.000774.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C4,POLYPGEN_NOCASE.001056,images/POLYPGEN_NOCASE.001056.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C6,POLYPGEN_NOCASE.001421,images/POLYPGEN_NOCASE.001421.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0

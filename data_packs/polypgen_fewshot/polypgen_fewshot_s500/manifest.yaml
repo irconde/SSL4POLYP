@@ -1,0 +1,176 @@
+name: polypgen_fewshot_s500
+version: 1.0.0
+policy:
+  unit_of_split: frame
+  fewshot_budget_S: 500
+  parent_pack: polypgen_clean_test_extended
+  target_train_size: 500
+  target_class_balance:
+    pos: 250
+    neg: 250
+  class_ratio_per_split:
+    train:
+      pos: 200
+      neg: 200
+    val:
+      pos: 50
+      neg: 50
+    test:
+      pos: 1004
+      neg: 817
+  realized_train_size: 400
+  realized_train_counts:
+    pos: 200
+    neg: 200
+  balance_relaxed: false
+  val_fraction_target: 0.2
+  val_fraction_realized:
+    overall: 0.2
+    pos: 0.2
+    neg: 0.2
+  val_fraction_rule:
+    size_lt_100: 0.1
+    size_100_to_199: 0.15
+    size_gte_200: 0.2
+  neg_sampling:
+    strategy: pool_first_sequence_cap_single_pass
+    pool_first: true
+    max_frames_per_sequence: 5
+    sequence_level_disjointness: true
+    phase_counts:
+      base_pool: 184
+      sequence: 66
+    sequences_in_train: 12
+  negatives_source:
+    train:
+      base: 144
+      sequence: 56
+    val:
+      base: 40
+      sequence: 10
+    test:
+      base: 0
+      sequence: 817
+  max_frames_per_sequence_train: 5
+  sequence_disjointness_across:
+  - train
+  - val
+  - test
+  sampling: pos:frame_id; neg:frame_pool_then_sequence(cap=5); seed=13
+row_schema:
+  fields:
+  - name: dataset
+    type: string
+    desc: constant 'polypgen_clean'
+  - name: split
+    type: string
+    desc: train|val|test (frame-level)
+  - name: case_id
+    type: string
+  - name: frame_id
+    type: string
+  - name: frame_path
+    type: path
+  - name: label
+    type: int
+selection_keys:
+  train: hmac_sha256(frame_id,13)
+  val: hmac_sha256(unit_key=frame_id|sequence_id_or_frame_id,13)
+  test: complement of train|val with neg-sequence exclusion within polypgen-clean-test-extended
+counts:
+  train:
+    frames: 400
+    total: 400
+    pos: 200
+    neg: 200
+    neg_frame: 144
+    neg_seq_frames: 56
+    neg_seq_sequences: 12
+  val:
+    frames: 100
+    total: 100
+    pos: 50
+    neg: 50
+    neg_frame: 40
+    neg_seq_frames: 10
+    neg_seq_sequences: 2
+  test:
+    frames: 1821
+    total: 1821
+    pos: 1004
+    neg: 817
+    neg_frame: 0
+    neg_seq_frames: 817
+    neg_seq_sequences: 4
+summary_by_split:
+- split: train
+  frames: 400
+  pos_frames: 200
+  neg_frames: 200
+  neg_frame: 144
+  neg_seq_frames: 56
+  neg_seq_sequences: 12
+- split: val
+  frames: 100
+  pos_frames: 50
+  neg_frames: 50
+  neg_frame: 40
+  neg_seq_frames: 10
+  neg_seq_sequences: 2
+- split: test
+  frames: 1821
+  pos_frames: 1004
+  neg_frames: 817
+  neg_frame: 0
+  neg_seq_frames: 817
+  neg_seq_sequences: 4
+notes:
+  excluded_sequences_in_test:
+  - seq11_neg
+  - seq12_neg
+  - seq13_neg
+  - seq14_neg
+  - seq16_neg
+  - seq17_neg
+  - seq18_neg
+  - seq1_neg
+  - seq20_neg
+  - seq21_neg
+  - seq22_neg
+  - seq23_neg
+  - seq8_neg
+  - seq9_neg
+roots:
+  polypgen_clean: /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
+generator:
+  repo: polyp-db-analysis
+  git_commit: dafb5a5a119f7d6ce1d24fe3f2a20591bdeebaee
+  command: polypdb polypgen fewshot --pack /Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE/data_packs/polypgen_clean_test_extended
+    --sizes 500 --seeds 13 --out /Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE/data_packs/polypgen_fewshot
+  seed: 13
+generated_at: '2025-10-03T20:19:46.879374+00:00'
+hashes:
+  train: d76f42211dabb6262b59c707af82ef29d8537e66eea0bf6cb4c26d1f4dc07095
+  val: dd86fb8ae5ae3ff96d5847755b2ad7fcae312a3c9d54a18d7ae7d354bc972f48
+  test: fbdd8098c40f537e07cd0d9b594474ef3dc1e7ccadf1140c2c6becaca97b7345
+case_lengths:
+  119: 1
+  90: 1
+  23: 1
+  56: 2
+  45: 1
+  11: 1
+  15: 1
+  26: 1
+  25: 1
+  8: 1
+  9: 1
+  7: 1
+  10: 1
+  201: 1
+  192: 1
+  308: 1
+  112: 1
+  149: 1
+  42: 1
+  817: 1
