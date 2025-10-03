@@ -1,14 +1,14 @@
 dataset:
   name: sun_subsets
   base_pack: sun_full
-  train_pattern: sun_subsets/sun_p{percent:02d}_seed{seed}
+  train_pattern: sun_subsets/sun_p{percent:02d}
   available_percents: [5, 10, 25, 50, 100]
-  seeds: [13, 29, 47]
+  seeds: [13]
   splits:
     train: train
     val: val
     test: test
-  manifest_pattern: sun_subsets/sun_p{percent:02d}_seed{seed}/manifest.yaml
+  manifest_pattern: sun_subsets/sun_p{percent:02d}/manifest.yaml
   assertions:
     frames_per_case: 33
     balance: cases_pos=70, cases_neg=70

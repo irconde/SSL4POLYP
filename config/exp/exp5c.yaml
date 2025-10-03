@@ -7,7 +7,7 @@ models:
   - model/ssl_colon
 dataset:
   size: 200
-  seed: 47
+  seed: 13
 protocol:
   init_from: canonical_sun_models
   finetune: head+2

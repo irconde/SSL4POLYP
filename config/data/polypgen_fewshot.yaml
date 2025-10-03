@@ -1,10 +1,10 @@
 dataset:
   name: polypgen_fewshot
-  pack_pattern: polypgen_fewshot/polypgen_fewshot_s{size}_seed{seed}
+  pack_pattern: polypgen_fewshot/polypgen_fewshot_s{size}
   sizes: [50, 100, 200, 500]
-  seeds: [13, 29, 47]
+  seeds: [13]
   splits:
     train: train
     test: test
-  manifest_pattern: polypgen_fewshot/polypgen_fewshot_s{size}_seed{seed}/manifest.yaml
+  manifest_pattern: polypgen_fewshot/polypgen_fewshot_s{size}/manifest.yaml
   reference_eval_pack: polypgen_clean_test
