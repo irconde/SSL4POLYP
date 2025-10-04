@@ -5,7 +5,7 @@ dataset:
     test: test
   manifest: sun_test_perturbations/manifest.yaml
   perturbations:
-    master_seed: 47
+    master_seed: 13
     policy: HMAC_SHA256
   assertions:
     hash:

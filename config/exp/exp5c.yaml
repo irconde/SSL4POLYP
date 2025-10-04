@@ -4,6 +4,7 @@ defaults:
 models:
   - model/sup_imnet
   - model/ssl_imnet
+  - model/ssl_colon
 dataset:
   size: 200
 protocol:
