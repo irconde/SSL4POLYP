@@ -5,10 +5,7 @@ models:
   - model/sup_imnet
   - model/ssl_imnet
   - model/ssl_colon
-dataset:
-  seed: 13
 protocol:
   finetune: full
   eval_split: test
   subset_percents: [5, 10, 25, 50, 100]
-  subset_seeds: [13]

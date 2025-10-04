@@ -4,7 +4,6 @@ defaults:
 
 dataset:
   percent: 10
-  seed: 13
 
 batch_size: 32
 epochs: 3

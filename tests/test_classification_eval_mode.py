@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import json
 import types
+import copy
 from typing import Dict, List
 
 import pytest
@@ -115,7 +116,7 @@ def test_cli_subset_overrides_and_batch_limits(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["pytest"])
     args = train_classification.get_args()
     args.dataset_percent = 10.0
-    args.dataset_seed = 29
+    args.dataset_seed = 13
     args.limit_train_batches = 2
     args.limit_val_batches = 1
     args.limit_test_batches = 3
@@ -130,9 +131,9 @@ def test_cli_subset_overrides_and_batch_limits(monkeypatch, tmp_path):
 
     assert dataset_cfg["name"] == "sun_subsets"
     assert dataset_cfg["percent"] == 10
-    assert dataset_cfg["seed"] == 29
-    assert str(dataset_resolved["train_pack"]).endswith("sun_p10_seed29")
-    assert str(args.train_pack).endswith("sun_p10_seed29")
+    assert dataset_cfg["seed"] == 13
+    assert str(dataset_resolved["train_pack"]).endswith("sun_p10")
+    assert str(args.train_pack).endswith("sun_p10")
     assert args.limit_train_batches == 2
     assert args.limit_val_batches == 1
     assert args.limit_test_batches == 3
@@ -221,3 +222,39 @@ def test_cli_subset_overrides_and_batch_limits(monkeypatch, tmp_path):
         args.limit_test_batches + train_classification.EVAL_MAX_ADDITIONAL_BATCHES,
     )
     assert test_loader.yielded == expected_batches
+
+
+def test_seed_resolution_defaults_and_protocol_overrides(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "argv", ["pytest"])
+    args_default = train_classification.get_args()
+    args_default.model_key = "sup_imnet"
+    args_default.output_dir = str(tmp_path / "out_default")
+
+    base_cfg = load_layered_config("exp/exp1.yaml")
+    _, default_dataset_cfg, default_dataset_resolved = train_classification.apply_experiment_config(
+        args_default, base_cfg, resolved_overrides=None
+    )
+
+    assert args_default.training_seeds == [13, 29, 47]
+    assert args_default.dataset_seeds == [47]
+    assert default_dataset_cfg.get("seed") == 47
+    assert default_dataset_resolved["seed"] == 47
+
+    monkeypatch.setattr(sys, "argv", ["pytest"])
+    args_override = train_classification.get_args()
+    args_override.model_key = "sup_imnet"
+    args_override.output_dir = str(tmp_path / "out_override")
+
+    override_cfg = copy.deepcopy(base_cfg)
+    override_cfg.setdefault("protocol", {})["seeds"] = [29]
+
+    _, override_dataset_cfg, override_dataset_resolved = train_classification.apply_experiment_config(
+        args_override, override_cfg, resolved_overrides=None
+    )
+
+    assert args_override.training_seeds == [29]
+    assert args_override.seeds == [29]
+    assert args_override.config_seed == 29
+    assert args_override.dataset_seeds == [47]
+    assert override_dataset_cfg.get("seed") == 47
+    assert override_dataset_resolved["seed"] == 47

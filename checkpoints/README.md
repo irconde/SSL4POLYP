@@ -10,13 +10,12 @@ checkpoints/
 │     ├─ mae_imagenet.pth
 │     └─ mae_hyperkvasir.pth
 └─ classification/          # outputs from fine-tuning jobs
-   ├─ exp01_seed42/
+    ├─ exp01_seed47/
    │  ├─ best.pth
    │  ├─ last.pth
    │  ├─ tau.json
    │  └─ tb/
-   ├─ exp01_seed47/
-   └─ exp05b_seed29/
+    └─ exp05b_seed47/
 ```
 
 Place any non-downloadable ViT-B checkpoints under `pretrained/vit_b/` so the

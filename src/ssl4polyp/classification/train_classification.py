@@ -1680,19 +1680,42 @@ def apply_experiment_config(
     cli_size = getattr(args, "dataset_size", None)
     if cli_percent is not None and "percent" not in dataset_cfg:
         dataset_cfg["percent"] = cli_percent
-    if cli_seed is not None and "seed" not in dataset_cfg:
-        dataset_cfg["seed"] = cli_seed
     if cli_size is not None and "size" not in dataset_cfg:
         dataset_cfg["size"] = cli_size
+
+    protocol_cfg = (experiment_cfg or {}).get("protocol") or {}
+    config_training_seeds = _normalize_seeds(experiment_cfg.get("seeds"))
+    protocol_training_seeds = _normalize_seeds(protocol_cfg.get("seeds"))
+    cli_training_seeds = list(getattr(args, "seeds", []) or [])
+    if cli_training_seeds:
+        resolved_training_seeds = [int(seed) for seed in cli_training_seeds]
+    elif protocol_training_seeds:
+        resolved_training_seeds = protocol_training_seeds
+    else:
+        resolved_training_seeds = config_training_seeds
+    args.training_seeds = resolved_training_seeds
+    if resolved_training_seeds:
+        args.seeds = resolved_training_seeds
+
+    dataset_seed_candidates = _normalize_seeds(dataset_cfg.get("seeds"))
+    args.dataset_seeds = dataset_seed_candidates
+    dataset_seed_value = _as_int(dataset_cfg.get("seed"))
+    if cli_seed is not None:
+        dataset_seed_value = int(cli_seed)
+    elif dataset_seed_value is None and resolved_training_seeds:
+        preferred_seed = resolved_training_seeds[0]
+        if not dataset_seed_candidates or preferred_seed in dataset_seed_candidates:
+            dataset_seed_value = preferred_seed
+    if dataset_seed_value is None and dataset_seed_candidates:
+        dataset_seed_value = dataset_seed_candidates[0]
+    if dataset_seed_value is not None:
+        dataset_cfg["seed"] = int(dataset_seed_value)
+
     model_cfgs = resolve_model_entries(experiment_cfg.get("models", []))
     selected_model = _select_model_config(model_cfgs, getattr(args, "model_key", None))
 
     if "optimizer" in experiment_cfg and experiment_cfg["optimizer"].lower() != "adamw":
         raise ValueError("Only AdamW optimizer is currently supported")
-
-    config_seeds = _normalize_seeds(experiment_cfg.get("seeds"))
-    if config_seeds:
-        args.seeds = config_seeds
 
     args.lr = experiment_cfg.get("lr", args.lr)
     args.weight_decay = experiment_cfg.get("weight_decay", getattr(args, "weight_decay", 0.05))
@@ -1701,6 +1724,8 @@ def apply_experiment_config(
     config_seed = _as_int(experiment_cfg.get("seed"))
     if config_seed is not None:
         args.config_seed = config_seed
+    elif resolved_training_seeds:
+        args.config_seed = int(resolved_training_seeds[0])
     args.image_size = experiment_cfg.get("image_size", args.image_size)
     args.workers = experiment_cfg.get("num_workers", args.workers)
     args.prefetch_factor = experiment_cfg.get("prefetch_factor", args.prefetch_factor)
@@ -1760,7 +1785,7 @@ def apply_experiment_config(
     args.pretraining = selected_model.get("pretraining", args.pretraining)
     args.ckpt = selected_model.get("checkpoint", args.ckpt)
     args.frozen = selected_model.get("frozen", args.frozen)
-    protocol_cfg = (experiment_cfg or {}).get("protocol") or {}
+    # protocol_cfg already computed above
     protocol_overrides = {}
     if resolved_overrides and isinstance(resolved_overrides, dict):
         protocol_overrides = resolved_overrides.get("protocol") or {}

@@ -72,19 +72,20 @@ import sys
 from ssl4polyp.configs.layered import load_layered_config
 
 cfg = load_layered_config(sys.argv[1])
-raw_seeds = cfg.get("seeds")
-if raw_seeds is None:
-    seed = cfg.get("seed")
-    raw_seeds = [seed] if seed is not None else []
-if isinstance(raw_seeds, int):
-    raw_seeds = [raw_seeds]
-if isinstance(raw_seeds, str):
-    parts = [p for p in raw_seeds.replace(',', ' ').split() if p]
-    raw_seeds = [int(p) for p in parts]
+protocol = cfg.get("protocol", {}) or {}
+raw = protocol.get("seeds")
+if raw is None:
+  raw = cfg.get("seeds")
+if raw is None:
+  raw = []
+if isinstance(raw, int):
+  seeds = [raw]
+elif isinstance(raw, str):
+  seeds = [int(part) for part in raw.replace(',', ' ').split() if part]
 else:
-    raw_seeds = [int(s) for s in raw_seeds]
-for seed in raw_seeds:
-    print(seed)
+  seeds = [int(value) for value in raw]
+for seed in seeds:
+  print(seed)
 PY
   )
   if [[ ${#SEEDS[@]} -eq 0 ]]; then

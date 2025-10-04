@@ -1,6 +1,7 @@
 dataset:
   name: sun_full
   pack: sun_full
+  seeds: [47]
   splits:
     train: train
     val: val

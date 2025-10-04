@@ -1,6 +1,7 @@
 dataset:
   name: polypgen_clean_test_extended
   pack: polypgen_clean_test_extended
+  seeds: [13]
   splits:
     test: test
   manifest: polypgen_clean_test_extended/manifest.yaml

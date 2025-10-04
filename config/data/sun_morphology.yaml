@@ -1,6 +1,7 @@
 dataset:
   name: sun_morphology
   pack: sun_morphology
+  seeds: [47]
   splits:
     train: train
     val: val
