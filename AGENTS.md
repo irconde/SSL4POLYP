@@ -30,6 +30,7 @@ This repository hosts the reference implementation for the paper *Evaluating Dom
 - YAML configs compose through `defaults` lists. Experiment manifests typically reside under `config/exp/` and reference shared base, data, and model files.
 - Dataset packs live under `data_packs/<pack_name>/` and include manifests plus CSV splits.
 - Each distributed pack is materialized once per configuration, and its manifest records the canonical generation seed that the configs expose when resolving data variants.
+- Training experiments default to the global seed trio `[13, 29, 47]`; evaluation-only manifests reuse the checkpoints emitted from those three seeds.
 - Scripts assume relative paths resolve against `config/` or `data_packs/` unless absolute paths are provided.
 
 ## Running Workflows

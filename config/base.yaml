@@ -11,6 +11,7 @@ early_stop:
   monitor: val_loss
   patience: 10
 threshold_policy: youden
+# training seeds (experiment runs iterate over this trio; dataset packs use their own seeds)
 seeds: [13, 29, 47]
 image_size: 224
 num_workers: 8

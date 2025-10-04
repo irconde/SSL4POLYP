@@ -242,15 +242,24 @@ The paper’s experiments map to manifests in `config/exp/`.  Launch them with
 `ssl_colon`).  Outputs default to
 `checkpoints/classification/<exp>_seed<seed>/`.
 
-| Experiment | Config | Description | Example command |
-|-----------:|:-------|:------------|:----------------|
-| 1 | `config/exp/exp1.yaml` | SUN baseline vs MAE(ImageNet) fine-tuning | `python -m ssl4polyp.classification.train_classification --exp-config exp/exp1.yaml --model-key sup_imnet --seed 42 --output-dir checkpoints/classification/exp1_seed42` |
-| 2 | `config/exp/exp2.yaml` | Domain MAE vs ImageNet MAE on SUN | run with `--model-key ssl_imnet` and `ssl_colon` |
-| 3 | `config/exp/exp3.yaml` | Morphology sensitivity (flat vs polypoid) | reuse Exp‑1 command but point to `exp3.yaml` |
-| 4 | `config/exp/exp4.yaml` | SUN sample-efficiency subsets (5–100%) | loop over percents/seeds using overrides, e.g. `--override dataset.percent=25 --override dataset.seed=29` |
-| 5A | `config/exp/exp5a.yaml` | Zero-shot transfer to PolypGen clean test | `--model-key sup_imnet` (repeat for other models) |
-| 5B | `config/exp/exp5b.yaml` | SUN robustness under perturbations | `--model-key ssl_imnet` (or others) |
-| 5C | `config/exp/exp5c.yaml` | Few-shot adaptation on PolypGen (50–500 frames) | set `--override dataset.size=<N> dataset.seed=<seed>` and evaluate both frozen and re-fit thresholds |
+#### Seed protocol
+
+- Unless explicitly noted, every training run repeats across the seed trio
+  `[13, 29, 47]` (set in `config/base.yaml`).
+- Evaluation-only manifests do not retrain models; instead they load the three
+  checkpoints emitted by the paired training experiment(s).
+- Dataset pack seeds remain fixed per configuration (for example, one pack
+  seed per SUN subset percent and per PolypGen few-shot budget).
+
+| Experiment | Config | Description | Seed usage |
+|-----------:|:-------|:------------|:-----------|
+| 1 | `config/exp/exp1.yaml` | SUN baseline vs MAE(ImageNet) fine-tuning | Train and evaluate seeds 13/29/47 |
+| 2 | `config/exp/exp2.yaml` | Domain MAE vs ImageNet MAE on SUN | Train and evaluate seeds 13/29/47 |
+| 3 | `config/exp/exp3.yaml` | Morphology sensitivity (flat vs polypoid) | Evaluate exp1/2 checkpoints at seeds 13/29/47 |
+| 4 | `config/exp/exp4.yaml` | SUN sample-efficiency subsets (5–100%) | Train per subset with seeds 13/29/47 (fixed pack seed per %) |
+| 5A | `config/exp/exp5a.yaml` | Zero-shot transfer to PolypGen clean test | Evaluate exp1/2 checkpoints at seeds 13/29/47 |
+| 5B | `config/exp/exp5b.yaml` | SUN robustness under perturbations | Evaluate exp1/2 checkpoints at seeds 13/29/47 (fixed corruption seed) |
+| 5C | `config/exp/exp5c.yaml` | Few-shot adaptation on PolypGen (50–500 frames) | Fine-tune per support size with seeds 13/29/47 (fixed pack seed per size) |
 
 To sweep subsets/seeds, wrap the command in a shell loop. Example for Exp‑4:
 
