@@ -34,7 +34,7 @@ for seed in ${SEEDS}; do
         --model-key "${model}" \
         --seed "${seed}" \
         --roots "${ROOTS}" \
-        --override dataset.size="${size}" dataset.seed="${seed}" \
+        --override dataset.size="${size}" \
         --output-dir "${out_dir}" "${@}"
     done
   done
