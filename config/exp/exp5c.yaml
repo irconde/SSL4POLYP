@@ -9,10 +9,23 @@ dataset:
   size: 200
 protocol:
   init_from: canonical_sun_models
-  finetune: head+2
-  lr: 5.0e-5
+  finetune_schedule:
+    - name: head_warmup
+      mode: none
+      epochs: 3
+      head_lr: 1.0e-3
+    - name: head2_refine
+      mode: full
+      epochs: 47
+      head_lr: 5.0e-4
+      backbone_lr: 2.0e-5
   eval_split: test
   thresholds:
     primary: sun_val_youden
     sensitivity: fewshot_val_youden
+weight_decay: 0.01
+early_stop:
+  monitor: val_loss
+  patience: 8
+  min_delta: 1.0e-4
 epochs: 50

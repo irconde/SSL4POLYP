@@ -251,15 +251,26 @@ The paper’s experiments map to manifests in `config/exp/`.  Launch them with
 - Dataset pack seeds remain fixed per configuration (for example, one pack
   seed per SUN subset percent and per PolypGen few-shot budget).
 
-| Experiment | Config | Description | Seed usage |
-|-----------:|:-------|:------------|:-----------|
-| 1 | `config/exp/exp1.yaml` | SUN baseline vs MAE(ImageNet) fine-tuning | Train and evaluate seeds 13/29/47 |
-| 2 | `config/exp/exp2.yaml` | Domain MAE vs ImageNet MAE on SUN | Train and evaluate seeds 13/29/47 |
-| 3 | `config/exp/exp3.yaml` | Morphology sensitivity (flat vs polypoid) | Evaluate exp1/2 checkpoints at seeds 13/29/47 |
-| 4 | `config/exp/exp4.yaml` | SUN sample-efficiency subsets (5–100%) | Train per subset with seeds 13/29/47 (fixed pack seed per %) |
-| 5A | `config/exp/exp5a.yaml` | Zero-shot transfer to PolypGen clean test | Evaluate exp1/2 checkpoints at seeds 13/29/47 |
-| 5B | `config/exp/exp5b.yaml` | SUN robustness under perturbations | Evaluate exp1/2 checkpoints at seeds 13/29/47 (fixed corruption seed) |
-| 5C | `config/exp/exp5c.yaml` | Few-shot adaptation on PolypGen (50–500 frames) | Fine-tune per support size with seeds 13/29/47 (fixed pack seed per size) |
+| Experiment | Config | Description | Seed usage | Finetune mode |
+|-----------:|:-------|:------------|:-----------|:--------------|
+| 1 | `config/exp/exp1.yaml` | Full SUN fine-tuning baseline vs MAE(ImageNet) | Train and evaluate seeds 13/29/47 | `full` |
+| 2 | `config/exp/exp2.yaml` | Full encoder fine-tune: domain MAE vs ImageNet MAE on SUN | Train and evaluate seeds 13/29/47 | `full` |
+| 3 | `config/exp/exp3.yaml` | Morphology fine-tuning on SUN (train on stratified split, monitor val, τ from Youden’s J on val) | Train and evaluate seeds 13/29/47 | `full` |
+| 4 | `config/exp/exp4.yaml` | SUN sample-efficiency study with full encoder updates (5–100%) | Train per subset with seeds 13/29/47 (fixed pack seed per %) | `full` |
+| 5A | `config/exp/exp5a.yaml` | Zero-shot transfer to PolypGen clean test (encoder frozen) | Evaluate exp1/2 checkpoints at seeds 13/29/47 | `none` |
+| 5B | `config/exp/exp5b.yaml` | Zero-shot SUN robustness under perturbations (encoder frozen) | Evaluate exp1/2 checkpoints at seeds 13/29/47 (fixed corruption seed) | `none` |
+| 5C | `config/exp/exp5c.yaml` | Few-shot PolypGen adaptation with head+2 tuning (50–500 frames) | Fine-tune per support size with seeds 13/29/47 (fixed pack seed per size) | `head+2` |
+
+Each few-shot pack `polypgen_fewshot_s{S}` reuses the same generation seed and enforces sequence-level disjointness, but its test fold is the complement of that support budget within `polypgen_clean_test_extended`. Results should therefore reference the specific pack size used rather than assuming a shared PolypGen test split across all budgets.
+
+Exp‑5C training follows a two-phase regime: a 3-epoch classifier-head warm-up (encoder frozen, head LR `1e-3`), then 47 epochs with the full encoder unfrozen, using head LR `5e-4` and a reduced backbone LR (`2e-5` for the ViT backbones shipped here).
+
+Runs log per-epoch summaries to `*.log` files and TensorBoard: we record `train/loss` together with the active learning rates for each parameter group, plus validation `loss`, `auprc` and `auroc`. The few-shot test remainder is only scored once the schedule finishes.
+
+During the final evaluation pass we freeze the Youden-derived τ and report recall, precision, F1, balanced accuracy, MCC, AUROC, AUPRC and the full confusion matrix (TP/FP/TN/FN) alongside prevalence. Per-frame outputs (frame ID, probability, label, origin, sequence ID, prediction) are written next to the checkpoint stem as `<stem>_test_outputs.csv` to support later uncertainty analysis.
+Exp‑1 runs additionally dump 200-point ROC and precision–recall grids to `<stem>_test_roc_curve.csv` and `<stem>_test_pr_curve.csv`, enabling sweep plots without recomputing logits.
+
+Each support size still repeats across the seed trio `{13, 29, 47}`; use `scripts/aggregate_metrics.py --metrics-root <results_dir>` to compute mean ± std (and confidence intervals) across the three seeds when summarising Exp‑5C.
 
 To sweep subsets/seeds, wrap the command in a shell loop. Example for Exp‑4:
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import distutils.version
 import sys
 import os
@@ -37,6 +38,7 @@ from ssl4polyp.classification.data import (
     create_classification_dataloaders,
 )
 from ssl4polyp.classification.finetune import (
+    collect_finetune_param_groups,
     configure_finetune_parameters,
     normalise_finetune_mode,
 )
@@ -139,6 +141,25 @@ class EvalLoggingContext:
     @property
     def prefix(self) -> str:
         return f"[eval: {self.tag}]"
+
+
+@dataclass(frozen=True)
+class FinetuneStage:
+    """Description of a single fine-tuning stage in a multi-phase schedule."""
+
+    index: int
+    start_epoch: int
+    end_epoch: int
+    mode: str
+    head_lr: float
+    backbone_lr: float
+    base_lr: float
+    backbone_lr_scale: Optional[float]
+    label: Optional[str] = None
+
+    @property
+    def epochs(self) -> int:
+        return self.end_epoch - self.start_epoch + 1
 
 
 def _resolve_case_identifier(row: Mapping[str, Any]) -> Optional[str]:
@@ -321,6 +342,253 @@ def _format_top_perturbation_summary(
     if remainder > 0:
         summary += f" (+{remainder} more)"
     return f"tags: {summary}"
+
+
+def _coerce_optional_float(value: Any, *, context: str) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid numeric value for {context}: {value!r}") from exc
+    if math.isnan(numeric) or math.isinf(numeric):
+        raise ValueError(f"Non-finite value for {context}: {value!r}")
+    return float(numeric)
+
+
+def _sanitize_finetune_schedule_config(
+    raw_schedule: Any,
+    *,
+    default_mode: str,
+) -> list[dict[str, Any]]:
+    if raw_schedule in (None, False):
+        return []
+    if not isinstance(raw_schedule, (list, tuple)):
+        raise TypeError(
+            "Fine-tune schedule must be a list of stage dictionaries."
+        )
+    sanitized: list[dict[str, Any]] = []
+    previous_mode = default_mode
+    for index, entry in enumerate(raw_schedule):
+        if not isinstance(entry, Mapping):
+            raise TypeError(
+                f"Schedule entry #{index + 1} must be a mapping; received {type(entry)!r}."
+            )
+        stage_mode_raw = entry.get("mode", previous_mode)
+        stage_mode = normalise_finetune_mode(stage_mode_raw, default=previous_mode)
+        epochs_value = entry.get("epochs")
+        if epochs_value is None:
+            raise ValueError(
+                f"Schedule entry #{index + 1} is missing required key 'epochs'."
+            )
+        try:
+            epochs_int = int(epochs_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Schedule entry #{index + 1} provided non-integer epochs {epochs_value!r}."
+            ) from exc
+        if epochs_int <= 0:
+            raise ValueError(
+                f"Schedule entry #{index + 1} must have a positive epoch count; received {epochs_int}."
+            )
+        sanitized.append(
+            {
+                "index": int(index),
+                "mode": stage_mode,
+                "epochs": epochs_int,
+                "lr": _coerce_optional_float(entry.get("lr"), context=f"schedule entry #{index + 1} lr"),
+                "head_lr": _coerce_optional_float(
+                    entry.get("head_lr"), context=f"schedule entry #{index + 1} head_lr"
+                ),
+                "backbone_lr": _coerce_optional_float(
+                    entry.get("backbone_lr"), context=f"schedule entry #{index + 1} backbone_lr"
+                ),
+                "backbone_lr_scale": _coerce_optional_float(
+                    entry.get("backbone_lr_scale"),
+                    context=f"schedule entry #{index + 1} backbone_lr_scale",
+                ),
+                "name": entry.get("name"),
+            }
+        )
+        previous_mode = stage_mode
+    return sanitized
+
+
+def _sanitize_curve_export_config(raw_config: Any) -> Dict[str, Dict[str, int]]:
+    """Normalise curve export configuration into a per-split map."""
+
+    default_points = 200
+    if raw_config in (None, False):
+        return {}
+
+    def _coerce_points(value: Any) -> int:
+        if value in (None, ""):
+            return default_points
+        try:
+            points = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Curve export grid points must be an integer; received {value!r}."
+            ) from exc
+        if points < 2:
+            raise ValueError("Curve export grid must contain at least two points.")
+        return points
+
+    spec: Dict[str, Dict[str, int]] = {}
+    if raw_config is True:
+        spec["test"] = {"points": default_points}
+        return spec
+
+    if isinstance(raw_config, str):
+        split = raw_config.strip().lower()
+        if split:
+            spec[split] = {"points": default_points}
+        return spec
+
+    if isinstance(raw_config, Iterable) and not isinstance(raw_config, Mapping):
+        for entry in raw_config:
+            if entry in (None, ""):
+                continue
+            spec[str(entry).strip().lower()] = {"points": default_points}
+        if spec:
+            return spec
+
+    if isinstance(raw_config, Mapping):
+        declared_default = raw_config.get("points")
+        if declared_default is not None:
+            default_points = _coerce_points(declared_default)
+        splits_value = raw_config.get("splits")
+        if splits_value:
+            if isinstance(splits_value, (str, bytes)):
+                splits_iter = [splits_value]
+            else:
+                splits_iter = splits_value
+            for entry in splits_iter:
+                if entry in (None, ""):
+                    continue
+                spec[str(entry).strip().lower()] = {"points": default_points}
+        for key, value in raw_config.items():
+            if key in {"points", "splits"}:
+                continue
+            split_key = str(key).strip().lower()
+            if not split_key:
+                continue
+            if isinstance(value, Mapping):
+                entry_points = _coerce_points(value.get("points"))
+            elif isinstance(value, (int, float)):
+                entry_points = _coerce_points(value)
+            elif isinstance(value, bool):
+                if not value:
+                    continue
+                entry_points = default_points
+            elif value in (None, ""):
+                entry_points = default_points
+            else:
+                raise TypeError(
+                    f"Unsupported curve export specification for split '{key}': {value!r}"
+                )
+            spec[split_key] = {"points": entry_points}
+        if not spec:
+            spec["test"] = {"points": default_points}
+        return spec
+
+    raise TypeError(f"Unsupported curve export configuration: {raw_config!r}")
+
+
+def _materialize_finetune_schedule(
+    schedule_spec: Sequence[dict[str, Any]],
+    *,
+    base_lr: float,
+) -> list[FinetuneStage]:
+    if not schedule_spec:
+        return []
+    start_epoch = 1
+    stages: list[FinetuneStage] = []
+    for spec in schedule_spec:
+        stage_lr = spec.get("lr")
+        stage_base_lr = float(stage_lr) if stage_lr is not None else float(base_lr)
+        head_lr = spec.get("head_lr")
+        resolved_head_lr = (
+            float(head_lr) if head_lr is not None else float(stage_base_lr)
+        )
+        backbone_lr = spec.get("backbone_lr")
+        lr_scale = spec.get("backbone_lr_scale")
+        stage_mode = str(spec.get("mode"))
+        if backbone_lr is not None:
+            resolved_backbone_lr = float(backbone_lr)
+        elif stage_mode == "none":
+            resolved_backbone_lr = 0.0
+        elif lr_scale is not None:
+            resolved_backbone_lr = float(stage_base_lr) * float(lr_scale)
+        else:
+            resolved_backbone_lr = float(stage_base_lr)
+        epochs = int(spec["epochs"])
+        end_epoch = start_epoch + epochs - 1
+        stages.append(
+            FinetuneStage(
+                index=int(spec["index"]),
+                start_epoch=int(start_epoch),
+                end_epoch=int(end_epoch),
+                mode=stage_mode,
+                head_lr=float(resolved_head_lr),
+                backbone_lr=float(resolved_backbone_lr),
+                base_lr=float(stage_base_lr),
+                backbone_lr_scale=float(lr_scale) if lr_scale is not None else None,
+                label=spec.get("name"),
+            )
+        )
+        start_epoch = end_epoch + 1
+    return stages
+
+
+class FinetuneScheduleRuntime:
+    """Runtime helper that applies fine-tuning stages as training progresses."""
+
+    def __init__(self, stages: Sequence[FinetuneStage]) -> None:
+        self.stages: list[FinetuneStage] = list(stages)
+        self._current_stage_index: Optional[int] = None
+
+    def is_active(self) -> bool:
+        return bool(self.stages)
+
+    def stage_for_epoch(self, epoch: int) -> Optional[FinetuneStage]:
+        for stage in self.stages:
+            if stage.start_epoch <= epoch <= stage.end_epoch:
+                return stage
+        if not self.stages:
+            return None
+        return self.stages[-1]
+
+    def apply_if_needed(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        epoch: int,
+        *,
+        rank: int = 0,
+    ) -> Optional[FinetuneStage]:
+        stage = self.stage_for_epoch(epoch)
+        if stage is None:
+            return None
+        if self._current_stage_index == stage.index:
+            return stage
+        target_model = _unwrap_model(model)
+        configure_finetune_parameters(target_model, stage.mode)
+        for group in optimizer.param_groups:
+            name = group.get("name")
+            if name == "head":
+                group["lr"] = stage.head_lr
+            elif name == "backbone":
+                group["lr"] = stage.backbone_lr
+        if rank == 0:
+            label_suffix = f" ({stage.label})" if stage.label else ""
+            print(
+                f"[finetune] Stage {stage.index + 1}{label_suffix}: "
+                f"epochs {stage.start_epoch}-{stage.end_epoch} | mode={stage.mode} | "
+                f"head_lr={stage.head_lr:.2e} | backbone_lr={stage.backbone_lr:.2e}"
+            )
+        self._current_stage_index = stage.index
+        return stage
 
 
 def _derive_eval_tag(
@@ -933,6 +1201,13 @@ def _compute_threshold_statistics(
 
     tpr = _safe_ratio(tp, tp + fn)
     tnr = _safe_ratio(tn, tn + fp)
+    prevalence = _safe_ratio(tp + fn, total)
+
+    denom_product = (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)
+    if denom_product > 0:
+        mcc_value = ((tp * tn) - (fp * fn)) / math.sqrt(float(denom_product))
+    else:
+        mcc_value = None
 
     metrics: Dict[str, Optional[float]] = {
         "tp": tp,
@@ -945,8 +1220,263 @@ def _compute_threshold_statistics(
         "npv": _safe_ratio(tn, tn + fn),
         "accuracy": _safe_ratio(tp + tn, total),
         "youden_j": None if tpr is None or tnr is None else tpr + tnr - 1.0,
+        "prevalence": prevalence,
+        "mcc": mcc_value,
     }
     return metrics
+
+
+def _coerce_metadata_row(row: Any) -> Mapping[str, Any]:
+    if isinstance(row, Mapping):
+        return dict(row)
+    return {}
+
+
+def _resolve_metadata_value(row: Mapping[str, Any], keys: Sequence[str]) -> Optional[str]:
+    for key in keys:
+        if key not in row:
+            continue
+        value = row.get(key)
+        if value in (None, ""):
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _export_frame_outputs(
+    path: Path,
+    *,
+    metadata_rows: Sequence[Mapping[str, Any]],
+    probabilities: Sequence[float],
+    targets: Sequence[int],
+    preds: Sequence[int],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["frame_id", "prob", "label", "origin", "sequence_id", "pred"]
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        total = len(probabilities)
+        for idx in range(total):
+            row = metadata_rows[idx] if idx < len(metadata_rows) else {}
+            frame_id = _resolve_metadata_value(
+                row,
+                (
+                    "frame_id",
+                    "orig_frame_id",
+                    "frame",
+                    "frame_path",
+                    "image_id",
+                ),
+            ) or f"idx_{idx}"
+            origin = _resolve_metadata_value(
+                row,
+                (
+                    "origin",
+                    "store_id",
+                    "dataset",
+                    "source_dataset",
+                ),
+            )
+            sequence_id = _resolve_metadata_value(
+                row,
+                (
+                    "sequence_id",
+                    "sequence",
+                    "case_id",
+                    "case",
+                    "study_id",
+                ),
+            )
+            writer.writerow(
+                {
+                    "frame_id": frame_id,
+                    "prob": float(probabilities[idx]),
+                    "label": int(targets[idx]) if idx < len(targets) else None,
+                    "origin": origin,
+                    "sequence_id": sequence_id,
+                    "pred": int(preds[idx]) if idx < len(preds) else None,
+                }
+            )
+
+
+def _extract_positive_probabilities(probabilities: Any) -> torch.Tensor:
+    tensor = torch.as_tensor(probabilities)
+    if not isinstance(tensor, torch.Tensor):
+        raise TypeError("Curve export requires tensor-like probabilities")
+    tensor = tensor.detach().cpu().to(dtype=torch.float32)
+    if tensor.ndim == 1:
+        return tensor
+    if tensor.ndim == 2:
+        if tensor.size(1) == 1:
+            return tensor[:, 0]
+        if tensor.size(1) == 2:
+            return tensor[:, 1]
+    raise ValueError(
+        "Curve export expects binary probabilities with shape (N,), (N,1) or (N,2)."
+    )
+
+
+def _export_curve_sets(
+    ckpt_stem: Path,
+    split_name: str,
+    *,
+    probabilities: Any,
+    targets: Any,
+    grid_points: int = 200,
+) -> Dict[str, Any]:
+    if grid_points is None or int(grid_points) < 2:
+        raise ValueError("Curve export requires at least two grid points.")
+    if probabilities is None or targets is None:
+        raise ValueError("Curve export requires probabilities and targets.")
+
+    scores = _extract_positive_probabilities(probabilities)
+    labels = torch.as_tensor(targets).detach().cpu().to(dtype=torch.long)
+    if scores.numel() != labels.numel():
+        raise ValueError("Mismatch between probability and target counts for curve export.")
+    if scores.numel() == 0:
+        raise ValueError("Curve export received no samples.")
+
+    scores_np = scores.numpy()
+    labels_np = labels.numpy()
+    thresholds = np.linspace(0.0, 1.0, num=int(grid_points), endpoint=True)
+    positive_mask = labels_np == 1
+    negative_mask = labels_np == 0
+
+    def _safe_fraction(numerator: int, denominator: int) -> Optional[float]:
+        if denominator <= 0:
+            return None
+        return float(numerator) / float(denominator)
+
+    def _normalise(value: Optional[float]) -> Optional[float]:
+        if value is None:
+            return None
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return float(value)
+
+    roc_rows: list[Dict[str, Any]] = []
+    pr_rows: list[Dict[str, Any]] = []
+    for tau in thresholds:
+        preds = scores_np >= tau
+        tp = int(np.count_nonzero(preds & positive_mask))
+        fp = int(np.count_nonzero(preds & negative_mask))
+        tn = int(np.count_nonzero((~preds) & negative_mask))
+        fn = int(np.count_nonzero((~preds) & positive_mask))
+
+        tpr = _safe_fraction(tp, tp + fn)
+        fpr = _safe_fraction(fp, fp + tn)
+        precision = _safe_fraction(tp, tp + fp)
+        recall = tpr
+        f1 = None
+        if precision is not None and recall is not None and (precision + recall) > 0:
+            f1 = 2.0 * precision * recall / (precision + recall)
+
+        roc_rows.append(
+            {
+                "threshold": round(float(tau), 10),
+                "tpr": _normalise(tpr),
+                "fpr": _normalise(fpr),
+                "tp": tp,
+                "fp": fp,
+                "tn": tn,
+                "fn": fn,
+            }
+        )
+        pr_rows.append(
+            {
+                "threshold": round(float(tau), 10),
+                "precision": _normalise(precision),
+                "recall": _normalise(recall),
+                "f1": _normalise(f1),
+                "tp": tp,
+                "fp": fp,
+                "tn": tn,
+                "fn": fn,
+            }
+        )
+
+    split_segment = _sanitize_path_segment(split_name, default=str(split_name).lower() or "split")
+    base_name = f"{ckpt_stem.name}_{split_segment}"
+    roc_path = ckpt_stem.with_name(f"{base_name}_roc_curve.csv")
+    pr_path = ckpt_stem.with_name(f"{base_name}_pr_curve.csv")
+    roc_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with roc_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["threshold", "tpr", "fpr", "tp", "fp", "tn", "fn"])
+        writer.writeheader()
+        for row in roc_rows:
+            writer.writerow(row)
+
+    with pr_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["threshold", "precision", "recall", "f1", "tp", "fp", "tn", "fn"],
+        )
+        writer.writeheader()
+        for row in pr_rows:
+            writer.writerow(row)
+
+    return {
+        "roc_csv": roc_path,
+        "pr_csv": pr_path,
+        "grid_points": int(grid_points),
+    }
+
+
+def _maybe_export_curves_for_split(
+    args,
+    *,
+    ckpt_stem: Path,
+    split_name: str,
+    metrics: Mapping[str, Any],
+    log_path: Path,
+) -> Optional[Dict[str, Any]]:
+    spec_map = getattr(args, "curve_export_spec", {}) or {}
+    split_key = str(split_name).strip().lower()
+    entry = spec_map.get(split_key)
+    if not entry:
+        return None
+
+    probabilities = metrics.get("probabilities")
+    targets = metrics.get("targets")
+    if probabilities is None or targets is None:
+        return None
+
+    grid_points = int(entry.get("points", 200) or 200)
+    try:
+        exports = _export_curve_sets(
+            ckpt_stem,
+            split_name,
+            probabilities=probabilities,
+            targets=targets,
+            grid_points=grid_points,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        warning = (
+            f"Warning: failed to export {split_name} curves ({grid_points} points): {exc}"
+        )
+        _log_lines(Path(log_path), [warning])
+        return None
+
+    metadata: Dict[str, Any] = {"points": int(exports["grid_points"])}
+    parent_dir = ckpt_stem.parent
+    for label, path in (("roc_csv", exports["roc_csv"]), ("pr_csv", exports["pr_csv"])):
+        path_obj = Path(path)
+        try:
+            metadata[label] = str(path_obj.relative_to(parent_dir))
+        except ValueError:
+            metadata[label] = str(path_obj)
+
+    lines = [
+        f"{split_name} curve export ({metadata['points']} thresholds):",
+        f"ROC CSV: {metadata['roc_csv']}",
+        f"PR CSV: {metadata['pr_csv']}",
+    ]
+    _log_lines(Path(log_path), lines)
+    return metadata
 
 
 def _safe_min(delta: float) -> float:
@@ -1804,6 +2334,34 @@ def apply_experiment_config(
         finetune_mode, default=default_mode
     )
     args.frozen = args.finetune_mode == "none"
+    schedule_cfg = protocol_cfg.get("finetune_schedule")
+    schedule_spec = _sanitize_finetune_schedule_config(
+        schedule_cfg, default_mode=args.finetune_mode
+    )
+    if schedule_spec:
+        schedule_total_epochs = sum(stage["epochs"] for stage in schedule_spec)
+        explicit_epochs = experiment_cfg.get("epochs")
+        if explicit_epochs is None:
+            args.epochs = schedule_total_epochs
+        elif int(explicit_epochs) != int(schedule_total_epochs):
+            raise ValueError(
+                "Experiment epochs ({} ) do not match the total epochs ({}) defined by the fine-tune schedule.".format(
+                    explicit_epochs, schedule_total_epochs
+                )
+            )
+        args.finetune_schedule_spec = schedule_spec
+        initial_stage_mode = schedule_spec[0]["mode"]
+        stage0_head_lr = schedule_spec[0].get("head_lr")
+        stage0_base_lr = schedule_spec[0].get("lr")
+        if stage0_head_lr is not None:
+            args.lr = float(stage0_head_lr)
+        elif stage0_base_lr is not None:
+            args.lr = float(stage0_base_lr)
+        args.finetune_mode = initial_stage_mode
+        args.frozen = args.finetune_mode == "none"
+    else:
+        args.finetune_schedule_spec = []
+    args.curve_export_spec = _sanitize_curve_export_config(protocol_cfg.get("export_curves"))
     morphology_eval_cfg = protocol_cfg.get("morphology_eval")
     if morphology_eval_cfg is not None:
         cli_morphology = getattr(args, "morphology_eval", None)
@@ -2082,6 +2640,7 @@ def test(
     max_batches: Optional[int] = None,
     morphology_eval: Optional[Iterable[str]] = None,
     eval_context: Optional[EvalLoggingContext] = None,
+    save_outputs_path: Optional[Path] = None,
 ):
     if test_loader is None:
         return float("nan")
@@ -2120,6 +2679,8 @@ def test(
     perturbation_tags: list[str] = []
     perturbation_sample_losses: list[torch.Tensor] = []
     perturbation_tags_aligned: Optional[List[str]] = None
+    outputs_path = save_outputs_path.expanduser() if save_outputs_path is not None else None
+    collected_metadata: list[Mapping[str, Any]] = []
 
     def _with_prefix(text: str) -> str:
         if eval_context is None:
@@ -2160,6 +2721,11 @@ def test(
             raise ValueError("Unexpected batch structure returned by dataloader")
         data = data.to(device, non_blocking=non_blocking)
         target = target.to(device, non_blocking=non_blocking)
+        if outputs_path is not None:
+            if metadata_batch is not None and len(metadata_batch) == len(data):
+                collected_metadata.extend(_coerce_metadata_row(row) for row in metadata_batch)
+            else:
+                collected_metadata.extend({} for _ in range(len(data)))
         if track_morphology and metadata_batch is not None:
             for row in metadata_batch:
                 morph_label = row.get("morphology") if isinstance(row, dict) else None
@@ -2417,12 +2983,18 @@ def test(
     class_presence_line = _with_prefix(f"{split_name} class presence: {class_flag}")
 
     metric_line_parts: list[str] = []
-    bal_value = results.get("balanced_accuracy")
-    if isinstance(bal_value, (float, np.floating)) and not math.isnan(bal_value):
-        metric_line_parts.append(f"Balanced Acc: {bal_value:.6f}")
+    recall_value = results.get("recall")
+    if isinstance(recall_value, (float, np.floating)) and not math.isnan(recall_value):
+        metric_line_parts.append(f"Recall@τ: {recall_value:.6f}")
+    precision_value = results.get("precision")
+    if isinstance(precision_value, (float, np.floating)) and not math.isnan(precision_value):
+        metric_line_parts.append(f"Precision@τ: {precision_value:.6f}")
     f1_value = results.get("f1")
     if isinstance(f1_value, (float, np.floating)) and not math.isnan(f1_value):
         metric_line_parts.append(f"F1@τ: {f1_value:.6f}")
+    bal_value = results.get("balanced_accuracy")
+    if isinstance(bal_value, (float, np.floating)) and not math.isnan(bal_value):
+        metric_line_parts.append(f"Balanced Acc: {bal_value:.6f}")
     ap_value = results.get("auprc")
     if isinstance(ap_value, (float, np.floating)) and not math.isnan(ap_value):
         metric_line_parts.append(f"AP (PR-AUC): {ap_value:.6f}")
@@ -2521,14 +3093,32 @@ def test(
             f"{split_name} morphology metrics: " + " | ".join(metric_parts)
         )
 
-    if threshold_stats and all(key in threshold_stats for key in ("tp", "fp", "fn", "tn")):
-        confusion_line = _with_prefix(
-            f"{split_name} confusion @τ: TP={int(threshold_stats['tp'])} "
-            f"FP={int(threshold_stats['fp'])} FN={int(threshold_stats['fn'])} "
-            f"TN={int(threshold_stats['tn'])}"
-        )
-    else:
-        confusion_line = _with_prefix(f"{split_name} confusion @τ: n/a")
+    confusion_parts: list[str] = []
+    if threshold_stats:
+        tp_val = threshold_stats.get("tp")
+        tn_val = threshold_stats.get("tn")
+        fp_val = threshold_stats.get("fp")
+        fn_val = threshold_stats.get("fn")
+        if isinstance(tp_val, (int, np.integer)):
+            confusion_parts.append(f"TP={int(tp_val)}")
+        if isinstance(fp_val, (int, np.integer)):
+            confusion_parts.append(f"FP={int(fp_val)}")
+        if isinstance(fn_val, (int, np.integer)):
+            confusion_parts.append(f"FN={int(fn_val)}")
+        if isinstance(tn_val, (int, np.integer)):
+            confusion_parts.append(f"TN={int(tn_val)}")
+        mcc_val = threshold_stats.get("mcc")
+        if isinstance(mcc_val, (float, np.floating)) and math.isfinite(mcc_val):
+            confusion_parts.append(f"MCC={mcc_val:.6f}")
+            results["mcc"] = float(mcc_val)
+        prevalence_val = threshold_stats.get("prevalence")
+        if isinstance(prevalence_val, (float, np.floating)) and math.isfinite(prevalence_val):
+            confusion_parts.append(f"Prev={prevalence_val:.6f}")
+            results["prevalence"] = float(prevalence_val)
+    confusion_line = _with_prefix(
+        f"{split_name} confusion @τ: "
+        + (" ".join(confusion_parts) if confusion_parts else "n/a")
+    )
 
     output_lines = [class_presence_line, metrics_line, tau_line, counts_line]
     if morph_counts_line:
@@ -2536,6 +3126,29 @@ def test(
     if morph_metrics_line:
         output_lines.append(morph_metrics_line)
     output_lines.append(confusion_line)
+
+    if outputs_path is not None and logits is not None and targets is not None:
+        sample_total = int(targets.shape[0])
+        if len(collected_metadata) < sample_total:
+            collected_metadata.extend({} for _ in range(sample_total - len(collected_metadata)))
+        if probs.ndim == 2:
+            if probs.size(1) == 2:
+                prob_tensor = probs[:, 1]
+            else:
+                prob_tensor = probs.gather(1, preds.unsqueeze(1)).squeeze(1)
+        else:
+            prob_tensor = probs
+        probabilities = [float(v) for v in prob_tensor.detach().cpu().tolist()]
+        target_list = [int(v) for v in targets.detach().cpu().tolist()]
+        pred_list = [int(v) for v in preds.detach().cpu().tolist()]
+        _export_frame_outputs(
+            outputs_path,
+            metadata_rows=collected_metadata[:sample_total],
+            probabilities=probabilities,
+            targets=target_list,
+            preds=pred_list,
+        )
+        results["outputs_path"] = str(outputs_path)
 
     if (
         track_perturbations
@@ -2874,7 +3487,23 @@ def build(args, rank, device: torch.device, distributed: bool):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch()
 
-    configure_finetune_parameters(model, getattr(args, "finetune_mode", "full"))
+    schedule_spec_list = getattr(args, "finetune_schedule_spec", []) or []
+    schedule_stages = _materialize_finetune_schedule(
+        schedule_spec_list, base_lr=float(getattr(args, "lr", 0.0) or 0.0)
+    )
+    schedule_runtime: Optional[FinetuneScheduleRuntime]
+    if schedule_stages:
+        schedule_runtime = FinetuneScheduleRuntime(schedule_stages)
+    else:
+        schedule_runtime = None
+
+    initial_mode = getattr(args, "finetune_mode", "full")
+    if schedule_runtime and schedule_runtime.is_active():
+        stage = schedule_runtime.stage_for_epoch(max(int(start_epoch), 1))
+        if stage is not None:
+            initial_mode = stage.mode
+    configure_finetune_parameters(model, initial_mode)
+    finetune_param_groups = collect_finetune_param_groups(model)
 
     if distributed:
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -2884,8 +3513,23 @@ def build(args, rank, device: torch.device, distributed: bool):
         if device.type == "cuda":
             ddp_kwargs["device_ids"] = [rank]
         model = DDP(model, **ddp_kwargs)
+    optimizer_param_groups: list[Dict[str, Any]] = []
+    head_params = finetune_param_groups.get("head", [])
+    backbone_params = finetune_param_groups.get("backbone", [])
+    if head_params:
+        optimizer_param_groups.append(
+            {"params": head_params, "lr": args.lr, "name": "head"}
+        )
+    if backbone_params:
+        optimizer_param_groups.append(
+            {"params": backbone_params, "lr": args.lr, "name": "backbone"}
+        )
+    if not optimizer_param_groups:
+        optimizer_param_groups.append(
+            {"params": list(model.parameters()), "lr": args.lr, "name": "head"}
+        )
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr, weight_decay=getattr(args, "weight_decay", 0.0)
+        optimizer_param_groups, lr=args.lr, weight_decay=getattr(args, "weight_decay", 0.0)
     )
     thresholds_map = dict(thresholds_map)
     raw_policy = (args.threshold_policy or "auto").strip().lower()
@@ -2929,6 +3573,12 @@ def build(args, rank, device: torch.device, distributed: bool):
 
     args.resume_monitor_available = bool(resume_monitor_available)
 
+    if schedule_runtime is not None and schedule_runtime.is_active():
+        schedule_runtime.apply_if_needed(
+            model, optimizer, max(int(start_epoch), 1), rank=rank
+        )
+    args.finetune_schedule_runtime = schedule_runtime
+
     return (
         train_dataloader,
         test_dataloader,
@@ -2947,6 +3597,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         compute_threshold,
         threshold_key,
         experiment4_trace,
+        schedule_runtime,
     )
 
 
@@ -2995,6 +3646,7 @@ def train(rank, args):
         compute_threshold,
         threshold_key,
         experiment4_trace,
+        schedule_runtime,
     ) = build(args, rank, device, distributed)
     eval_only = train_dataloader is None
     use_amp = args.precision == "amp" and device.type == "cuda"
@@ -3074,6 +3726,8 @@ def train(rank, args):
     total_seen_samples = 0
     total_batches_processed = 0
     epochs_run = 0
+    if schedule_runtime is not None and not schedule_runtime.is_active():
+        schedule_runtime = None
 
     if rank == 0 and experiment4_trace is not None and not eval_only:
         subset_lines = ["Experiment4 subset summary (run start):"]
@@ -3194,6 +3848,8 @@ def train(rank, args):
     last_test_monitor: Optional[float] = None
     last_val_metrics_export: Optional[Dict[str, float]] = None
     last_test_metrics_export: Optional[Dict[str, float]] = None
+    last_train_lr: Optional[float] = None
+    last_train_lr_groups: Dict[str, float] = {}
     val_logits: Optional[np.ndarray] = None
     val_targets: Optional[np.ndarray] = None
     latest_threshold_file_relpath: Optional[str] = None
@@ -3201,6 +3857,13 @@ def train(rank, args):
     latest_thresholds_root: Optional[str] = None
 
     for epoch in range(start_epoch, args.epochs + 1):
+        if schedule_runtime is not None:
+            stage = schedule_runtime.apply_if_needed(
+                model, optimizer, epoch, rank=rank
+            )
+            if stage is not None:
+                args.finetune_mode = stage.mode
+                args.frozen = stage.mode == "none"
         try:
             prev_global_step = global_step
             epoch_stats = train_epoch(
@@ -3232,6 +3895,25 @@ def train(rank, args):
             if epoch_stats.batches_processed > 0:
                 epochs_run += 1
             if rank == 0:
+                train_lr_groups_map: Dict[str, float] = {}
+                train_lr_display_parts: list[str] = []
+                primary_lr = None
+                train_metrics_payload: Dict[str, float] = {"loss": float(loss)}
+                for idx, group in enumerate(optimizer.param_groups):
+                    lr_value = float(group["lr"])
+                    group_name = str(group.get("name") or f"group{idx}")
+                    train_metrics_payload[f"{group_name}_lr"] = lr_value
+                    train_lr_groups_map[group_name] = lr_value
+                    train_lr_display_parts.append(f"{group_name}={lr_value:.2e}")
+                    if primary_lr is None:
+                        primary_lr = lr_value
+                if primary_lr is not None:
+                    train_metrics_payload["lr"] = primary_lr
+                if tb_logger:
+                    tb_logger.log_metrics("train", train_metrics_payload, epoch)
+                last_train_lr = primary_lr
+                last_train_lr_groups = dict(train_lr_groups_map)
+                train_lr_summary = ", ".join(train_lr_display_parts) if train_lr_display_parts else "n/a"
                 eval_tau, eval_tau_key = resolve_eval_tau(
                     threshold_key, sun_threshold_key
                 )
@@ -3274,6 +3956,32 @@ def train(rank, args):
                 val_perf = float(val_metrics["auroc"])
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, epoch)
+                def _format_epoch_metric(value: Any) -> str:
+                    if value is None:
+                        return "—"
+                    if isinstance(value, torch.Tensor):
+                        if value.numel() != 1:
+                            return "—"
+                        value = value.item()
+                    if isinstance(value, np.generic):
+                        value = float(value)
+                    try:
+                        numeric = float(value)
+                    except (TypeError, ValueError):
+                        return "—"
+                    if not math.isfinite(numeric):
+                        return "—"
+                    return f"{numeric:.6f}"
+
+                summary_line = (
+                    f"[epoch {epoch}] train: loss={_format_epoch_metric(loss)}"
+                    f", lr={train_lr_summary} | val: loss={_format_epoch_metric(val_loss_value)}"
+                    f", auprc={_format_epoch_metric(val_metrics.get('auprc'))}"
+                    f", auroc={_format_epoch_metric(val_metrics.get('auroc'))}"
+                )
+                print(summary_line)
+                with open(log_path, "a") as f:
+                    f.write(summary_line + "\n")
                 last_epoch = int(epoch)
                 last_loss = float(loss)
                 last_val_perf = float(val_perf)
@@ -3476,6 +4184,12 @@ def train(rank, args):
                     "monitor_value": float(monitor_value),
                     "monitor_metric": monitor_name,
                 }
+                if last_train_lr is not None:
+                    metrics_payload["train_lr"] = float(last_train_lr)
+                if last_train_lr_groups:
+                    metrics_payload["train_lr_groups"] = {
+                        key: float(value) for key, value in last_train_lr_groups.items()
+                    }
                 if threshold_file_relpath:
                     metrics_payload["threshold_files"] = {
                         threshold_key: threshold_file_relpath
@@ -3536,6 +4250,7 @@ def train(rank, args):
         if distributed:
             dist.barrier()
     final_test_metrics: Optional[Dict[str, Any]] = None
+    curve_export_metadata: Optional[Dict[str, Any]] = None
     if (
         rank == 0
         and not eval_only
@@ -3564,6 +4279,7 @@ def train(rank, args):
                 final_tau_info = describe_tau_source(threshold_key) or final_tau_info
                 thresholds_map = dict(thresholds_map or {})
                 thresholds_map[threshold_key] = float(final_tau)
+        test_outputs_path = ckpt_stem.parent / f"{ckpt_stem.name}_test_outputs.csv"
         final_test_metrics = test(
             _unwrap_model(model),
             rank,
@@ -3575,12 +4291,23 @@ def train(rank, args):
             loss_fn=loss_fn,
             loss_mode=loss_mode,
             split_name="Test",
+            return_outputs=True,
             tau=final_tau,
             tau_info=final_tau_info,
             max_batches=args.limit_test_batches,
             morphology_eval=morphology_eval,
             eval_context=eval_context_lookup.get("Test"),
+            save_outputs_path=test_outputs_path,
         )
+        curve_export_metadata = _maybe_export_curves_for_split(
+            args,
+            ckpt_stem=ckpt_stem,
+            split_name="Test",
+            metrics=final_test_metrics,
+            log_path=log_path,
+        )
+        if curve_export_metadata:
+            final_test_metrics.setdefault("curve_exports", {})["test"] = curve_export_metadata
         if tb_logger:
             tb_logger.log_metrics("test", final_test_metrics, final_eval_epoch)
         last_test_metrics_export = dict(
@@ -3692,11 +4419,19 @@ def train(rank, args):
             else None,
             "monitor_metric": monitor_name,
         }
+        if last_train_lr is not None:
+            last_metrics_payload["train_lr"] = float(last_train_lr)
+        if last_train_lr_groups:
+            last_metrics_payload["train_lr_groups"] = {
+                key: float(value) for key, value in last_train_lr_groups.items()
+            }
         if latest_threshold_file_relpath and threshold_key is not None:
             last_metrics_payload["threshold_files"] = {
                 threshold_key: latest_threshold_file_relpath
             }
             last_metrics_payload["threshold_policy"] = args.threshold_policy
+        if curve_export_metadata:
+            last_metrics_payload.setdefault("curve_exports", {})["test"] = curve_export_metadata
         last_metrics_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.metrics.json"
         with open(last_metrics_path, "w") as handle:
             json.dump(last_metrics_payload, handle, indent=2)

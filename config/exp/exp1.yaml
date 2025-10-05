@@ -9,3 +9,6 @@ protocol:
   eval_split: test
   early_stop_split: val
   thresholds: sun_val_youden
+  export_curves:
+    splits: [test]
+    points: 200
