@@ -263,3 +263,31 @@ def test_build_metrics_provenance_prefers_subset_trace():
     assert provenance["subset_percent"] == pytest.approx(25.0)
     assert provenance["pack_seed"] == 42
     assert provenance["split"] == "test"
+
+
+def test_build_run_metadata_collects_core_fields():
+    args = SimpleNamespace(
+        exp_config="config/exp/exp1.yaml",
+        run_stem="ssl_colon__sun_full_s7",
+        run_tag="exp1_seed7",
+        model_tag="ssl_colon",
+        arch="vit_b",
+        pretraining="ImageNet_self",
+        finetune_mode="full",
+        active_seed=7,
+        eval_only=False,
+        world_size=2,
+    )
+
+    run_info = tc._build_run_metadata(args, selection_tag="ValLoss")
+
+    assert run_info["experiment"] == "exp1"
+    assert run_info["experiment_config"] == "config/exp/exp1.yaml"
+    assert run_info["stem"] == "ssl_colon__sun_full_s7"
+    assert run_info["model"] == "ssl_colon"
+    assert run_info["arch"] == "vit_b"
+    assert run_info["pretraining"] == "ImageNet_self"
+    assert run_info["selection"] == "ValLoss"
+    assert run_info["seed"] == 7
+    assert run_info["mode"] == "train"
+    assert run_info["world_size"] == 2

@@ -1475,6 +1475,78 @@ def _format_parent_reference_block(
     return dict(block)
 
 
+def _build_run_metadata(
+    args,
+    *,
+    selection_tag: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Collect high-level run metadata for metrics exports."""
+
+    run_block: "OrderedDict[str, Any]" = OrderedDict()
+
+    exp_config = getattr(args, "exp_config", None)
+    if exp_config:
+        run_block["experiment_config"] = str(exp_config)
+        run_block.setdefault("experiment", Path(str(exp_config)).stem)
+
+    experiment_label = getattr(args, "experiment_name", None) or getattr(args, "experiment", None)
+    if experiment_label:
+        run_block.setdefault("experiment", str(experiment_label))
+
+    run_stem = getattr(args, "run_stem", None)
+    if run_stem:
+        run_block["stem"] = str(run_stem)
+
+    display_tag = getattr(args, "run_tag", None) or getattr(args, "run_name", None)
+    if display_tag:
+        run_block["tag"] = str(display_tag)
+
+    model_identifier = getattr(args, "model_tag", None) or getattr(args, "model_key", None)
+    if model_identifier:
+        run_block["model"] = str(model_identifier)
+
+    arch = getattr(args, "arch", None)
+    if arch:
+        run_block["arch"] = str(arch)
+
+    variant = getattr(args, "variant_key", None) or getattr(args, "variant", None)
+    if variant:
+        run_block["variant"] = str(variant)
+
+    pretraining = getattr(args, "pretraining", None)
+    if pretraining:
+        run_block["pretraining"] = str(pretraining)
+
+    finetune_mode = getattr(args, "finetune_mode", None)
+    if finetune_mode:
+        run_block["finetune_mode"] = str(finetune_mode)
+
+    if selection_tag:
+        run_block["selection"] = str(selection_tag)
+
+    seed = _get_active_seed(args)
+    if seed is not None:
+        run_block["seed"] = int(seed)
+
+    finetune_mode_value = getattr(args, "finetune_mode", None)
+    if isinstance(finetune_mode_value, str):
+        finetune_mode_value = finetune_mode_value.strip().lower()
+
+    if getattr(args, "eval_only", False):
+        mode = "eval"
+    elif getattr(args, "frozen", False) and (not finetune_mode_value or finetune_mode_value == "none"):
+        mode = "inference"
+    else:
+        mode = "train"
+    run_block["mode"] = mode
+
+    world_size = getattr(args, "world_size", None)
+    if world_size:
+        run_block["world_size"] = int(world_size)
+
+    return dict(run_block)
+
+
 def _build_metrics_provenance(
     args, *, experiment4_trace: Optional[Experiment4SubsetTrace] = None
 ) -> Dict[str, Any]:
@@ -4214,6 +4286,7 @@ def build(args, rank, device: torch.device, distributed: bool):
 
     train_dataloader = loaders.get("train")
     eval_only = train_dataloader is None
+    args.eval_only = eval_only
     if train_dataloader is None and not getattr(args, "frozen", False):
         raise RuntimeError(
             "Training dataloader could not be constructed; check --train-pack and --train-split inputs."
@@ -4781,6 +4854,8 @@ def train(rank, args):
                 sources=threshold_sources,
                 primary=primary_metadata,
             )
+            selection_tag = _format_selection_tag(getattr(args, "early_stop_monitor", None))
+            run_block = _build_run_metadata(args, selection_tag=selection_tag)
             provenance_block = _build_metrics_provenance(
                 args, experiment4_trace=experiment4_trace
             )
@@ -4793,6 +4868,8 @@ def train(rank, args):
                 "test_sensitivity": sensitivity_block,
                 "provenance": provenance_block,
             }
+            if run_block:
+                metrics_payload["run"] = run_block
             perturbation_block = _build_perturbation_export(test_metrics)
             if perturbation_block:
                 metrics_payload["test_perturbations"] = perturbation_block
@@ -5240,6 +5317,7 @@ def train(rank, args):
                     policy=getattr(args, "threshold_policy", None),
                     sources=threshold_sources,
                 )
+                run_block = _build_run_metadata(args, selection_tag=selection_tag)
                 metrics_payload: Dict[str, Any] = {
                     "seed": _get_active_seed(args),
                     "epoch": int(epoch),
@@ -5251,6 +5329,8 @@ def train(rank, args):
                     "test_sensitivity": sensitivity_block,
                     "provenance": provenance_block,
                 }
+                if run_block:
+                    metrics_payload["run"] = run_block
                 dataset_summary = getattr(args, "dataset_summary", None)
                 if dataset_summary:
                     metrics_payload["dataset"] = dataset_summary
@@ -5524,6 +5604,7 @@ def train(rank, args):
             policy=getattr(args, "threshold_policy", None),
             sources=threshold_sources,
         )
+        run_block = _build_run_metadata(args, selection_tag=selection_tag)
         last_metrics_payload: Dict[str, Any] = {
             "seed": _get_active_seed(args),
             "epoch": int(last_epoch),
@@ -5537,6 +5618,8 @@ def train(rank, args):
             "test_sensitivity": sensitivity_block,
             "provenance": provenance_block,
         }
+        if run_block:
+            last_metrics_payload["run"] = run_block
         perturbation_block = _build_perturbation_export(final_test_metrics)
         if perturbation_block:
             last_metrics_payload["test_perturbations"] = perturbation_block
