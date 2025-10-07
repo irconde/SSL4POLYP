@@ -16,7 +16,7 @@ import time
 import copy
 import warnings
 from pathlib import Path
-from collections import Counter
+from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
@@ -55,7 +55,10 @@ from sklearn.metrics import (
     average_precision_score,
     balanced_accuracy_score,
     f1_score,
+    matthews_corrcoef,
+    precision_score,
     recall_score,
+    roc_auc_score,
 )
 
 
@@ -111,6 +114,119 @@ class TrainEpochStats:
     global_step: int
     samples_processed: int
     batches_processed: int
+
+
+@dataclass
+class ParentRunReference:
+    """Metadata describing the canonical parent run used for evaluation."""
+
+    checkpoint_path: Path
+    checkpoint_sha256: Optional[str]
+    metrics_path: Optional[Path]
+    metrics_payload: Optional[Dict[str, Any]]
+    metrics_sha256: Optional[str]
+    outputs_path: Optional[Path]
+    outputs_sha256: Optional[str]
+
+
+def _compute_file_sha256(path: Path) -> Optional[str]:
+    """Return the SHA256 digest for ``path`` if it exists."""
+
+    try:
+        with path.open("rb") as handle:
+            hasher = hashlib.sha256()
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                if not chunk:
+                    break
+                hasher.update(chunk)
+            return hasher.hexdigest()
+    except FileNotFoundError:
+        return None
+
+
+def _safe_relpath(path: Path, base: Path) -> str:
+    """Return a stable string path relative to ``base`` when possible."""
+
+    try:
+        return str(path.relative_to(base))
+    except ValueError:
+        try:
+            return os.path.relpath(path, base)
+        except ValueError:
+            return str(path)
+
+
+def _infer_metrics_candidates(checkpoint_path: Path) -> Sequence[Path]:
+    """Return possible metrics JSON paths corresponding to ``checkpoint_path``."""
+
+    stem = checkpoint_path.with_suffix("")
+    candidates = [
+        stem.with_suffix(".metrics.json"),
+        stem.parent / f"{stem.name}_last.metrics.json",
+        stem.parent / f"{stem.name}_best.metrics.json",
+    ]
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def _infer_outputs_path_from_metrics(metrics_path: Path) -> Path:
+    stem = metrics_path.stem
+    if stem.endswith("_last"):
+        base = stem[:-5]
+    else:
+        base = stem
+    return metrics_path.with_name(f"{base}_test_outputs.csv")
+
+
+def _load_reference_payload(path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        return None
+    except json.JSONDecodeError:
+        warnings.warn(
+            f"Unable to parse parent metrics JSON at {path}; continuing without reference.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return None
+
+
+def _resolve_parent_reference(checkpoint_path: Path) -> ParentRunReference:
+    """Resolve canonical SUN provenance for evaluation-only experiments."""
+
+    checkpoint_path = checkpoint_path.expanduser()
+    checkpoint_sha = _compute_file_sha256(checkpoint_path)
+    metrics_path: Optional[Path] = None
+    metrics_payload: Optional[Dict[str, Any]] = None
+    metrics_sha: Optional[str] = None
+    outputs_path: Optional[Path] = None
+    outputs_sha: Optional[str] = None
+
+    for candidate in _infer_metrics_candidates(checkpoint_path):
+        if candidate.exists():
+            metrics_path = candidate
+            metrics_payload = _load_reference_payload(candidate)
+            metrics_sha = _compute_file_sha256(candidate)
+            outputs_candidate = _infer_outputs_path_from_metrics(candidate)
+            if outputs_candidate.exists():
+                outputs_path = outputs_candidate
+                outputs_sha = _compute_file_sha256(outputs_candidate)
+            break
+
+    return ParentRunReference(
+        checkpoint_path=checkpoint_path,
+        checkpoint_sha256=checkpoint_sha,
+        metrics_path=metrics_path,
+        metrics_payload=metrics_payload,
+        metrics_sha256=metrics_sha,
+        outputs_path=outputs_path,
+        outputs_sha256=outputs_sha,
+    )
 
 
 @dataclass
@@ -712,6 +828,50 @@ def _prepare_eval_contexts(
     return contexts
 
 
+def _summarize_dataset_for_metrics(
+    alias: str,
+    split_name: Optional[str],
+    dataset: Optional["PackDataset"],
+    pack_spec: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Return provenance and composition metadata for ``dataset`` suitable for JSON export."""
+
+    if dataset is None:
+        return None
+    summary: Dict[str, Any] = {"alias": alias}
+    if split_name:
+        summary["split"] = split_name
+    if pack_spec:
+        summary["pack_spec"] = str(pack_spec)
+
+    provenance = getattr(dataset, "provenance", None)
+    if isinstance(provenance, Mapping):
+        for key, value in provenance.items():
+            if value in (None, ""):
+                continue
+            summary[key] = value
+
+    total_frames = len(dataset)
+    summary["frames"] = int(total_frames)
+    labels = getattr(dataset, "labels_list", None)
+    frame_counts = _summarize_frame_counts(labels)
+    if frame_counts:
+        summary["class_counts"] = {int(k): int(v) for k, v in frame_counts.items()}
+        summary["n_total"] = int(sum(frame_counts.values()))
+        if 1 in frame_counts:
+            summary["n_pos"] = int(frame_counts[1])
+        if 0 in frame_counts:
+            summary["n_neg"] = int(frame_counts[0])
+    else:
+        summary["n_total"] = int(total_frames)
+
+    case_summary = _summarize_case_counts(dataset)
+    if isinstance(case_summary, Mapping) and case_summary:
+        summary["case_counts"] = {key: int(value) for key, value in case_summary.items()}
+
+    return summary
+
+
 def _collect_experiment4_trace(
     args,
     datasets: Mapping[str, "PackDataset"],
@@ -1090,11 +1250,11 @@ def _unwrap_model(model: nn.Module) -> nn.Module:
 
 def _prepare_metric_export(
     metrics: Dict[str, Any], drop: Optional[Iterable[str]] = None
-) -> Dict[str, float]:
+) -> Dict[str, float | int]:
     """Convert ``metrics`` into a JSON-serialisable mapping of floats."""
 
     drop = set(drop or [])
-    export: Dict[str, float] = {}
+    export: Dict[str, float | int] = {}
     for key, value in metrics.items():
         if key in drop:
             continue
@@ -1106,7 +1266,269 @@ def _prepare_metric_export(
             value = float(value)
         if isinstance(value, (float, int)):
             export[key] = float(value)
+    _augment_metric_export(export, metrics)
     return export
+
+
+def _augment_metric_export(
+    export: Dict[str, float | int], metrics: Mapping[str, Any]
+) -> None:
+    """Inject confusion counts and frame statistics into ``export`` when available."""
+
+    threshold_metrics = metrics.get("threshold_metrics")
+    if isinstance(threshold_metrics, Mapping):
+        for key, value in threshold_metrics.items():
+            if isinstance(value, (int, np.integer)):
+                export[key] = int(value)
+            elif isinstance(value, (float, np.floating)) and math.isfinite(float(value)):
+                export[key] = float(value)
+
+    class_counts = metrics.get("class_counts")
+    if isinstance(class_counts, Sequence):
+        total = 0
+        for idx, count in enumerate(class_counts):
+            if isinstance(count, (int, np.integer)):
+                count_int = int(count)
+            elif isinstance(count, (float, np.floating)) and math.isfinite(float(count)):
+                count_int = int(count)
+            else:
+                continue
+            total += count_int
+            if idx == 0:
+                export.setdefault("n_neg", count_int)
+            elif idx == 1:
+                export.setdefault("n_pos", count_int)
+        if total > 0:
+            export.setdefault("n_total", total)
+
+
+PRIMARY_METRIC_KEYS: Tuple[str, ...] = (
+    "auprc",
+    "auroc",
+    "recall",
+    "precision",
+    "f1",
+    "balanced_accuracy",
+    "mcc",
+    "loss",
+    "tp",
+    "fp",
+    "tn",
+    "fn",
+    "n_pos",
+    "n_neg",
+    "n_total",
+    "prevalence",
+    "count",
+)
+
+
+INTEGER_METRIC_KEYS: set[str] = {
+    "tp",
+    "fp",
+    "tn",
+    "fn",
+    "n_pos",
+    "n_neg",
+    "n_total",
+    "count",
+}
+
+
+def _coerce_metric_value(value: Any) -> Optional[float | int]:
+    """Return a JSON-serialisable numeric representation of ``value`` if possible."""
+
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if math.isfinite(numeric):
+            return numeric
+        return None
+    return None
+
+
+def _build_metric_block(
+    metrics: Optional[Mapping[str, Any]], *, include_tau: bool = True
+) -> Dict[str, Any]:
+    """Select a stable subset of metrics for export."""
+
+    if not metrics:
+        return {}
+    block: "OrderedDict[str, Any]" = OrderedDict()
+    for key in PRIMARY_METRIC_KEYS:
+        if key not in metrics:
+            continue
+        value = _coerce_metric_value(metrics.get(key))
+        if value is None:
+            continue
+        if key in INTEGER_METRIC_KEYS:
+            block[key] = int(value)
+        else:
+            block[key] = float(value)
+    if include_tau and "tau" in metrics:
+        tau_value = _coerce_metric_value(metrics.get("tau"))
+        if tau_value is not None:
+            block["tau"] = float(tau_value)
+    tau_info = metrics.get("tau_info") if isinstance(metrics, Mapping) else None
+    if isinstance(tau_info, str) and tau_info:
+        block["tau_info"] = tau_info
+    return dict(block)
+
+
+def _build_sensitivity_block(
+    strata: Optional[Mapping[str, Mapping[str, Any]]]
+) -> Dict[str, Dict[str, Any]]:
+    """Convert morphology strata metrics into exportable form."""
+
+    if not strata:
+        return {}
+    output: Dict[str, Dict[str, Any]] = {}
+    for key in sorted(strata):
+        metrics = strata.get(key)
+        if not isinstance(metrics, Mapping):
+            continue
+        block = _build_metric_block(metrics, include_tau=False)
+        if block:
+            output[key] = block
+    return output
+
+
+def _format_parent_reference_block(
+    reference: Optional[ParentRunReference], *, output_dir: Optional[str]
+) -> Dict[str, Any]:
+    """Convert ``reference`` into an exportable mapping for provenance."""
+
+    if reference is None:
+        return {}
+
+    base_dir: Optional[Path] = None
+    if output_dir:
+        candidate = Path(output_dir).expanduser()
+        base_dir = candidate.parent if candidate.parent != candidate else candidate
+    if base_dir is None:
+        base_dir = Path.cwd()
+
+    block: "OrderedDict[str, Any]" = OrderedDict()
+    block["checkpoint"] = _safe_relpath(reference.checkpoint_path, base_dir)
+    if reference.checkpoint_sha256:
+        block["checkpoint_sha256"] = reference.checkpoint_sha256
+
+    metrics_info: "OrderedDict[str, Any]" = OrderedDict()
+    if reference.metrics_path:
+        metrics_info["path"] = _safe_relpath(reference.metrics_path, base_dir)
+    if reference.metrics_sha256:
+        metrics_info["sha256"] = reference.metrics_sha256
+    if reference.metrics_payload and isinstance(reference.metrics_payload, Mapping):
+        metrics_info["payload"] = reference.metrics_payload
+    if metrics_info:
+        block["metrics"] = dict(metrics_info)
+
+    outputs_info: "OrderedDict[str, Any]" = OrderedDict()
+    if reference.outputs_path:
+        outputs_info["path"] = _safe_relpath(reference.outputs_path, base_dir)
+    if reference.outputs_sha256:
+        outputs_info["sha256"] = reference.outputs_sha256
+    if outputs_info:
+        block["outputs"] = dict(outputs_info)
+
+    return dict(block)
+
+
+def _build_metrics_provenance(
+    args, *, experiment4_trace: Optional[Experiment4SubsetTrace] = None
+) -> Dict[str, Any]:
+    """Assemble provenance information for metrics exports."""
+
+    provenance: "OrderedDict[str, Any]" = OrderedDict()
+    model_key = getattr(args, "model_key", None)
+    model_tag = getattr(args, "model_tag", None)
+    run_stem = getattr(args, "run_stem", None)
+    model_identifier = next(
+        (candidate for candidate in (model_key, model_tag, run_stem) if candidate),
+        None,
+    )
+    if model_identifier:
+        provenance["model"] = str(model_identifier)
+    arch = getattr(args, "arch", None)
+    if arch:
+        provenance["arch"] = str(arch)
+    provenance["train_seed"] = int(_get_active_seed(args))
+
+    subset_percent: Optional[float] = None
+    if experiment4_trace and experiment4_trace.percent is not None:
+        subset_percent = float(experiment4_trace.percent)
+    else:
+        dataset_percent = getattr(args, "dataset_percent", None)
+        if isinstance(dataset_percent, (int, float)) and dataset_percent > 0:
+            subset_percent = float(dataset_percent)
+        else:
+            layout = getattr(args, "dataset_layout", {}) or {}
+            layout_percent = layout.get("percent")
+            if isinstance(layout_percent, (int, float)):
+                subset_percent = float(layout_percent)
+    if subset_percent is None:
+        subset_percent = 100.0
+    provenance["subset_percent"] = subset_percent
+
+    pack_seed: Optional[int] = None
+    if experiment4_trace and experiment4_trace.seed is not None:
+        pack_seed = int(experiment4_trace.seed)
+    else:
+        layout = getattr(args, "dataset_layout", {}) or {}
+        layout_seed = layout.get("dataset_seed")
+        if isinstance(layout_seed, (int, float)):
+            pack_seed = int(layout_seed)
+        else:
+            dataset_seed = getattr(args, "dataset_seed", None)
+            if isinstance(dataset_seed, (int, float)) and dataset_seed >= 0:
+                pack_seed = int(dataset_seed)
+    if pack_seed is not None:
+        provenance["pack_seed"] = pack_seed
+
+    split = getattr(args, "test_split", None)
+    if split:
+        provenance["split"] = str(split)
+
+    parent_reference = getattr(args, "parent_reference", None)
+    if isinstance(parent_reference, ParentRunReference):
+        parent_block = _format_parent_reference_block(
+            parent_reference, output_dir=getattr(args, "output_dir", None)
+        )
+        if parent_block:
+            provenance["parent_run"] = parent_block
+
+    return dict(provenance)
+
+
+def _build_thresholds_block(
+    thresholds_map: Optional[Mapping[str, Any]],
+    *,
+    policy: Optional[str] = None,
+    sources: Optional[Mapping[str, str]] = None,
+) -> Dict[str, Any]:
+    """Return a structured representation of threshold provenance."""
+
+    block: "OrderedDict[str, Any]" = OrderedDict()
+    if policy:
+        block["policy"] = policy
+    if thresholds_map:
+        values = {
+            key: float(value)
+            for key, value in sorted(thresholds_map.items())
+            if isinstance(value, (int, float, np.floating, np.integer)) and math.isfinite(float(value))
+        }
+        if values:
+            block["values"] = values
+    if sources:
+        filtered_sources = {
+            key: value
+            for key, value in sources.items()
+            if isinstance(value, str) and value
+        }
+        if filtered_sources:
+            block["sources"] = filtered_sources
+    return dict(block)
 
 
 def _sanitize_path_segment(raw: Any, *, default: str = "default") -> str:
@@ -1254,7 +1676,16 @@ def _export_frame_outputs(
     preds: Sequence[int],
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["frame_id", "prob", "label", "origin", "sequence_id", "pred"]
+    fieldnames = [
+        "frame_id",
+        "prob",
+        "label",
+        "pred",
+        "case_id",
+        "origin",
+        "sequence_id",
+        "morphology",
+    ]
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -1271,6 +1702,15 @@ def _export_frame_outputs(
                     "image_id",
                 ),
             ) or f"idx_{idx}"
+            case_id = _resolve_metadata_value(
+                row,
+                (
+                    "case_id",
+                    "sequence_id",
+                    "case",
+                    "study_id",
+                ),
+            )
             origin = _resolve_metadata_value(
                 row,
                 (
@@ -1290,14 +1730,21 @@ def _export_frame_outputs(
                     "study_id",
                 ),
             )
+            morphology = None
+            if isinstance(row, Mapping):
+                value = row.get("morphology")
+                if value not in (None, ""):
+                    morphology = str(value).strip()
             writer.writerow(
                 {
                     "frame_id": frame_id,
                     "prob": float(probabilities[idx]),
                     "label": int(targets[idx]) if idx < len(targets) else None,
+                    "pred": int(preds[idx]) if idx < len(preds) else None,
+                    "case_id": case_id,
                     "origin": origin,
                     "sequence_id": sequence_id,
-                    "pred": int(preds[idx]) if idx < len(preds) else None,
+                    "morphology": morphology,
                 }
             )
 
@@ -1317,6 +1764,165 @@ def _extract_positive_probabilities(probabilities: Any) -> torch.Tensor:
     raise ValueError(
         "Curve export expects binary probabilities with shape (N,), (N,1) or (N,2)."
     )
+
+
+def _binary_subset_metrics(
+    *,
+    positive_scores: np.ndarray,
+    preds: np.ndarray,
+    labels: np.ndarray,
+    indices: np.ndarray,
+    sample_losses: Optional[np.ndarray] = None,
+) -> Dict[str, Any]:
+    if indices.size == 0:
+        return {}
+    subset_scores = positive_scores[indices]
+    subset_preds = preds[indices]
+    subset_labels = labels[indices]
+    total = subset_labels.size
+    n_pos = int(np.sum(subset_labels == 1))
+    n_neg = int(np.sum(subset_labels == 0))
+    prevalence = (float(n_pos) / float(total)) if total > 0 else float("nan")
+    tp = int(np.sum((subset_preds == 1) & (subset_labels == 1)))
+    fp = int(np.sum((subset_preds == 1) & (subset_labels == 0)))
+    tn = int(np.sum((subset_preds == 0) & (subset_labels == 0)))
+    fn = int(np.sum((subset_preds == 0) & (subset_labels == 1)))
+    try:
+        auprc = float(average_precision_score(subset_labels, subset_scores))
+    except ValueError:
+        auprc = float("nan")
+    try:
+        auroc = float(roc_auc_score(subset_labels, subset_scores))
+    except ValueError:
+        auroc = float("nan")
+    recall = float(recall_score(subset_labels, subset_preds, zero_division=0))
+    precision = float(precision_score(subset_labels, subset_preds, zero_division=0))
+    f1 = float(f1_score(subset_labels, subset_preds, zero_division=0))
+    try:
+        balanced_acc = float(balanced_accuracy_score(subset_labels, subset_preds))
+    except ValueError:
+        balanced_acc = float("nan")
+    try:
+        mcc = float(matthews_corrcoef(subset_labels, subset_preds))
+    except ValueError:
+        mcc = float("nan")
+    if sample_losses is not None:
+        subset_losses = sample_losses[indices]
+        loss_value = float(np.mean(subset_losses)) if subset_losses.size > 0 else float("nan")
+    else:
+        eps = 1e-12
+        clipped = np.clip(subset_scores, eps, 1.0 - eps)
+        loss_value = float(
+            np.mean(
+                -(subset_labels * np.log(clipped) + (1 - subset_labels) * np.log(1 - clipped))
+            )
+        )
+    return {
+        "count": int(total),
+        "n_pos": n_pos,
+        "n_neg": n_neg,
+        "prevalence": prevalence,
+        "tp": tp,
+        "fp": fp,
+        "tn": tn,
+        "fn": fn,
+        "auprc": auprc,
+        "auroc": auroc,
+        "recall": recall,
+        "precision": precision,
+        "f1": f1,
+        "balanced_accuracy": balanced_acc,
+        "mcc": mcc,
+        "loss": loss_value,
+    }
+
+
+def _build_morphology_strata_metrics(
+    *,
+    positive_scores: np.ndarray,
+    preds: np.ndarray,
+    labels: np.ndarray,
+    morphology: Sequence[str],
+    sample_losses: Optional[np.ndarray] = None,
+) -> Dict[str, Dict[str, Any]]:
+    total = labels.size
+    if total == 0:
+        return {}
+    indices_all = np.arange(total, dtype=int)
+    strata: Dict[str, Dict[str, Any]] = {
+        "overall": _binary_subset_metrics(
+            positive_scores=positive_scores,
+            preds=preds,
+            labels=labels,
+            indices=indices_all,
+            sample_losses=sample_losses,
+        )
+    }
+    if len(morphology) != total:
+        return strata
+    morph_array = np.array([str(value).strip().lower() if value not in (None, "") else "" for value in morphology])
+    labels_pos = labels == 1
+    labels_neg = labels == 0
+    flat_pos_count = int(np.sum(labels_pos & (morph_array == "flat")))
+    polypoid_pos_count = int(np.sum(labels_pos & (morph_array == "polypoid")))
+    if flat_pos_count > 0:
+        flat_mask = labels_neg | (labels_pos & (morph_array == "flat"))
+        flat_indices = np.flatnonzero(flat_mask)
+        strata["flat_plus_negs"] = _binary_subset_metrics(
+            positive_scores=positive_scores,
+            preds=preds,
+            labels=labels,
+            indices=flat_indices,
+            sample_losses=sample_losses,
+        )
+    if polypoid_pos_count > 0:
+        polypoid_mask = labels_neg | (labels_pos & (morph_array == "polypoid"))
+        polypoid_indices = np.flatnonzero(polypoid_mask)
+        strata["polypoid_plus_negs"] = _binary_subset_metrics(
+            positive_scores=positive_scores,
+            preds=preds,
+            labels=labels,
+            indices=polypoid_indices,
+            sample_losses=sample_losses,
+        )
+    return strata
+
+
+def _compute_f1_morph_threshold(
+    *,
+    positive_scores: np.ndarray,
+    labels: np.ndarray,
+    morphology: Sequence[str],
+    grid_points: int = 512,
+) -> Optional[float]:
+    if positive_scores.size == 0 or labels.size == 0:
+        return None
+    if len(morphology) != labels.size:
+        return None
+    morph_array = np.array([str(value).strip().lower() if value not in (None, "") else "" for value in morphology])
+    labels_pos = labels == 1
+    labels_neg = labels == 0
+    flat_mask = labels_neg | (labels_pos & (morph_array == "flat"))
+    polypoid_mask = labels_neg | (labels_pos & (morph_array == "polypoid"))
+    flat_pos_count = int(np.sum(labels_pos & (morph_array == "flat")))
+    polypoid_pos_count = int(np.sum(labels_pos & (morph_array == "polypoid")))
+    if flat_pos_count == 0 or polypoid_pos_count == 0:
+        return None
+    thresholds = np.linspace(0.0, 1.0, num=max(2, int(grid_points)), endpoint=True)
+    best_tau: Optional[float] = None
+    best_score = -1.0
+    for tau in thresholds:
+        preds = (positive_scores >= tau).astype(int)
+        try:
+            f1_flat = f1_score(labels[flat_mask], preds[flat_mask], zero_division=0)
+            f1_polypoid = f1_score(labels[polypoid_mask], preds[polypoid_mask], zero_division=0)
+        except ValueError:
+            continue
+        macro_f1 = 0.5 * (f1_flat + f1_polypoid)
+        if macro_f1 > best_score or (math.isclose(macro_f1, best_score) and best_tau is not None and tau < best_tau):
+            best_score = float(macro_f1)
+            best_tau = float(tau)
+    return best_tau
 
 
 def _export_curve_sets(
@@ -2413,6 +3019,14 @@ def apply_experiment_config(
             canonical_root = Path("checkpoints") / "classification"
             args.parent_checkpoint = str(canonical_root / relative_path)
 
+    init_key_lower = str(protocol_cfg.get("init_from", "")).strip().lower()
+    dataset_name_lower = str(dataset_cfg.get("name", "")).strip().lower()
+    args.is_exp5a = (
+        dataset_name_lower == "polypgen_clean_test"
+        and args.finetune_mode == "none"
+        and init_key_lower == "canonical_sun_models"
+    )
+
     dataset_resolved = _resolve_dataset_specs(
         dataset_cfg,
         percent_override=cli_percent,
@@ -2670,8 +3284,9 @@ def test(
     morphology_eval_list = [str(m).strip() for m in (morphology_eval or []) if str(m).strip()]
     morphology_eval_lookup = [m.lower() for m in morphology_eval_list]
     track_morphology = bool(morphology_eval_list)
-    morphology_values: list[str] = []
+    morphology_labels: list[str] = []
     morphology_counter: Counter[str] = Counter()
+    case_ids: list[str] = []
     dataset_obj = getattr(test_loader, "dataset", None)
     track_perturbations = _dataset_supports_perturbations(dataset_obj)
     perturbation_counter: Counter[str] = Counter()
@@ -2680,7 +3295,7 @@ def test(
     perturbation_sample_losses: list[torch.Tensor] = []
     perturbation_tags_aligned: Optional[List[str]] = None
     outputs_path = save_outputs_path.expanduser() if save_outputs_path is not None else None
-    collected_metadata: list[Mapping[str, Any]] = []
+    metadata_records: list[Mapping[str, Any]] = []
 
     def _with_prefix(text: str) -> str:
         if eval_context is None:
@@ -2721,17 +3336,31 @@ def test(
             raise ValueError("Unexpected batch structure returned by dataloader")
         data = data.to(device, non_blocking=non_blocking)
         target = target.to(device, non_blocking=non_blocking)
-        if outputs_path is not None:
-            if metadata_batch is not None and len(metadata_batch) == len(data):
-                collected_metadata.extend(_coerce_metadata_row(row) for row in metadata_batch)
-            else:
-                collected_metadata.extend({} for _ in range(len(data)))
-        if track_morphology and metadata_batch is not None:
-            for row in metadata_batch:
-                morph_label = row.get("morphology") if isinstance(row, dict) else None
-                morph_value = str(morph_label).strip().lower() if morph_label not in (None, "") else "unknown"
-                morphology_values.append(morph_value)
-                morphology_counter[morph_value] += 1
+        if metadata_batch is not None and len(metadata_batch) == len(data):
+            batch_records = [_coerce_metadata_row(row) for row in metadata_batch]
+        else:
+            batch_records = [{} for _ in range(len(data))]
+        metadata_records.extend(batch_records)
+        for row_dict in batch_records:
+            case_value = _resolve_metadata_value(
+                row_dict,
+                (
+                    "case_id",
+                    "sequence_id",
+                    "case",
+                    "study_id",
+                ),
+            )
+            if case_value is None:
+                case_value = f"case_{len(case_ids)}"
+            case_ids.append(case_value)
+            morph_raw = row_dict.get("morphology") if isinstance(row_dict, Mapping) else None
+            morph_normalised = (
+                str(morph_raw).strip().lower() if morph_raw not in (None, "") else "unknown"
+            )
+            morphology_labels.append(morph_normalised)
+            if track_morphology:
+                morphology_counter[morph_normalised] += 1
         if track_perturbations:
             if metadata_batch is not None and len(metadata_batch) == len(data):
                 for row in metadata_batch:
@@ -2913,6 +3542,15 @@ def test(
         results["loss"] = mean_loss
     else:
         mean_loss = float("nan")
+    sample_losses_tensor: Optional[torch.Tensor] = None
+    if loss_fn is not None and logits is not None and targets is not None:
+        try:
+            sample_losses_tensor = _compute_sample_losses(
+                logits, targets, mode=loss_mode
+            ).detach().cpu()
+        except Exception:
+            sample_losses_tensor = None
+
     if binary_tau is not None:
         preds = (probs[:, 1] >= binary_tau).to(dtype=torch.long)
     else:
@@ -2945,6 +3583,28 @@ def test(
         results["tau"] = None
     if tau_info:
         results["tau_info"] = tau_info
+
+    positive_scores_tensor = _extract_positive_probabilities(probs)
+    positive_scores_np = positive_scores_tensor.detach().cpu().numpy()
+    preds_np = preds.detach().cpu().numpy()
+    targets_np = targets.detach().cpu().numpy()
+    sample_losses_np = (
+        sample_losses_tensor.numpy() if sample_losses_tensor is not None else None
+    )
+    strata_metrics = _build_morphology_strata_metrics(
+        positive_scores=positive_scores_np,
+        preds=preds_np,
+        labels=targets_np,
+        morphology=morphology_labels,
+        sample_losses=sample_losses_np,
+    )
+    if strata_metrics:
+        results.setdefault("strata", {}).update(strata_metrics)
+
+    if case_ids:
+        results["_case_ids"] = list(case_ids)
+    if morphology_labels:
+        results["_morphology_labels"] = list(morphology_labels)
     if track_perturbations and perturbation_counter:
         results["perturbation_tag_counts"] = dict(sorted(perturbation_counter.items()))
     if track_perturbations and perturbation_metadata_rows:
@@ -3038,10 +3698,10 @@ def test(
 
     morph_counts_line: Optional[str] = None
     morph_metrics_line: Optional[str] = None
-    if track_morphology and morphology_values and targets is not None:
+    if track_morphology and morphology_labels and targets is not None:
         requested_counts: Dict[str, int] = {}
         requested_metrics: Dict[str, Dict[str, float]] = {}
-        morph_array = np.array(morphology_values)
+        morph_array = np.array(morphology_labels)
         targets_np = targets.numpy()
         preds_np = preds.numpy()
         for display, lookup in zip(morphology_eval_list, morphology_eval_lookup):
@@ -3129,8 +3789,8 @@ def test(
 
     if outputs_path is not None and logits is not None and targets is not None:
         sample_total = int(targets.shape[0])
-        if len(collected_metadata) < sample_total:
-            collected_metadata.extend({} for _ in range(sample_total - len(collected_metadata)))
+        if len(metadata_records) < sample_total:
+            metadata_records.extend({} for _ in range(sample_total - len(metadata_records)))
         if probs.ndim == 2:
             if probs.size(1) == 2:
                 prob_tensor = probs[:, 1]
@@ -3143,7 +3803,7 @@ def test(
         pred_list = [int(v) for v in preds.detach().cpu().tolist()]
         _export_frame_outputs(
             outputs_path,
-            metadata_rows=collected_metadata[:sample_total],
+            metadata_rows=metadata_records[:sample_total],
             probabilities=probabilities,
             targets=target_list,
             preds=pred_list,
@@ -3342,6 +4002,21 @@ def build(args, rank, device: torch.device, distributed: bool):
         snapshot_dir=Path(args.output_dir) if rank == 0 else None,
     )
 
+    dataset_summaries: Dict[str, Dict[str, Any]] = {}
+    split_specs = {
+        "train": (getattr(args, "train_split", None), getattr(args, "train_pack", None)),
+        "val": (getattr(args, "val_split", None), getattr(args, "val_pack", None)),
+        "test": (getattr(args, "test_split", None), getattr(args, "test_pack", None)),
+    }
+    for alias, (split_name, pack_spec) in split_specs.items():
+        if not split_name:
+            continue
+        dataset_obj = datasets.get(split_name)
+        summary = _summarize_dataset_for_metrics(alias, split_name, dataset_obj, pack_spec)
+        if summary:
+            dataset_summaries[alias] = summary
+    args.dataset_summary = dataset_summaries
+
     experiment4_trace = _collect_experiment4_trace(args, datasets)
 
     train_dataloader = loaders.get("train")
@@ -3359,6 +4034,7 @@ def build(args, rank, device: torch.device, distributed: bool):
     train_sampler = samplers.get("train")
 
     eval_context_lookup = _prepare_eval_contexts(args, datasets)
+    args.eval_context_lookup = eval_context_lookup
 
     train_dataset = (
         datasets.get(args.train_split) if getattr(args, "train_split", None) else None
@@ -3443,6 +4119,7 @@ def build(args, rank, device: torch.device, distributed: bool):
     thresholds_map: Dict[str, Any] = {}
     existing_ckpt, pointer_valid = _find_existing_checkpoint(stem_path)
     parent_reference = getattr(args, "parent_checkpoint", None)
+    parent_run_reference: Optional[ParentRunReference] = None
     resume_monitor_available = False
     if existing_ckpt is not None:
         main_dict = torch.load(existing_ckpt, map_location="cpu")
@@ -3481,11 +4158,14 @@ def build(args, rank, device: torch.device, distributed: bool):
         best_val_perf = None
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch(exist_ok=True)
+        parent_run_reference = _resolve_parent_reference(parent_path)
     else:
         start_epoch = 1
         best_val_perf = None
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch()
+
+    args.parent_reference = parent_run_reference
 
     schedule_spec_list = getattr(args, "finetune_schedule_spec", []) or []
     schedule_stages = _materialize_finetune_schedule(
@@ -3532,28 +4212,39 @@ def build(args, rank, device: torch.device, distributed: bool):
         optimizer_param_groups, lr=args.lr, weight_decay=getattr(args, "weight_decay", 0.0)
     )
     thresholds_map = dict(thresholds_map)
+    morphology_eval = getattr(args, "morphology_eval", None)
     raw_policy = (args.threshold_policy or "auto").strip().lower()
-    if raw_policy not in {"auto", "youden", "none", ""}:
+    allowed_policies = {"auto", "youden", "none", "f1-morph", ""}
+    if raw_policy not in allowed_policies:
         raise ValueError(
             f"Unsupported threshold policy '{raw_policy}'. Use 'auto', 'youden' or 'none'."
         )
     resolved_policy = raw_policy
+    dataset_name_lower = str(getattr(args, "dataset", "")).lower()
+    wants_morph_threshold = (
+        dataset_name_lower == "sun_morphology" and bool(morphology_eval)
+    )
     if resolved_policy in {"", "auto"}:
-        resolved_policy = "youden" if len(class_weights) == 2 else "none"
-        if rank == 0:
-            if resolved_policy == "youden":
-                print("Auto-selecting Youden's J threshold policy for binary classification.")
-            else:
-                print(
-                    "Threshold policy resolved to 'none' because the task is not binary."
-                )
-    if resolved_policy == "youden" and len(class_weights) != 2:
+        if wants_morph_threshold and len(class_weights) == 2:
+            resolved_policy = "f1-morph"
+        else:
+            resolved_policy = "youden" if len(class_weights) == 2 else "none"
+    elif resolved_policy == "youden" and wants_morph_threshold and len(class_weights) == 2:
+        resolved_policy = "f1-morph"
+    if rank == 0:
+        if resolved_policy == "youden":
+            print("Auto-selecting Youden's J threshold policy for binary classification.")
+        elif resolved_policy == "f1-morph":
+            print("Auto-selecting F1 morphology-balanced threshold policy for binary classification.")
+        elif resolved_policy == "none":
+            print("Threshold policy resolved to 'none' because the task is not binary.")
+    if resolved_policy in {"youden", "f1-morph"} and len(class_weights) != 2:
         if rank == 0:
             print(
                 "Warning: Youden threshold policy requested but dataset is not binary; disabling threshold computation."
             )
         resolved_policy = "none"
-    compute_threshold = resolved_policy == "youden" and val_dataloader is not None
+    compute_threshold = resolved_policy in {"youden", "f1-morph"} and val_dataloader is not None
     threshold_key = None
     if compute_threshold:
         dataset_name = args.dataset or "dataset"
@@ -3648,6 +4339,7 @@ def train(rank, args):
         experiment4_trace,
         schedule_runtime,
     ) = build(args, rank, device, distributed)
+    eval_context_lookup = getattr(args, "eval_context_lookup", {})
     eval_only = train_dataloader is None
     use_amp = args.precision == "amp" and device.type == "cuda"
 
@@ -3706,7 +4398,7 @@ def train(rank, args):
             return None
         policy_raw = parts[-1]
         split_raw = parts[-2] if len(parts) >= 2 else (args.val_split or "val")
-        policy_map = {"youden": "Youden J"}
+        policy_map = {"youden": "Youden J", "f1-morph": "F1 morph"}
         policy_label = policy_map.get(policy_raw, policy_raw.replace("_", " ").title())
         return f"{policy_label} on {split_raw}"
 
@@ -3774,6 +4466,10 @@ def train(rank, args):
 
     if eval_only:
         eval_epoch = max(start_epoch - 1, 0)
+        ckpt_stem = Path(ckpt_path).with_suffix("")
+        val_metrics: Optional[Dict[str, Any]] = None
+        test_metrics: Optional[Dict[str, Any]] = None
+        curve_export_metadata: Optional[Dict[str, Any]] = None
         if rank == 0:
             print("No training data provided; running evaluation-only mode.")
             eval_tau, eval_tau_key = resolve_eval_tau(
@@ -3801,6 +4497,7 @@ def train(rank, args):
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, eval_epoch)
             if test_dataloader is not None:
+                test_outputs_path = ckpt_stem.parent / f"{ckpt_stem.name}_test_outputs.csv"
                 test_metrics = test(
                     _unwrap_model(model),
                     rank,
@@ -3812,14 +4509,93 @@ def train(rank, args):
                     loss_fn=loss_fn,
                     loss_mode=loss_mode,
                     split_name="Test",
+                    return_outputs=True,
                     tau=eval_tau,
                     tau_info=eval_tau_info,
                     max_batches=args.limit_test_batches,
                     morphology_eval=morphology_eval,
                     eval_context=eval_context_lookup.get("Test"),
+                    save_outputs_path=test_outputs_path,
                 )
+                curve_export_metadata = _maybe_export_curves_for_split(
+                    args,
+                    ckpt_stem=ckpt_stem,
+                    split_name="Test",
+                    metrics=test_metrics,
+                    log_path=log_path,
+                )
+                if isinstance(test_metrics, Mapping):
+                    test_metrics.pop("_case_ids", None)
+                    test_metrics.pop("_morphology_labels", None)
+                    if curve_export_metadata:
+                        test_metrics.setdefault("curve_exports", {})["test"] = (
+                            curve_export_metadata
+                        )
                 if tb_logger:
                     tb_logger.log_metrics("test", test_metrics, eval_epoch)
+
+            val_metrics_export = (
+                _prepare_metric_export(val_metrics) if isinstance(val_metrics, Mapping) else {}
+            )
+            test_metrics_export = (
+                _prepare_metric_export(test_metrics) if isinstance(test_metrics, Mapping) else {}
+            )
+            val_block = _build_metric_block(val_metrics_export)
+            test_primary_block = _build_metric_block(test_metrics_export)
+            sensitivity_block = _build_sensitivity_block(
+                test_metrics.get("strata")
+                if isinstance(test_metrics, Mapping)
+                else None
+            )
+            threshold_sources: Dict[str, str] = {}
+            if isinstance(val_metrics, Mapping):
+                val_tau_info = val_metrics.get("tau_info")
+                if isinstance(val_tau_info, str) and val_tau_info:
+                    threshold_sources["val"] = val_tau_info
+            if isinstance(test_metrics, Mapping):
+                test_tau_info = test_metrics.get("tau_info")
+                if isinstance(test_tau_info, str) and test_tau_info:
+                    threshold_sources["test"] = test_tau_info
+            thresholds_block = _build_thresholds_block(
+                thresholds_map,
+                policy=getattr(args, "threshold_policy", None),
+                sources=threshold_sources,
+            )
+            provenance_block = _build_metrics_provenance(
+                args, experiment4_trace=experiment4_trace
+            )
+            metrics_payload: Dict[str, Any] = {
+                "seed": _get_active_seed(args),
+                "epoch": int(eval_epoch),
+                "eval_only": True,
+                "val": val_block,
+                "test_primary": test_primary_block,
+                "test_sensitivity": sensitivity_block,
+                "provenance": provenance_block,
+            }
+            dataset_summary = getattr(args, "dataset_summary", None)
+            if dataset_summary:
+                metrics_payload["dataset"] = dataset_summary
+            if threshold_sources:
+                if "val" in threshold_sources:
+                    metrics_payload["val_tau_source"] = threshold_sources["val"]
+                if "test" in threshold_sources:
+                    metrics_payload["test_tau_source"] = threshold_sources["test"]
+            if thresholds_block:
+                metrics_payload["thresholds"] = thresholds_block
+            if getattr(args, "threshold_policy", None):
+                metrics_payload.setdefault(
+                    "threshold_policy", args.threshold_policy
+                )
+            if curve_export_metadata:
+                metrics_payload.setdefault("curve_exports", {})["test"] = (
+                    curve_export_metadata
+                )
+            metrics_path = ckpt_stem.with_suffix(".metrics.json")
+            metrics_path.parent.mkdir(parents=True, exist_ok=True)
+            with metrics_path.open("w", encoding="utf-8") as handle:
+                json.dump(metrics_payload, handle, indent=2)
+
         tb_logger.close()
         if distributed:
             dist.destroy_process_group()
@@ -3850,8 +4626,13 @@ def train(rank, args):
     last_test_metrics_export: Optional[Dict[str, float]] = None
     last_train_lr: Optional[float] = None
     last_train_lr_groups: Dict[str, float] = {}
-    val_logits: Optional[np.ndarray] = None
-    val_targets: Optional[np.ndarray] = None
+    last_val_tau_info: Optional[str] = None
+    last_test_tau_info: Optional[str] = None
+    val_logits: Optional[torch.Tensor] = None
+    val_targets: Optional[torch.Tensor] = None
+    val_probabilities: Optional[torch.Tensor] = None
+    val_case_ids: Optional[List[str]] = None
+    val_morphology_labels: Optional[List[str]] = None
     latest_threshold_file_relpath: Optional[str] = None
     latest_threshold_record: Optional[Dict[str, Any]] = None
     latest_thresholds_root: Optional[str] = None
@@ -3936,13 +4717,34 @@ def train(rank, args):
                     morphology_eval=morphology_eval,
                     eval_context=eval_context_lookup.get("Val"),
                 )
+                val_tau_info = val_metrics.get("tau_info")
+                if isinstance(val_tau_info, str) and val_tau_info:
+                    last_val_tau_info = val_tau_info
+                else:
+                    last_val_tau_info = None
                 val_metrics_export = _prepare_metric_export(
                     val_metrics, drop={"logits", "probabilities", "targets"}
                 )
                 test_metrics_export: Dict[str, float] = {}
-                val_logits = val_metrics.pop("logits", None)
-                val_metrics.pop("probabilities", None)
-                val_targets = val_metrics.pop("targets", None)
+                raw_val_logits = val_metrics.pop("logits", None)
+                val_logits = (
+                    raw_val_logits.detach().cpu() if isinstance(raw_val_logits, torch.Tensor) else None
+                )
+                raw_val_probabilities = val_metrics.pop("probabilities", None)
+                if isinstance(raw_val_probabilities, torch.Tensor):
+                    val_probabilities = raw_val_probabilities.detach().cpu()
+                else:
+                    val_probabilities = None
+                raw_val_targets = val_metrics.pop("targets", None)
+                val_targets = (
+                    raw_val_targets.detach().cpu() if isinstance(raw_val_targets, torch.Tensor) else None
+                )
+                raw_val_case_ids = val_metrics.pop("_case_ids", None)
+                val_case_ids = list(raw_val_case_ids) if raw_val_case_ids is not None else None
+                raw_val_morph = val_metrics.pop("_morphology_labels", None)
+                val_morphology_labels = (
+                    list(raw_val_morph) if raw_val_morph is not None else None
+                )
                 val_loss_value = val_metrics.get("loss")
                 monitor_value = val_metrics.get(monitor_key)
                 if monitor_value is None:
@@ -4059,16 +4861,33 @@ def train(rank, args):
                     and val_logits is not None
                     and val_targets is not None
                 ):
-                    try:
-                        tau = thresholds.compute_youden_j_threshold(
-                            val_logits, val_targets
-                        )
-                    except ValueError as exc:
-                        print(
-                            f"Warning: unable to compute threshold '{threshold_key}': {exc}"
-                        )
-                    else:
-                        updated_thresholds[threshold_key] = tau
+                    tau: Optional[float] = None
+                    if (
+                        args.threshold_policy == "f1-morph"
+                        and val_probabilities is not None
+                        and val_morphology_labels
+                    ):
+                        try:
+                            positive_scores = _extract_positive_probabilities(val_probabilities)
+                            tau = _compute_f1_morph_threshold(
+                                positive_scores=positive_scores.detach().cpu().numpy(),
+                                labels=val_targets.detach().cpu().numpy(),
+                                morphology=list(val_morphology_labels),
+                            )
+                        except Exception:
+                            tau = None
+                    if tau is None:
+                        try:
+                            tau = thresholds.compute_youden_j_threshold(
+                                val_logits, val_targets
+                            )
+                        except ValueError as exc:
+                            print(
+                                f"Warning: unable to compute threshold '{threshold_key}': {exc}"
+                            )
+                            tau = None
+                    if tau is not None:
+                        updated_thresholds[threshold_key] = float(tau)
                         thresholds_root_path = Path(
                             getattr(args, "thresholds_root", None)
                             or (Path(args.output_dir).expanduser().parent / "thresholds")
@@ -4175,15 +4994,38 @@ def train(rank, args):
                     final_path = ckpt_stem.parent / candidate_name
                 torch.save(payload, final_path)
                 _update_checkpoint_pointer(ckpt_pointer, final_path)
-                metrics_payload = {
+                val_block = _build_metric_block(val_metrics_export)
+                test_primary_block = _build_metric_block(test_metrics_export)
+                sensitivity_block: Dict[str, Dict[str, Any]] = {}
+                provenance_block = _build_metrics_provenance(
+                    args, experiment4_trace=experiment4_trace
+                )
+                threshold_sources: Dict[str, str] = {}
+                if isinstance(val_tau_info, str) and val_tau_info:
+                    threshold_sources["val"] = val_tau_info
+                if last_test_tau_info:
+                    threshold_sources["test"] = last_test_tau_info
+                thresholds_block = _build_thresholds_block(
+                    updated_thresholds,
+                    policy=getattr(args, "threshold_policy", None),
+                    sources=threshold_sources,
+                )
+                metrics_payload: Dict[str, Any] = {
                     "seed": _get_active_seed(args),
                     "epoch": int(epoch),
                     "train_loss": float(loss),
-                    "val": val_metrics_export,
-                    "test": test_metrics_export,
                     "monitor_value": float(monitor_value),
                     "monitor_metric": monitor_name,
+                    "val": val_block,
+                    "test_primary": test_primary_block,
+                    "test_sensitivity": sensitivity_block,
+                    "provenance": provenance_block,
                 }
+                dataset_summary = getattr(args, "dataset_summary", None)
+                if dataset_summary:
+                    metrics_payload["dataset"] = dataset_summary
+                if isinstance(val_tau_info, str) and val_tau_info:
+                    metrics_payload["val_tau_source"] = val_tau_info
                 if last_train_lr is not None:
                     metrics_payload["train_lr"] = float(last_train_lr)
                 if last_train_lr_groups:
@@ -4194,7 +5036,10 @@ def train(rank, args):
                     metrics_payload["threshold_files"] = {
                         threshold_key: threshold_file_relpath
                     }
-                    metrics_payload["threshold_policy"] = args.threshold_policy
+                if thresholds_block:
+                    metrics_payload["thresholds"] = thresholds_block
+                if getattr(args, "threshold_policy", None):
+                    metrics_payload.setdefault("threshold_policy", args.threshold_policy)
                 metrics_path = ckpt_stem.with_suffix(".metrics.json")
                 with open(metrics_path, "w") as f:
                     json.dump(metrics_payload, f, indent=2)
@@ -4251,6 +5096,7 @@ def train(rank, args):
             dist.barrier()
     final_test_metrics: Optional[Dict[str, Any]] = None
     curve_export_metadata: Optional[Dict[str, Any]] = None
+    final_tau_info: Optional[str] = None
     if (
         rank == 0
         and not eval_only
@@ -4267,15 +5113,32 @@ def train(rank, args):
             and val_logits is not None
             and val_targets is not None
         ):
-            try:
-                final_tau = thresholds.compute_youden_j_threshold(
-                    val_logits, val_targets
-                )
-            except ValueError as exc:
-                print(
-                    f"Warning: unable to compute final threshold '{threshold_key}': {exc}"
-                )
-            else:
+            computed_tau: Optional[float] = None
+            if (
+                args.threshold_policy == "f1-morph"
+                and val_probabilities is not None
+                and val_morphology_labels
+            ):
+                try:
+                    positive_scores = _extract_positive_probabilities(val_probabilities)
+                    computed_tau = _compute_f1_morph_threshold(
+                        positive_scores=positive_scores.detach().cpu().numpy(),
+                        labels=val_targets.detach().cpu().numpy(),
+                        morphology=list(val_morphology_labels),
+                    )
+                except Exception:
+                    computed_tau = None
+            if computed_tau is None:
+                try:
+                    computed_tau = thresholds.compute_youden_j_threshold(
+                        val_logits, val_targets
+                    )
+                except ValueError as exc:
+                    print(
+                        f"Warning: unable to compute final threshold '{threshold_key}': {exc}"
+                    )
+            if computed_tau is not None:
+                final_tau = float(computed_tau)
                 final_tau_info = describe_tau_source(threshold_key) or final_tau_info
                 thresholds_map = dict(thresholds_map or {})
                 thresholds_map[threshold_key] = float(final_tau)
@@ -4306,6 +5169,8 @@ def train(rank, args):
             metrics=final_test_metrics,
             log_path=log_path,
         )
+        final_test_metrics.pop("_case_ids", None)
+        final_test_metrics.pop("_morphology_labels", None)
         if curve_export_metadata:
             final_test_metrics.setdefault("curve_exports", {})["test"] = curve_export_metadata
         if tb_logger:
@@ -4323,6 +5188,7 @@ def train(rank, args):
         last_test_perf = (
             float(final_test_auroc) if final_test_auroc is not None else None
         )
+        last_test_tau_info = final_tau_info
 
     if rank == 0 and experiment4_trace is not None and not eval_only:
         limit_train_batches = getattr(args, "limit_train_batches", None)
@@ -4408,17 +5274,46 @@ def train(rank, args):
         torch.save(last_payload, last_final_path)
         last_pointer_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.pth"
         _update_checkpoint_pointer(last_pointer_path, last_final_path)
+        val_block = _build_metric_block(last_val_metrics_export)
+        test_primary_block = _build_metric_block(last_test_metrics_export)
+        sensitivity_block = _build_sensitivity_block(
+            final_test_metrics.get("strata")
+            if isinstance(final_test_metrics, Mapping)
+            else None
+        )
+        provenance_block = _build_metrics_provenance(
+            args, experiment4_trace=experiment4_trace
+        )
+        threshold_sources: Dict[str, str] = {}
+        if last_val_tau_info:
+            threshold_sources["val"] = last_val_tau_info
+        if last_test_tau_info:
+            threshold_sources["test"] = last_test_tau_info
+        thresholds_block = _build_thresholds_block(
+            thresholds_map,
+            policy=getattr(args, "threshold_policy", None),
+            sources=threshold_sources,
+        )
         last_metrics_payload: Dict[str, Any] = {
             "seed": _get_active_seed(args),
             "epoch": int(last_epoch),
             "train_loss": float(last_loss) if last_loss is not None else None,
-            "val": dict(last_val_metrics_export or {}),
-            "test": dict(last_test_metrics_export or {}),
             "monitor_value": float(last_monitor_value)
             if last_monitor_value is not None
             else None,
             "monitor_metric": monitor_name,
+            "val": val_block,
+            "test_primary": test_primary_block,
+            "test_sensitivity": sensitivity_block,
+            "provenance": provenance_block,
         }
+        dataset_summary = getattr(args, "dataset_summary", None)
+        if dataset_summary:
+            last_metrics_payload["dataset"] = dataset_summary
+        if last_val_tau_info:
+            last_metrics_payload["val_tau_source"] = last_val_tau_info
+        if last_test_tau_info:
+            last_metrics_payload["test_tau_source"] = last_test_tau_info
         if last_train_lr is not None:
             last_metrics_payload["train_lr"] = float(last_train_lr)
         if last_train_lr_groups:
@@ -4429,7 +5324,10 @@ def train(rank, args):
             last_metrics_payload["threshold_files"] = {
                 threshold_key: latest_threshold_file_relpath
             }
-            last_metrics_payload["threshold_policy"] = args.threshold_policy
+        if thresholds_block:
+            last_metrics_payload["thresholds"] = thresholds_block
+        if getattr(args, "threshold_policy", None):
+            last_metrics_payload.setdefault("threshold_policy", args.threshold_policy)
         if curve_export_metadata:
             last_metrics_payload.setdefault("curve_exports", {})["test"] = curve_export_metadata
         last_metrics_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.metrics.json"
@@ -4620,7 +5518,7 @@ def get_args():
         "--threshold-policy",
         type=str,
         default="auto",
-        choices=["auto", "youden", "none"],
+        choices=["auto", "youden", "none", "f1-morph"],
         help="Threshold policy to apply when tracking the best checkpoint (default: auto)",
     )
     parser.add_argument("--workers", type=int, default=8)

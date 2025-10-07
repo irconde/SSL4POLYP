@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 import pytest
@@ -32,7 +33,12 @@ def test_test_writes_per_frame_outputs(tmp_path: Path, tau: float):
     )
     targets = torch.tensor([1, 0, 1, 0], dtype=torch.long)
     metadata = [
-        {"frame_id": f"frame-{idx}", "origin": "polypgen", "case_id": f"case-{idx // 2}"}
+        {
+            "frame_id": f"frame-{idx}",
+            "origin": "polypgen",
+            "case_id": f"case-{idx // 2}",
+            "morphology": "flat" if idx == 0 else ("polypoid" if idx == 2 else "unknown"),
+        }
         for idx in range(len(targets))
     ]
     inputs = torch.zeros((len(targets), 3, 8, 8), dtype=torch.float32)
@@ -66,9 +72,26 @@ def test_test_writes_per_frame_outputs(tmp_path: Path, tau: float):
     assert first_row["frame_id"] == "frame-0"
     assert first_row["origin"] == "polypgen"
     assert first_row["sequence_id"] == "case-0"
+    assert first_row["case_id"] == "case-0"
+    assert first_row["morphology"] == "flat"
     assert int(first_row["label"]) == 1
     assert int(first_row["pred"]) == 1
     assert pytest.approx(float(first_row["prob"]), rel=1e-6) == torch.sigmoid(torch.tensor(1.0)).item()
+
+    strata = result.get("strata")
+    assert strata is not None
+    overall = strata["overall"]
+    flat_stratum = strata["flat_plus_negs"]
+    polypoid_stratum = strata["polypoid_plus_negs"]
+    assert overall["n_pos"] == 2
+    assert overall["n_neg"] == 2
+    assert overall["prevalence"] == pytest.approx(0.5)
+    assert flat_stratum["n_pos"] == 1
+    assert flat_stratum["n_neg"] == 2
+    assert flat_stratum["prevalence"] == pytest.approx(1 / 3)
+    assert polypoid_stratum["n_pos"] == 1
+    assert polypoid_stratum["n_neg"] == 2
+    assert polypoid_stratum["prevalence"] == pytest.approx(1 / 3)
 
     threshold_metrics = result.get("threshold_metrics")
     assert threshold_metrics is not None
@@ -139,3 +162,104 @@ def test_curve_exports_write_csvs(tmp_path: Path):
     last_pr = pr_rows[-1]
     assert as_float(last_pr["threshold"]) == pytest.approx(1.0)
     assert last_pr["precision"] == ""
+
+
+def test_prepare_metric_export_includes_counts_and_confusion():
+    metrics = {
+        "auroc": 0.75,
+        "class_counts": [4, 6],
+        "threshold_metrics": {
+            "tp": 5,
+            "tn": 3,
+            "fp": 1,
+            "fn": 2,
+            "prevalence": 0.6,
+            "mcc": 0.25,
+        },
+    }
+
+    export = tc._prepare_metric_export(metrics)
+
+    assert export["tp"] == 5
+    assert export["fp"] == 1
+    assert export["fn"] == 2
+    assert export["tn"] == 3
+    assert export["n_neg"] == 4
+    assert export["n_pos"] == 6
+    assert export["n_total"] == 10
+    assert export["prevalence"] == pytest.approx(0.6)
+    assert export["mcc"] == pytest.approx(0.25)
+
+
+def test_build_metric_block_selects_primary_metrics():
+    metrics = {
+        "auprc": 0.82,
+        "tp": 7,
+        "fp": 2,
+        "tn": 9,
+        "fn": 1,
+        "prevalence": 0.45,
+        "tau": 0.37,
+        "tau_info": "demo",
+        "ignored": 123,
+    }
+
+    block = tc._build_metric_block(metrics)
+
+    assert block["auprc"] == pytest.approx(0.82)
+    assert block["tp"] == 7
+    assert block["fp"] == 2
+    assert block["tau"] == pytest.approx(0.37)
+    assert block["tau_info"] == "demo"
+    assert "ignored" not in block
+
+
+def test_build_sensitivity_block_filters_invalid_entries():
+    strata = {
+        "overall": {"auprc": 0.5, "tp": 3},
+        "flat_plus_negs": {"f1": 0.6, "n_pos": 2},
+        "invalid": 123,
+    }
+
+    block = tc._build_sensitivity_block(strata)
+
+    assert set(block.keys()) == {"flat_plus_negs", "overall"}
+    assert block["overall"]["tp"] == 3
+    assert block["flat_plus_negs"]["n_pos"] == 2
+
+
+def test_build_metrics_provenance_prefers_subset_trace():
+    args = SimpleNamespace(
+        seed=7,
+        active_seed=11,
+        model_key="ssl_colon",
+        model_tag="ssl_colon_tag",
+        run_stem="ssl_colon_run",
+        arch="vit_b",
+        dataset_percent=None,
+        dataset_seed=23,
+        test_split="test",
+        dataset_layout={"percent": 50, "dataset_seed": 99},
+    )
+    trace = tc.Experiment4SubsetTrace(
+        percent=25,
+        seed=42,
+        train_pos_cases=0,
+        train_neg_cases=0,
+        frames_per_case=None,
+        total_frames=0,
+        pos_case_ids=tuple(),
+        neg_case_ids=tuple(),
+        pos_digest="",
+        neg_digest="",
+        manifest=None,
+    )
+
+    provenance = tc._build_metrics_provenance(args, experiment4_trace=trace)
+
+    assert provenance["model"] == "ssl_colon"
+    assert provenance["arch"] == "vit_b"
+    assert provenance["train_seed"] == 11
+    assert provenance["subset_percent"] == pytest.approx(25.0)
+    assert provenance["pack_seed"] == 42
+    assert provenance["split"] == "test"

@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import hashlib
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import torch
 from PIL import Image
@@ -25,11 +26,17 @@ class PackDataset(Dataset):
     meta: Sequence[MutableMapping[str, object]]
     transform: ClassificationTransforms
     return_meta: bool = True
+    provenance: Optional[Mapping[str, Any]] = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self._paths = [str(Path(p)) for p in self.paths]
         self._labels = self._prepare_labels(self.labels)
         self._meta = [dict(row) for row in self.meta] if self.meta else [{} for _ in self._paths]
+        provenance_dict = dict(self.provenance or {})
+        self.provenance = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in provenance_dict.items()
+        }
 
     @staticmethod
     def _prepare_labels(labels: Optional[Sequence[object]]) -> Optional[list[int]]:
@@ -210,6 +217,7 @@ def _load_datasets(
         overrides=transform_overrides,
     )
     snapshot_consumed = False
+    csv_hash_cache: Dict[Path, str] = {}
     for spec_key, splits in grouped.items():
         manifest, csv_map = _resolve_manifest_and_csvs(spec_lookup[spec_key], splits, pack_root)
         load_kwargs = {split: csv_map[split] for split in splits}
@@ -225,11 +233,31 @@ def _load_datasets(
             if split not in pack_dict:
                 raise KeyError(f"Split '{split}' not returned for pack '{spec_lookup[spec_key]}'")
             paths, labels, meta = pack_dict[split]
+            csv_path = Path(csv_map[split])
+            csv_hash = csv_hash_cache.get(csv_path)
+            if csv_hash is None:
+                hasher = hashlib.sha256()
+                with open(csv_path, "rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        if not chunk:
+                            break
+                        hasher.update(chunk)
+                csv_hash = hasher.hexdigest()
+                csv_hash_cache[csv_path] = csv_hash
+            provenance = {
+                "split": split,
+                "csv_path": str(csv_path),
+                "csv_sha256": csv_hash,
+                "pack_spec": str(spec_lookup.get(spec_key, spec_key)),
+            }
+            if manifest is not None:
+                provenance["manifest_path"] = str(manifest)
             datasets[split] = PackDataset(
                 paths=paths,
                 labels=labels,
                 meta=meta,
                 transform=transforms_map[split],
+                provenance=provenance,
             )
     return datasets
 

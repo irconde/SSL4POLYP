@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import csv
+import json
+from pathlib import Path
+
+import pytest  # type: ignore[import]
+
+from ssl4polyp.classification.analysis.exp3_report import (  # type: ignore[import]
+    FrameRecord,
+    compute_strata_metrics,
+    generate_report,
+)
+
+
+@pytest.mark.parametrize("tau", [0.5, 0.7])
+def test_compute_strata_metrics_counts(tau: float) -> None:
+    records = [
+        FrameRecord(prob=0.9, label=1, pred=1, case_id="case_polyp", morphology="polypoid"),
+        FrameRecord(prob=0.8, label=1, pred=1, case_id="case_flat", morphology="flat"),
+        FrameRecord(prob=0.2, label=0, pred=0, case_id="case_neg1", morphology="unknown"),
+        FrameRecord(prob=0.3, label=0, pred=0, case_id="case_neg2", morphology="other"),
+    ]
+    metrics = compute_strata_metrics(records, tau=tau)
+    assert metrics["overall"]["n_pos"] == 2
+    assert metrics["overall"]["n_neg"] == 2
+    assert metrics["flat_plus_negs"]["n_pos"] == 1
+    assert metrics["flat_plus_negs"]["n_neg"] == 2
+    assert metrics["polypoid_plus_negs"]["n_pos"] == 1
+    assert metrics["polypoid_plus_negs"]["n_neg"] == 2
+
+
+def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]], tau: float = 0.5) -> None:
+    run_prefix = f"{model}__sun_morphology_s{seed}"
+    metrics_path = root / f"{run_prefix}_last.metrics.json"
+    metrics_path.write_text(json.dumps({"seed": seed, "test": {"tau": tau}}), encoding="utf-8")
+    outputs_path = root / f"{run_prefix}_test_outputs.csv"
+    with outputs_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["case_id", "prob", "label", "pred", "morphology"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def test_generate_report_smoke(tmp_path: Path) -> None:
+    colon_rows = [
+        {"case_id": "a", "prob": 0.9, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "a", "prob": 0.1, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "b", "prob": 0.8, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "c", "prob": 0.2, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    sup_rows = [
+        {"case_id": "a", "prob": 0.7, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.4, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "c", "prob": 0.3, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    _write_run(tmp_path, "ssl_colon", seed=1, rows=colon_rows, tau=0.5)
+    _write_run(tmp_path, "sup_imnet", seed=1, rows=sup_rows, tau=0.5)
+
+    report = generate_report(tmp_path, bootstrap=10, rng_seed=7)
+
+    assert "## Metrics at τ_F1(val-morph) — Overall" in report
+    assert "Flat + Negs" in report
+    assert "SSL-Colon − SUP-ImNet" in report
+    assert "Interaction effect" in report
