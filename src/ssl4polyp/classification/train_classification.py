@@ -1323,6 +1323,16 @@ PRIMARY_METRIC_KEYS: Tuple[str, ...] = (
 )
 
 
+RETENTION_METRIC_KEYS: Tuple[str, ...] = (
+    "auprc",
+    "auroc",
+    "recall",
+    "precision",
+    "f1",
+    "balanced_accuracy",
+)
+
+
 INTEGER_METRIC_KEYS: set[str] = {
     "tp",
     "fp",
@@ -1374,6 +1384,36 @@ def _build_metric_block(
     if isinstance(tau_info, str) and tau_info:
         block["tau_info"] = tau_info
     return dict(block)
+
+
+def _build_perturbation_export(
+    metrics: Optional[Mapping[str, Any]]
+) -> Optional[Dict[str, Dict[str, float | int]]]:
+    """Select perturbation metrics for export when available."""
+
+    if not isinstance(metrics, Mapping):
+        return None
+    per_tag_raw = metrics.get("perturbation_metrics")
+    if not isinstance(per_tag_raw, Mapping):
+        return None
+    export: Dict[str, Dict[str, float | int]] = {}
+    for tag, stats in per_tag_raw.items():
+        if not isinstance(stats, Mapping):
+            continue
+        sanitized: Dict[str, float | int] = {}
+        for key, value in stats.items():
+            numeric = _coerce_metric_value(value)
+            if numeric is None:
+                continue
+            if key in INTEGER_METRIC_KEYS:
+                sanitized[key] = int(numeric)
+            else:
+                sanitized[key] = float(numeric)
+        if sanitized:
+            export[str(tag)] = sanitized
+    if not export:
+        return None
+    return {"per_tag": dict(sorted(export.items()))}
 
 
 def _build_sensitivity_block(
@@ -1455,6 +1495,62 @@ def _build_metrics_provenance(
         provenance["arch"] = str(arch)
     provenance["train_seed"] = int(_get_active_seed(args))
 
+    dataset_summary = getattr(args, "dataset_summary", None)
+    train_summary = dataset_summary.get("train") if isinstance(dataset_summary, Mapping) else None
+    manifest_payload: Optional[Mapping[str, Any]] = None
+    train_pack_spec: Optional[str] = None
+    if isinstance(train_summary, Mapping):
+        train_pack_spec = train_summary.get("pack_spec")
+        if train_pack_spec:
+            provenance["train_pack"] = str(train_pack_spec)
+            provenance.setdefault("train_pack_name", Path(str(train_pack_spec)).name)
+        csv_hash = train_summary.get("csv_sha256")
+        if csv_hash:
+            provenance["train_csv_sha256"] = str(csv_hash)
+        manifest_path = train_summary.get("manifest_path")
+        if manifest_path:
+            provenance.setdefault("train_manifest" , str(manifest_path))
+            try:
+                manifest_text = Path(str(manifest_path)).read_text(encoding="utf-8")
+                manifest_payload = yaml.safe_load(manifest_text) or {}
+            except OSError:
+                manifest_payload = None
+    val_summary = dataset_summary.get("val") if isinstance(dataset_summary, Mapping) else None
+    if isinstance(val_summary, Mapping):
+        csv_hash = val_summary.get("csv_sha256")
+        if csv_hash:
+            provenance["val_csv_sha256"] = str(csv_hash)
+    test_summary = dataset_summary.get("test") if isinstance(dataset_summary, Mapping) else None
+    if isinstance(test_summary, Mapping):
+        csv_hash = test_summary.get("csv_sha256")
+        if csv_hash:
+            provenance["test_csv_sha256"] = str(csv_hash)
+
+    fewshot_budget: Optional[int] = None
+    pack_seed_value: Optional[int] = None
+    if isinstance(manifest_payload, Mapping):
+        policy_block = manifest_payload.get("policy")
+        if isinstance(policy_block, Mapping):
+            budget_value = policy_block.get("fewshot_budget_S") or policy_block.get("target_train_size")
+            if isinstance(budget_value, (int, float)):
+                fewshot_budget = int(budget_value)
+        generator_block = manifest_payload.get("generator")
+        if isinstance(generator_block, Mapping):
+            seed_value = generator_block.get("seed")
+            if isinstance(seed_value, (int, float)):
+                pack_seed_value = int(seed_value)
+    if fewshot_budget is None and isinstance(train_pack_spec, str):
+        match = re.search(r"_s(\d+)", train_pack_spec)
+        if match:
+            try:
+                fewshot_budget = int(match.group(1))
+            except ValueError:
+                fewshot_budget = None
+    if fewshot_budget is not None:
+        provenance["fewshot_budget"] = int(fewshot_budget)
+    if pack_seed_value is not None:
+        provenance.setdefault("pack_seed", int(pack_seed_value))
+
     subset_percent: Optional[float] = None
     if experiment4_trace and experiment4_trace.percent is not None:
         subset_percent = float(experiment4_trace.percent)
@@ -1501,15 +1597,52 @@ def _build_metrics_provenance(
     return dict(provenance)
 
 
+def _parse_threshold_key(key: Optional[str]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Return (dataset, split, policy) parsed from a threshold key."""
+
+    if not key:
+        return None, None, None
+    parts = [segment for segment in str(key).split("_") if segment]
+    if len(parts) < 3:
+        return str(key), None, None
+    policy = parts[-1]
+    split = parts[-2]
+    dataset = "_".join(parts[:-2])
+    dataset = dataset or None
+    split = split or None
+    policy = policy or None
+    return dataset, split, policy
+
+
 def _build_thresholds_block(
     thresholds_map: Optional[Mapping[str, Any]],
     *,
     policy: Optional[str] = None,
     sources: Optional[Mapping[str, str]] = None,
+    primary: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Return a structured representation of threshold provenance."""
 
     block: "OrderedDict[str, Any]" = OrderedDict()
+    if primary:
+        primary_block: "OrderedDict[str, Any]" = OrderedDict()
+        tau_value = primary.get("tau") if isinstance(primary, Mapping) else None
+        if isinstance(tau_value, (int, float, np.integer, np.floating)) and math.isfinite(float(tau_value)):
+            primary_block["tau"] = float(tau_value)
+        policy_value = primary.get("policy") if isinstance(primary, Mapping) else None
+        if isinstance(policy_value, str) and policy_value:
+            primary_block["policy"] = policy_value
+        split_value = primary.get("split") if isinstance(primary, Mapping) else None
+        if isinstance(split_value, str) and split_value:
+            primary_block["split"] = split_value
+        source_key = primary.get("source_key") if isinstance(primary, Mapping) else None
+        if isinstance(source_key, str) and source_key:
+            primary_block["source_key"] = source_key
+        info_value = primary.get("info") if isinstance(primary, Mapping) else None
+        if isinstance(info_value, str) and info_value:
+            primary_block["info"] = info_value
+        if primary_block:
+            block["primary"] = dict(primary_block)
     if policy:
         block["policy"] = policy
     if thresholds_map:
@@ -1529,6 +1662,51 @@ def _build_thresholds_block(
         if filtered_sources:
             block["sources"] = filtered_sources
     return dict(block)
+
+
+def _compute_domain_shift_delta(
+    polyp_metrics: Optional[Mapping[str, Any]],
+    parent_reference: Optional[ParentRunReference],
+    *,
+    metrics: Sequence[str] = ("recall", "f1", "auprc", "auroc"),
+) -> Optional[Dict[str, Any]]:
+    """Return domain-shift deltas (PolypGen minus SUN) when parent metrics are available."""
+
+    if not polyp_metrics or not isinstance(polyp_metrics, Mapping):
+        return None
+    if not isinstance(parent_reference, ParentRunReference):
+        return None
+    payload = parent_reference.metrics_payload
+    if not isinstance(payload, Mapping):
+        return None
+    sun_block = payload.get("test_primary")
+    if not isinstance(sun_block, Mapping):
+        return None
+    deltas: Dict[str, float] = {}
+    sun_values: Dict[str, float] = {}
+    for metric_name in metrics:
+        polyp_value = polyp_metrics.get(metric_name)
+        sun_value = sun_block.get(metric_name)
+        if not isinstance(polyp_value, (int, float, np.integer, np.floating)):
+            continue
+        if not isinstance(sun_value, (int, float, np.integer, np.floating)):
+            continue
+        polyp_numeric = float(polyp_value)
+        sun_numeric = float(sun_value)
+        if not (math.isfinite(polyp_numeric) and math.isfinite(sun_numeric)):
+            continue
+        delta_value = polyp_numeric - sun_numeric
+        deltas[metric_name] = delta_value
+        sun_values[metric_name] = sun_numeric
+    if not deltas:
+        return None
+    result: Dict[str, Any] = {"metrics": deltas}
+    if sun_values:
+        result["sun"] = sun_values
+    sun_tau = sun_block.get("tau")
+    if isinstance(sun_tau, (int, float, np.integer, np.floating)) and math.isfinite(float(sun_tau)):
+        result["sun_tau"] = float(sun_tau)
+    return result
 
 
 def _sanitize_path_segment(raw: Any, *, default: str = "default") -> str:
@@ -1683,6 +1861,7 @@ def _export_frame_outputs(
         "pred",
         "case_id",
         "origin",
+        "center_id",
         "sequence_id",
         "morphology",
     ]
@@ -1720,6 +1899,19 @@ def _export_frame_outputs(
                     "source_dataset",
                 ),
             )
+            center_id = _resolve_metadata_value(
+                row,
+                (
+                    "center_id",
+                    "centre_id",
+                    "center",
+                    "centre",
+                    "hospital_id",
+                    "hospital",
+                    "origin",
+                    "store_id",
+                ),
+            )
             sequence_id = _resolve_metadata_value(
                 row,
                 (
@@ -1743,6 +1935,7 @@ def _export_frame_outputs(
                     "pred": int(preds[idx]) if idx < len(preds) else None,
                     "case_id": case_id,
                     "origin": origin,
+                    "center_id": center_id,
                     "sequence_id": sequence_id,
                     "morphology": morphology,
                 }
@@ -4556,10 +4749,37 @@ def train(rank, args):
                 test_tau_info = test_metrics.get("tau_info")
                 if isinstance(test_tau_info, str) and test_tau_info:
                     threshold_sources["test"] = test_tau_info
+            primary_metadata: Optional[Dict[str, Any]] = None
+            if isinstance(test_primary_block, Mapping):
+                primary_metadata = {}
+                tau_value = test_primary_block.get("tau")
+                if isinstance(tau_value, (int, float, np.integer, np.floating)) and math.isfinite(float(tau_value)):
+                    primary_metadata["tau"] = float(tau_value)
+                dataset_name, split_name, policy_name = _parse_threshold_key(eval_tau_key)
+                if getattr(args, "is_exp5a", False) and dataset_name and split_name:
+                    primary_metadata["policy"] = "sun_val_frozen"
+                elif getattr(args, "threshold_policy", None):
+                    primary_metadata["policy"] = str(getattr(args, "threshold_policy"))
+                elif policy_name:
+                    primary_metadata["policy"] = str(policy_name)
+                if dataset_name and split_name:
+                    primary_metadata["split"] = f"{dataset_name}/{split_name}"
+                elif split_name:
+                    primary_metadata["split"] = str(split_name)
+                if eval_tau_key:
+                    primary_metadata["source_key"] = str(eval_tau_key)
+                tau_info_value = None
+                if isinstance(test_metrics, Mapping):
+                    tau_info_value = test_metrics.get("tau_info")
+                if isinstance(tau_info_value, str) and tau_info_value:
+                    primary_metadata["info"] = tau_info_value
+                if not primary_metadata:
+                    primary_metadata = None
             thresholds_block = _build_thresholds_block(
                 thresholds_map,
                 policy=getattr(args, "threshold_policy", None),
                 sources=threshold_sources,
+                primary=primary_metadata,
             )
             provenance_block = _build_metrics_provenance(
                 args, experiment4_trace=experiment4_trace
@@ -4573,6 +4793,9 @@ def train(rank, args):
                 "test_sensitivity": sensitivity_block,
                 "provenance": provenance_block,
             }
+            perturbation_block = _build_perturbation_export(test_metrics)
+            if perturbation_block:
+                metrics_payload["test_perturbations"] = perturbation_block
             dataset_summary = getattr(args, "dataset_summary", None)
             if dataset_summary:
                 metrics_payload["dataset"] = dataset_summary
@@ -4591,6 +4814,13 @@ def train(rank, args):
                 metrics_payload.setdefault("curve_exports", {})["test"] = (
                     curve_export_metadata
                 )
+            if getattr(args, "is_exp5a", False):
+                domain_shift_block = _compute_domain_shift_delta(
+                    test_primary_block if isinstance(test_primary_block, Mapping) else None,
+                    getattr(args, "parent_reference", None),
+                )
+                if domain_shift_block:
+                    metrics_payload["domain_shift_delta"] = domain_shift_block
             metrics_path = ckpt_stem.with_suffix(".metrics.json")
             metrics_path.parent.mkdir(parents=True, exist_ok=True)
             with metrics_path.open("w", encoding="utf-8") as handle:
@@ -5307,6 +5537,9 @@ def train(rank, args):
             "test_sensitivity": sensitivity_block,
             "provenance": provenance_block,
         }
+        perturbation_block = _build_perturbation_export(final_test_metrics)
+        if perturbation_block:
+            last_metrics_payload["test_perturbations"] = perturbation_block
         dataset_summary = getattr(args, "dataset_summary", None)
         if dataset_summary:
             last_metrics_payload["dataset"] = dataset_summary
