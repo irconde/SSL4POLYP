@@ -9,3 +9,6 @@ protocol:
   init_from: canonical_sun_models
   finetune: none
   eval_split: test
+  thresholds:
+    primary: sun_val_frozen
+threshold_policy: sun_val_frozen

@@ -1697,24 +1697,7 @@ def _build_thresholds_block(
 
     block: "OrderedDict[str, Any]" = OrderedDict()
     if primary:
-        primary_block: "OrderedDict[str, Any]" = OrderedDict()
-        tau_value = primary.get("tau") if isinstance(primary, Mapping) else None
-        if isinstance(tau_value, (int, float, np.integer, np.floating)) and math.isfinite(float(tau_value)):
-            primary_block["tau"] = float(tau_value)
-        policy_value = primary.get("policy") if isinstance(primary, Mapping) else None
-        if isinstance(policy_value, str) and policy_value:
-            primary_block["policy"] = policy_value
-        split_value = primary.get("split") if isinstance(primary, Mapping) else None
-        if isinstance(split_value, str) and split_value:
-            primary_block["split"] = split_value
-        source_key = primary.get("source_key") if isinstance(primary, Mapping) else None
-        if isinstance(source_key, str) and source_key:
-            primary_block["source_key"] = source_key
-        info_value = primary.get("info") if isinstance(primary, Mapping) else None
-        if isinstance(info_value, str) and info_value:
-            primary_block["info"] = info_value
-        if primary_block:
-            block["primary"] = dict(primary_block)
+        block["primary"] = _convert_json_compatible(primary)
     if policy:
         block["policy"] = policy
     if thresholds_map:
@@ -1734,6 +1717,25 @@ def _build_thresholds_block(
         if filtered_sources:
             block["sources"] = filtered_sources
     return dict(block)
+
+
+def _convert_json_compatible(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        result: "OrderedDict[str, Any]" = OrderedDict()
+        for key, item in value.items():
+            result[str(key)] = _convert_json_compatible(item)
+        return dict(result)
+    if isinstance(value, (list, tuple)):
+        return [_convert_json_compatible(item) for item in value]
+    if isinstance(value, (np.integer, int)):
+        return int(value)
+    if isinstance(value, (np.floating, float)):
+        return float(value)
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    if value is None:
+        return None
+    return str(value)
 
 
 def _compute_domain_shift_delta(
@@ -2492,6 +2494,7 @@ def _build_threshold_payload(
     test_perf: float,
     model_tag: Optional[str] = None,
     subdir: Optional[str] = None,
+    policy_record: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Create a structured payload capturing threshold metadata."""
 
@@ -2531,6 +2534,10 @@ def _build_threshold_payload(
         payload["model_tag"] = model_tag
     if subdir:
         payload["directory"] = subdir
+    if policy_record:
+        payload["policy_record"] = json.loads(
+            json.dumps(policy_record, default=str)
+        )
     return payload
 
 
@@ -4496,47 +4503,94 @@ def build(args, rank, device: torch.device, distributed: bool):
         optimizer_param_groups, lr=args.lr, weight_decay=getattr(args, "weight_decay", 0.0)
     )
     thresholds_map = dict(thresholds_map)
-    morphology_eval = getattr(args, "morphology_eval", None)
     raw_policy = (args.threshold_policy or "auto").strip().lower()
-    allowed_policies = {"auto", "youden", "none", "f1-morph", ""}
+    alias_map = {
+        "youden": "youden_on_val",
+        "f1": "f1_opt_on_val",
+        "f1-morph": "f1_opt_on_val",
+    }
+    raw_policy = alias_map.get(raw_policy, raw_policy)
+    allowed_policies = {
+        "",
+        "auto",
+        "none",
+        "f1_opt_on_val",
+        "youden_on_val",
+        "sun_val_frozen",
+        "val_opt_youden",
+    }
     if raw_policy not in allowed_policies:
         raise ValueError(
-            f"Unsupported threshold policy '{raw_policy}'. Use 'auto', 'youden' or 'none'."
+            f"Unsupported threshold policy '{raw_policy}'. Use one of {sorted(allowed_policies)}."
         )
+
+    dataset_name = args.dataset or "dataset"
+    dataset_name_lower = dataset_name.lower()
+    val_split = args.val_split or "val"
+    binary_task = len(class_weights) == 2
     resolved_policy = raw_policy
-    dataset_name_lower = str(getattr(args, "dataset", "")).lower()
-    wants_morph_threshold = (
-        dataset_name_lower == "sun_morphology" and bool(morphology_eval)
-    )
     if resolved_policy in {"", "auto"}:
-        if wants_morph_threshold and len(class_weights) == 2:
-            resolved_policy = "f1-morph"
+        if not binary_task:
+            resolved_policy = "none"
+        elif getattr(args, "is_exp5a", False):
+            resolved_policy = "sun_val_frozen"
+        elif dataset_name_lower.startswith("polypgen_fewshot"):
+            resolved_policy = "val_opt_youden"
         else:
-            resolved_policy = "youden" if len(class_weights) == 2 else "none"
-    elif resolved_policy == "youden" and wants_morph_threshold and len(class_weights) == 2:
-        resolved_policy = "f1-morph"
-    if rank == 0:
-        if resolved_policy == "youden":
-            print("Auto-selecting Youden's J threshold policy for binary classification.")
-        elif resolved_policy == "f1-morph":
-            print("Auto-selecting F1 morphology-balanced threshold policy for binary classification.")
-        elif resolved_policy == "none":
-            print("Threshold policy resolved to 'none' because the task is not binary.")
-    if resolved_policy in {"youden", "f1-morph"} and len(class_weights) != 2:
+            resolved_policy = "f1_opt_on_val"
+
+    if resolved_policy in {"f1_opt_on_val", "youden_on_val", "val_opt_youden"} and not binary_task:
         if rank == 0:
             print(
-                "Warning: Youden threshold policy requested but dataset is not binary; disabling threshold computation."
+                "Warning: threshold policy requires binary classification; disabling threshold computation."
             )
         resolved_policy = "none"
-    compute_threshold = resolved_policy in {"youden", "f1-morph"} and val_dataloader is not None
-    threshold_key = None
-    if compute_threshold:
-        dataset_name = args.dataset or "dataset"
-        val_split = args.val_split or "val"
+
+    threshold_key: Optional[str] = None
+    if resolved_policy == "sun_val_frozen":
+        source_key = getattr(args, "threshold_source_key", None) or "primary"
+        parent_ref = getattr(args, "parent_reference", None)
+        if not isinstance(parent_ref, ParentRunReference) or not parent_ref.metrics_payload:
+            raise ValueError(
+                "Policy 'sun_val_frozen' requires a parent run providing stored thresholds."
+            )
+        tau, record = thresholds.resolve_frozen_sun_threshold(
+            parent_ref.metrics_payload.get("thresholds") or {},
+            source_key=source_key,
+            expected_split_substring="sun_full/val",
+            checkpoint_path=parent_ref.checkpoint_path,
+        )
         threshold_key = thresholds.format_threshold_key(
             dataset_name, val_split, resolved_policy
         )
+        thresholds_map.setdefault(threshold_key, float(tau))
+        args.frozen_threshold_record = dict(record)
+        args.threshold_source_key = source_key
+    else:
+        args.frozen_threshold_record = None
+
     args.threshold_policy = resolved_policy
+
+    if rank == 0:
+        if resolved_policy == "f1_opt_on_val":
+            print("Threshold policy resolved to 'f1_opt_on_val' (F1 optimisation on validation split).")
+        elif resolved_policy == "youden_on_val":
+            print("Threshold policy resolved to 'youden_on_val' (Youden J on validation split).")
+        elif resolved_policy == "val_opt_youden":
+            print("Threshold policy resolved to 'val_opt_youden' (few-shot validation Youden optimisation).")
+        elif resolved_policy == "sun_val_frozen":
+            print("Threshold policy resolved to 'sun_val_frozen' (reusing SUN validation τ).")
+        elif resolved_policy == "none":
+            print("Threshold policy resolved to 'none'; no threshold computation will be performed.")
+
+    compute_threshold = (
+        resolved_policy in {"f1_opt_on_val", "youden_on_val", "val_opt_youden"}
+        and val_dataloader is not None
+    )
+    if compute_threshold or resolved_policy == "sun_val_frozen":
+        threshold_key = thresholds.format_threshold_key(
+            dataset_name, val_split, resolved_policy
+        )
     use_amp = args.precision == "amp" and device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     scheduler = create_scheduler(optimizer, args)
@@ -4960,7 +5014,11 @@ def train(rank, args):
     val_case_ids: Optional[List[str]] = None
     val_morphology_labels: Optional[List[str]] = None
     latest_threshold_file_relpath: Optional[str] = None
-    latest_threshold_record: Optional[Dict[str, Any]] = None
+    frozen_initial_record = getattr(args, "frozen_threshold_record", None)
+    if isinstance(frozen_initial_record, Mapping):
+        latest_threshold_record = dict(_convert_json_compatible(frozen_initial_record))
+    else:
+        latest_threshold_record = None
     latest_thresholds_root: Optional[str] = None
 
     for epoch in range(start_epoch, args.epochs + 1):
@@ -5177,43 +5235,56 @@ def train(rank, args):
                 with open(log_path, "a") as f:
                     f.write("Saving...")
                     f.write("\n")
+                dataset_label = args.dataset or "dataset"
+                val_split_label = args.val_split or "val"
                 updated_thresholds = dict(thresholds_map)
                 threshold_file_relpath: Optional[str] = None
-                threshold_record: Optional[Dict[str, Any]] = None
                 thresholds_root_path: Optional[Path] = None
+                threshold_record: Optional[Dict[str, Any]] = None
+                frozen_record = getattr(args, "frozen_threshold_record", None)
+                if isinstance(frozen_record, Mapping):
+                    threshold_record = dict(_convert_json_compatible(frozen_record))
                 if (
                     compute_threshold
                     and threshold_key is not None
                     and val_logits is not None
                     and val_targets is not None
                 ):
-                    tau: Optional[float] = None
-                    if (
-                        args.threshold_policy == "f1-morph"
-                        and val_probabilities is not None
-                        and val_morphology_labels
-                    ):
-                        try:
+                    policy_result: Optional[thresholds.ThresholdPolicyResult] = None
+                    try:
+                        if val_probabilities is not None:
                             positive_scores = _extract_positive_probabilities(val_probabilities)
-                            tau = _compute_f1_morph_threshold(
-                                positive_scores=positive_scores.detach().cpu().numpy(),
-                                labels=val_targets.detach().cpu().numpy(),
-                                morphology=list(val_morphology_labels),
+                        else:
+                            positive_scores = _extract_positive_probabilities(
+                                _prepare_binary_probabilities(val_logits)
                             )
-                        except Exception:
-                            tau = None
-                    if tau is None:
-                        try:
-                            tau = thresholds.compute_youden_j_threshold(
-                                val_logits, val_targets
-                            )
-                        except ValueError as exc:
-                            print(
-                                f"Warning: unable to compute threshold '{threshold_key}': {exc}"
-                            )
-                            tau = None
-                    if tau is not None:
-                        updated_thresholds[threshold_key] = float(tau)
+                        scores_np = positive_scores.detach().cpu().numpy().astype(float)
+                        labels_np = val_targets.detach().cpu().numpy().astype(int)
+                        previous_tau = thresholds.resolve_threshold(updated_thresholds, threshold_key)
+                        split_label = f"{dataset_label}/{val_split_label}"
+                        policy_result = thresholds.compute_policy_threshold(
+                            scores_np,
+                            labels_np,
+                            policy=args.threshold_policy,
+                            split_name=split_label,
+                            epoch=int(epoch),
+                            previous_tau=previous_tau,
+                        )
+                    except ValueError as exc:
+                        print(
+                            f"Warning: unable to compute threshold '{threshold_key}': {exc}"
+                        )
+                        policy_result = None
+                    if policy_result is not None:
+                        tau = float(policy_result.tau)
+                        updated_thresholds[threshold_key] = tau
+                        threshold_record = dict(_convert_json_compatible(policy_result.record))
+                        threshold_record.setdefault("source_key", threshold_key)
+                        metrics_at_tau = _compute_threshold_statistics(
+                            val_logits, val_targets, tau
+                        )
+                        metrics_at_tau = _convert_json_compatible(metrics_at_tau)
+                        threshold_record.setdefault("metrics_at_tau", metrics_at_tau)
                         thresholds_root_path = Path(
                             getattr(args, "thresholds_root", None)
                             or (Path(args.output_dir).expanduser().parent / "thresholds")
@@ -5229,13 +5300,10 @@ def train(rank, args):
                         threshold_dir = thresholds_root_path / subdir
                         threshold_dir.mkdir(parents=True, exist_ok=True)
                         threshold_file = threshold_dir / f"{model_tag}.json"
-                        metrics_at_tau = _compute_threshold_statistics(
-                            val_logits, val_targets, float(tau)
-                        )
-                        threshold_record = _build_threshold_payload(
+                        threshold_record_payload = _build_threshold_payload(
                             args,
                             threshold_key=threshold_key,
-                            tau=float(tau),
+                            tau=tau,
                             metrics_at_tau=metrics_at_tau,
                             val_metrics=val_metrics_export,
                             test_metrics=test_metrics_export,
@@ -5243,9 +5311,10 @@ def train(rank, args):
                             test_perf=test_perf,
                             model_tag=model_tag,
                             subdir=subdir,
+                            policy_record=threshold_record,
                         )
                         with threshold_file.open("w", encoding="utf-8") as handle:
-                            json.dump(threshold_record, handle, indent=2)
+                            json.dump(threshold_record_payload, handle, indent=2)
                         try:
                             threshold_file_relpath = str(
                                 threshold_file.relative_to(thresholds_root_path.parent)
@@ -5297,6 +5366,10 @@ def train(rank, args):
                         payload.setdefault("threshold_records", {})[
                             threshold_key
                         ] = threshold_record
+                elif threshold_record is not None and threshold_key is not None:
+                    payload.setdefault("threshold_records", {})[
+                        threshold_key
+                    ] = threshold_record
                 if thresholds_root_path is not None:
                     payload["thresholds_root"] = str(thresholds_root_path)
                     latest_thresholds_root = str(thresholds_root_path)
@@ -5335,6 +5408,7 @@ def train(rank, args):
                     updated_thresholds,
                     policy=getattr(args, "threshold_policy", None),
                     sources=threshold_sources,
+                    primary=threshold_record,
                 )
                 run_block = _build_run_metadata(args, selection_tag=selection_tag)
                 metrics_payload: Dict[str, Any] = {
@@ -5595,6 +5669,10 @@ def train(rank, args):
                 last_payload.setdefault("threshold_records", {})[
                     threshold_key
                 ] = latest_threshold_record
+        elif latest_threshold_record is not None and threshold_key is not None:
+            last_payload.setdefault("threshold_records", {})[
+                threshold_key
+            ] = latest_threshold_record
         if latest_thresholds_root is not None:
             last_payload["thresholds_root"] = latest_thresholds_root
         last_candidate_name = (
@@ -5641,6 +5719,7 @@ def train(rank, args):
             thresholds_map,
             policy=getattr(args, "threshold_policy", None),
             sources=threshold_sources,
+            primary=latest_threshold_record,
         )
         run_block = _build_run_metadata(args, selection_tag=selection_tag)
         last_metrics_payload: Dict[str, Any] = {

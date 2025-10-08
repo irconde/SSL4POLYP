@@ -9,3 +9,7 @@ protocol:
   eval_split: test
   early_stop_split: val
   comparison: domain_vs_generic
+  thresholds:
+    primary: f1_opt_on_val
+    sensitivity: youden_on_val
+threshold_policy: f1_opt_on_val

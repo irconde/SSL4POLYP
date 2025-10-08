@@ -8,7 +8,10 @@ protocol:
   finetune: full
   eval_split: test
   early_stop_split: val
-  thresholds: sun_val_youden
+  thresholds:
+    primary: f1_opt_on_val
+    sensitivity: youden_on_val
   export_curves:
     splits: [test]
     points: 200
+threshold_policy: f1_opt_on_val

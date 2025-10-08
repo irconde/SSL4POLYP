@@ -21,8 +21,9 @@ protocol:
       backbone_lr: 2.0e-5
   eval_split: test
   thresholds:
-    primary: sun_val_youden
-    sensitivity: fewshot_val_youden
+    primary: sun_val_frozen
+    sensitivity: val_opt_youden
+threshold_policy: sun_val_frozen
 weight_decay: 0.01
 early_stop:
   monitor: val_loss

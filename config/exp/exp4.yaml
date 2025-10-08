@@ -8,4 +8,9 @@ models:
 protocol:
   finetune: full
   eval_split: test
+  early_stop_split: val
   subset_percents: [5, 10, 25, 50, 100]
+  thresholds:
+    primary: f1_opt_on_val
+    sensitivity: youden_on_val
+threshold_policy: f1_opt_on_val
