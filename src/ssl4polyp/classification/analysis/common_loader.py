@@ -78,7 +78,7 @@ def load_common_run(
     loader: Optional[ResultLoader] = None,
 ) -> CommonRun:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-    normalised_payload = _normalise_payload(payload)
+    normalised_payload = ResultLoader.normalise_payload(payload)
     active_loader = loader or get_default_loader()
     active_loader.validate(metrics_path, normalised_payload)
     provenance_block = normalised_payload.get("provenance")
@@ -140,21 +140,6 @@ def load_outputs_csv(
     if not frames:
         raise ValueError(f"No evaluation rows parsed from {outputs_path}")
     return tuple(frames), {case: tuple(items) for case, items in cases.items()}
-
-
-def _normalise_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    normalised: Dict[str, Any] = dict(payload)
-    test_primary = normalised.get("test_primary")
-    if not isinstance(test_primary, Mapping):
-        test_block = normalised.get("test")
-        if isinstance(test_block, Mapping):
-            normalised["test_primary"] = dict(test_block)
-    test_sensitivity = normalised.get("test_sensitivity")
-    if not isinstance(test_sensitivity, Mapping):
-        sensitivity_block = normalised.get("test_secondary")
-        if isinstance(sensitivity_block, Mapping):
-            normalised["test_sensitivity"] = dict(sensitivity_block)
-    return normalised
 
 
 def _extract_metrics(block: Optional[Mapping[str, Any]]) -> Dict[str, float]:

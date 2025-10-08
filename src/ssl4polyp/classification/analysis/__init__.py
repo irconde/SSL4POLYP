@@ -2,6 +2,8 @@
 
 __all__ = [
     "common_metrics",
+    "bootstrapper",
+    "display",
     "exp2_report",
     "exp3_report",
     "exp4_report",
