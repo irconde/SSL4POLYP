@@ -32,6 +32,7 @@ This repository hosts the reference implementation for the paper *Evaluating Dom
 - Each distributed pack is materialized once per configuration, and its manifest records the canonical generation seed that the configs expose when resolving data variants.
 - Training experiments default to the global seed trio `[13, 29, 47]`; evaluation-only manifests reuse the checkpoints emitted from those three seeds.
 - Scripts assume relative paths resolve against `config/` or `data_packs/` unless absolute paths are provided.
+- Downstream tooling expects held-out metrics to live under `test_*` keys. Treat any legacy packs that label the remainder split as `eval` as referring to the same test set when wiring configs or reports.
 
 ## Running Workflows
 1. Install dependencies via the locked `requirements.txt` (or `requirements-pip.txt` for tooling extras) and register the package in editable mode with `pip install --no-deps -e .`.

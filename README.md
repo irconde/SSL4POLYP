@@ -410,6 +410,8 @@ python -m ssl4polyp.classification.eval_classification \
 * Replace `[dataset]` with name of dataset (e.g., `Hyperkvasir_anatomical` or `Hyperkvasir_pathological`).
 * Replace `[data-root]` with path to the chosen dataset.
 
+All downstream tooling standardises on the `test_*` metric blocks for the held-out split. Some historic manifests labelled that split `eval`, but new runs should always export their primary and sensitivity metrics under the `test_*` keys so reports and aggregators stay consistent.
+
 In addition to printing the results (mean F1, precision, recall, AUROC and accuracy) the evaluation script also writes them to `eval_results.txt`. For further analysis, `ssl4polyp/classification/eval_outputs.py` provides a `write_outputs` helper to persist logits and metadata.
 
 ### Prediction

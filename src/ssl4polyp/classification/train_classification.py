@@ -1416,7 +1416,7 @@ def _build_perturbation_export(
     return {"per_tag": dict(sorted(export.items()))}
 
 
-def _build_sensitivity_block(
+def _build_morphology_block(
     strata: Optional[Mapping[str, Mapping[str, Any]]]
 ) -> Dict[str, Dict[str, Any]]:
     """Convert morphology strata metrics into exportable form."""
@@ -1692,12 +1692,15 @@ def _build_thresholds_block(
     policy: Optional[str] = None,
     sources: Optional[Mapping[str, str]] = None,
     primary: Optional[Mapping[str, Any]] = None,
+    sensitivity: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Return a structured representation of threshold provenance."""
 
     block: "OrderedDict[str, Any]" = OrderedDict()
     if primary:
         block["primary"] = _convert_json_compatible(primary)
+    if sensitivity:
+        block["sensitivity"] = _convert_json_compatible(sensitivity)
     if policy:
         block["policy"] = policy
     if thresholds_map:
@@ -1736,6 +1739,53 @@ def _convert_json_compatible(value: Any) -> Any:
     if value is None:
         return None
     return str(value)
+
+
+def _normalize_threshold_records_map(records: Any) -> Dict[str, Dict[str, Any]]:
+    """Return a copy of ``records`` with JSON-compatible values."""
+
+    normalised: Dict[str, Dict[str, Any]] = {}
+    if isinstance(records, Mapping):
+        for key, value in records.items():
+            if isinstance(value, Mapping):
+                normalised[str(key)] = _convert_json_compatible(dict(value))
+    return normalised
+
+
+def _resolve_primary_threshold_record(
+    *,
+    threshold_key: Optional[str],
+    threshold_records: Optional[Mapping[str, Mapping[str, Any]]],
+    frozen_record: Optional[Mapping[str, Any]],
+    parent_reference: Optional[ParentRunReference],
+) -> Optional[Dict[str, Any]]:
+    """Return the richest available primary threshold record."""
+
+    candidates: list[Mapping[str, Any]] = []
+    if threshold_key and isinstance(threshold_records, Mapping):
+        direct = threshold_records.get(threshold_key)
+        if isinstance(direct, Mapping):
+            candidates.append(direct)
+        else:
+            key_lower = str(threshold_key).lower()
+            for stored_key, stored_record in threshold_records.items():
+                if isinstance(stored_record, Mapping) and str(stored_key).lower() == key_lower:
+                    candidates.append(stored_record)
+                    break
+    if isinstance(frozen_record, Mapping):
+        candidates.append(frozen_record)
+    if isinstance(parent_reference, ParentRunReference):
+        payload = parent_reference.metrics_payload or {}
+        thresholds_block = payload.get("thresholds")
+        if isinstance(thresholds_block, Mapping):
+            primary_candidate = thresholds_block.get("primary")
+            if isinstance(primary_candidate, Mapping):
+                candidates.append(primary_candidate)
+    for candidate in candidates:
+        converted = _convert_json_compatible(dict(candidate))
+        if converted:
+            return converted
+    return None
 
 
 def _compute_domain_shift_delta(
@@ -1898,6 +1948,237 @@ def _compute_threshold_statistics(
         "mcc": mcc_value,
     }
     return metrics
+
+
+def _compute_metrics_for_probability_threshold(
+    probabilities: Optional[torch.Tensor],
+    targets: Optional[torch.Tensor],
+    tau: Optional[float],
+    *,
+    base_metrics: Optional[Mapping[str, Any]] = None,
+    tau_info: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Return aggregate metrics after applying ``tau`` to ``probabilities``."""
+
+    if tau is None or probabilities is None or targets is None:
+        return {}
+
+    try:
+        scores_tensor = _extract_positive_probabilities(probabilities)
+    except Exception:
+        return {}
+
+    if scores_tensor.numel() == 0:
+        return {}
+
+    targets_tensor = torch.as_tensor(targets)
+    if targets_tensor.numel() != scores_tensor.numel():
+        return {}
+
+    scores_np = scores_tensor.detach().cpu().numpy().astype(float, copy=False)
+    labels_np = targets_tensor.detach().cpu().numpy().astype(int, copy=False)
+
+    preds_np = (scores_np >= float(tau)).astype(int, copy=False)
+    positives = labels_np == 1
+    negatives = labels_np == 0
+
+    tp = int(np.count_nonzero(preds_np & positives))
+    fp = int(np.count_nonzero(preds_np & negatives))
+    tn = int(np.count_nonzero((1 - preds_np) & negatives))
+    fn = int(np.count_nonzero((1 - preds_np) & positives))
+
+    total = tp + fp + tn + fn
+    n_pos = int(np.count_nonzero(positives))
+    n_neg = int(np.count_nonzero(negatives))
+
+    def _safe_ratio(numerator: int, denominator: int) -> float:
+        if denominator <= 0:
+            return float("nan")
+        return float(numerator) / float(denominator)
+
+    recall = _safe_ratio(tp, tp + fn)
+    precision = _safe_ratio(tp, tp + fp)
+    specificity = _safe_ratio(tn, tn + fp)
+
+    if math.isfinite(recall) and math.isfinite(precision) and (precision + recall) > 0:
+        f1 = 2.0 * precision * recall / (precision + recall)
+    else:
+        f1 = float("nan")
+
+    if math.isfinite(recall) and math.isfinite(specificity):
+        balanced_accuracy = 0.5 * (recall + specificity)
+    else:
+        balanced_accuracy = float("nan")
+
+    denom = math.sqrt(
+        float(tp + fp)
+        * float(tp + fn)
+        * float(tn + fp)
+        * float(tn + fn)
+    )
+    if denom > 0:
+        mcc = ((tp * tn) - (fp * fn)) / denom
+    else:
+        mcc = float("nan")
+
+    prevalence = _safe_ratio(n_pos, n_pos + n_neg)
+
+    metrics: Dict[str, Any] = {
+        "tp": tp,
+        "fp": fp,
+        "tn": tn,
+        "fn": fn,
+        "n_pos": n_pos,
+        "n_neg": n_neg,
+        "n_total": total,
+        "count": total,
+        "prevalence": prevalence,
+        "recall": recall,
+        "precision": precision,
+        "f1": f1,
+        "balanced_accuracy": balanced_accuracy,
+        "mcc": mcc,
+        "tau": float(tau),
+    }
+    if tau_info:
+        metrics["tau_info"] = str(tau_info)
+
+    if base_metrics:
+        for key in ("loss", "auroc", "auprc"):
+            value = base_metrics.get(key)
+            if isinstance(value, (int, float, np.integer, np.floating)) and math.isfinite(float(value)):
+                metrics[key] = float(value)
+
+    return metrics
+
+
+def _resolve_policy_threshold(
+    *,
+    policy: Optional[str],
+    dataset: str,
+    split: str,
+    epoch: int,
+    scores: Optional[np.ndarray],
+    labels: Optional[np.ndarray],
+    previous_tau: Optional[float] = None,
+    parent_reference: Optional[ParentRunReference] = None,
+    source_key: Optional[str] = None,
+) -> Tuple[Optional[float], Optional[Dict[str, Any]]]:
+    """Compute or retrieve a threshold and provenance record for ``policy``."""
+
+    if not policy:
+        return None, None
+
+    policy_normalised = str(policy).strip().lower()
+    if policy_normalised in {"", "none"}:
+        return None, None
+
+    if policy_normalised == "sun_val_frozen":
+        if not isinstance(parent_reference, ParentRunReference):
+            raise ValueError(
+                "Policy 'sun_val_frozen' requires a parent run reference with stored thresholds."
+            )
+        thresholds_block = (parent_reference.metrics_payload or {}).get("thresholds") or {}
+        tau_value, record = thresholds.resolve_frozen_sun_threshold(
+            thresholds_block,
+            source_key=source_key or "primary",
+            expected_split_substring=f"{dataset}/{split}",
+            checkpoint_path=parent_reference.checkpoint_path,
+        )
+        return float(tau_value), dict(_convert_json_compatible(record))
+
+    if scores is None or labels is None:
+        return None, None
+
+    try:
+        result = thresholds.compute_policy_threshold(
+            scores,
+            labels,
+            policy=policy_normalised,
+            split_name=f"{dataset}/{split}",
+            epoch=int(epoch),
+            previous_tau=previous_tau,
+        )
+    except ValueError:
+        return None, None
+
+    record = dict(_convert_json_compatible(result.record))
+    if "policy" not in record:
+        record["policy"] = policy_normalised
+    record.setdefault("split", f"{dataset}/{split}")
+    if result.metrics:
+        record.setdefault("metrics", _convert_json_compatible(result.metrics))
+    if result.candidates:
+        record.setdefault("candidates", [_convert_json_compatible(value) for value in result.candidates])
+    return float(result.tau), record
+
+
+def _resolve_sensitivity_threshold(
+    *,
+    policy: Optional[str],
+    threshold_key: Optional[str],
+    dataset: str,
+    split: str,
+    epoch: int,
+    val_probabilities: Optional[torch.Tensor],
+    val_logits: Optional[torch.Tensor],
+    val_targets: Optional[torch.Tensor],
+    thresholds_map: MutableMapping[str, float],
+    parent_reference: Optional[ParentRunReference] = None,
+    source_key: Optional[str] = None,
+) -> Tuple[Optional[float], Optional[Dict[str, Any]]]:
+    """Compute and persist the sensitivity threshold if applicable."""
+
+    if not policy:
+        return None, None
+
+    previous_tau = None
+    if threshold_key and threshold_key in thresholds_map:
+        try:
+            previous_tau = float(thresholds_map[threshold_key])
+        except (TypeError, ValueError):
+            previous_tau = None
+
+    scores_np: Optional[np.ndarray] = None
+    labels_np: Optional[np.ndarray] = None
+
+    if policy not in {"sun_val_frozen"}:
+        scores_tensor: Optional[torch.Tensor] = None
+        if val_probabilities is not None:
+            try:
+                scores_tensor = _extract_positive_probabilities(val_probabilities)
+            except Exception:
+                scores_tensor = None
+        if scores_tensor is None and val_logits is not None:
+            try:
+                scores_tensor = _extract_positive_probabilities(
+                    _prepare_binary_probabilities(val_logits)
+                )
+            except Exception:
+                scores_tensor = None
+        if scores_tensor is None or val_targets is None:
+            return None, None
+        scores_np = scores_tensor.detach().cpu().numpy().astype(float, copy=False)
+        labels_np = (
+            torch.as_tensor(val_targets).detach().cpu().numpy().astype(int, copy=False)
+        )
+
+    tau_value, record = _resolve_policy_threshold(
+        policy=policy,
+        dataset=dataset,
+        split=split,
+        epoch=epoch,
+        scores=scores_np,
+        labels=labels_np,
+        previous_tau=previous_tau,
+        parent_reference=parent_reference,
+        source_key=source_key,
+    )
+
+    if tau_value is not None and threshold_key:
+        thresholds_map[threshold_key] = float(tau_value)
+
+    return tau_value, record
 
 
 def _coerce_metadata_row(row: Any) -> Mapping[str, Any]:
@@ -3192,6 +3473,26 @@ def apply_experiment_config(
         "threshold_policy", getattr(args, "threshold_policy", None)
     )
 
+    thresholds_cfg = (protocol_cfg.get("thresholds") or {}) if isinstance(protocol_cfg, Mapping) else {}
+    primary_policy = thresholds_cfg.get("primary")
+    if primary_policy:
+        canonical_primary = str(primary_policy)
+        args.primary_threshold_policy = canonical_primary
+        args.expected_primary_threshold_policy = canonical_primary
+        args.threshold_policy = canonical_primary
+    else:
+        args.primary_threshold_policy = getattr(args, "threshold_policy", None)
+        args.expected_primary_threshold_policy = None
+    sensitivity_policy = thresholds_cfg.get("sensitivity")
+    if sensitivity_policy is not None:
+        canonical_sensitivity = str(sensitivity_policy)
+        args.sensitivity_threshold_policy = canonical_sensitivity
+        args.expected_sensitivity_threshold_policy = canonical_sensitivity
+    else:
+        if not hasattr(args, "sensitivity_threshold_policy"):
+            args.sensitivity_threshold_policy = None
+        args.expected_sensitivity_threshold_policy = None
+
     for limit_key in ("limit_train_batches", "limit_val_batches", "limit_test_batches"):
         limit_value = experiment_cfg.get(limit_key)
         if limit_value is None:
@@ -4408,6 +4709,7 @@ def build(args, rank, device: torch.device, distributed: bool):
     log_path = stem_path.with_suffix(".log")
 
     thresholds_map: Dict[str, Any] = {}
+    threshold_record_cache: Dict[str, Dict[str, Any]] = {}
     existing_ckpt, pointer_valid = _find_existing_checkpoint(stem_path)
     parent_reference = getattr(args, "parent_checkpoint", None)
     parent_run_reference: Optional[ParentRunReference] = None
@@ -4428,6 +4730,9 @@ def build(args, rank, device: torch.device, distributed: bool):
         np.random.set_state(main_dict["np_state"])
         torch.set_rng_state(main_dict["torch_state"])
         thresholds_map = dict(main_dict.get("thresholds", {}) or {})
+        threshold_record_cache = _normalize_threshold_records_map(
+            main_dict.get("threshold_records")
+        )
         if not pointer_valid:
             _update_checkpoint_pointer(ckpt_path, Path(existing_ckpt))
     elif parent_reference:
@@ -4442,6 +4747,9 @@ def build(args, rank, device: torch.device, distributed: bool):
         if isinstance(parent_state, dict) and "model_state_dict" in parent_state:
             state_dict = parent_state["model_state_dict"]
             thresholds_map = dict(parent_state.get("thresholds", {}) or {})
+            threshold_record_cache = _normalize_threshold_records_map(
+                parent_state.get("threshold_records")
+            )
         else:
             state_dict = parent_state
         model.load_state_dict(state_dict)
@@ -4455,8 +4763,10 @@ def build(args, rank, device: torch.device, distributed: bool):
         best_val_perf = None
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch()
+        threshold_record_cache = {}
 
     args.parent_reference = parent_run_reference
+    args.cached_threshold_records = threshold_record_cache
 
     schedule_spec_list = getattr(args, "finetune_schedule_spec", []) or []
     schedule_stages = _materialize_finetune_schedule(
@@ -4539,6 +4849,24 @@ def build(args, rank, device: torch.device, distributed: bool):
         else:
             resolved_policy = "f1_opt_on_val"
 
+    expected_primary_raw = getattr(args, "expected_primary_threshold_policy", None)
+    expected_primary_canonical: Optional[str]
+    if expected_primary_raw:
+        expected_primary_lower = str(expected_primary_raw).strip().lower()
+        expected_primary_canonical = alias_map.get(
+            expected_primary_lower, expected_primary_lower
+        )
+        if expected_primary_canonical in {"", "auto"}:
+            expected_primary_canonical = None
+    else:
+        expected_primary_canonical = None
+    if expected_primary_canonical and expected_primary_canonical != resolved_policy:
+        raise ValueError(
+            "Experiment configuration requires primary threshold policy "
+            f"'{expected_primary_raw}' (canonical '{expected_primary_canonical}'), "
+            f"but resolved policy is '{resolved_policy}'."
+        )
+
     if resolved_policy in {"f1_opt_on_val", "youden_on_val", "val_opt_youden"} and not binary_task:
         if rank == 0:
             print(
@@ -4571,6 +4899,71 @@ def build(args, rank, device: torch.device, distributed: bool):
 
     args.threshold_policy = resolved_policy
 
+    raw_sensitivity_policy = getattr(args, "sensitivity_threshold_policy", None)
+    sensitivity_policy = None
+    if raw_sensitivity_policy is not None:
+        raw_sensitivity_policy = str(raw_sensitivity_policy).strip().lower()
+        sensitivity_policy = alias_map.get(raw_sensitivity_policy, raw_sensitivity_policy)
+        if sensitivity_policy not in allowed_policies - {"", "auto"}:
+            raise ValueError(
+                f"Unsupported sensitivity threshold policy '{raw_sensitivity_policy}'. Use one of {sorted(allowed_policies - {'', 'auto'})}."
+            )
+
+    sensitivity_threshold_key: Optional[str] = None
+
+    if sensitivity_policy in {"f1_opt_on_val", "youden_on_val", "val_opt_youden"} and not binary_task:
+        if rank == 0:
+            print(
+                "Warning: sensitivity threshold policy requires binary classification; disabling sensitivity threshold computation."
+            )
+        sensitivity_policy = None
+
+    if sensitivity_policy == "sun_val_frozen":
+        parent_ref = getattr(args, "parent_reference", None)
+        if not isinstance(parent_ref, ParentRunReference) or not parent_ref.metrics_payload:
+            raise ValueError(
+                "Sensitivity policy 'sun_val_frozen' requires a parent run providing stored thresholds."
+            )
+
+    if sensitivity_policy and val_dataloader is None and sensitivity_policy != "sun_val_frozen":
+        if rank == 0:
+            print(
+                "Warning: validation loader unavailable; sensitivity threshold computation disabled."
+            )
+        sensitivity_policy = None
+
+    if sensitivity_policy:
+        sensitivity_threshold_key = thresholds.format_threshold_key(
+            dataset_name, val_split, sensitivity_policy
+        )
+
+    expected_sensitivity_raw = getattr(args, "expected_sensitivity_threshold_policy", None)
+    if expected_sensitivity_raw:
+        expected_sensitivity_lower = str(expected_sensitivity_raw).strip().lower()
+        expected_sensitivity_canonical = alias_map.get(
+            expected_sensitivity_lower, expected_sensitivity_lower
+        )
+        if expected_sensitivity_canonical in {"", "auto"}:
+            expected_sensitivity_canonical = None
+    else:
+        expected_sensitivity_canonical = None
+    if expected_sensitivity_canonical:
+        if not sensitivity_policy:
+            raise ValueError(
+                "Experiment configuration requires sensitivity threshold policy "
+                f"'{expected_sensitivity_raw}' (canonical '{expected_sensitivity_canonical}'), "
+                "but no sensitivity policy was resolved."
+            )
+        if sensitivity_policy != expected_sensitivity_canonical:
+            raise ValueError(
+                "Experiment configuration requires sensitivity threshold policy "
+                f"'{expected_sensitivity_raw}' (canonical '{expected_sensitivity_canonical}'), "
+                f"but resolved sensitivity policy is '{sensitivity_policy}'."
+            )
+
+    args.sensitivity_threshold_policy = sensitivity_policy
+    args.sensitivity_threshold_key = sensitivity_threshold_key
+
     if rank == 0:
         if resolved_policy == "f1_opt_on_val":
             print("Threshold policy resolved to 'f1_opt_on_val' (F1 optimisation on validation split).")
@@ -4582,6 +4975,18 @@ def build(args, rank, device: torch.device, distributed: bool):
             print("Threshold policy resolved to 'sun_val_frozen' (reusing SUN validation τ).")
         elif resolved_policy == "none":
             print("Threshold policy resolved to 'none'; no threshold computation will be performed.")
+        if sensitivity_policy:
+            if sensitivity_policy == "sun_val_frozen":
+                policy_note = "reusing SUN validation τ"
+            elif sensitivity_policy == "val_opt_youden":
+                policy_note = "few-shot validation Youden optimisation"
+            elif sensitivity_policy == "youden_on_val":
+                policy_note = "Youden J on validation split"
+            elif sensitivity_policy == "f1_opt_on_val":
+                policy_note = "F1 optimisation on validation split"
+            else:
+                policy_note = sensitivity_policy
+            print(f"Sensitivity threshold policy resolved to '{sensitivity_policy}' ({policy_note}).")
 
     compute_threshold = (
         resolved_policy in {"f1_opt_on_val", "youden_on_val", "val_opt_youden"}
@@ -4591,6 +4996,26 @@ def build(args, rank, device: torch.device, distributed: bool):
         threshold_key = thresholds.format_threshold_key(
             dataset_name, val_split, resolved_policy
         )
+    if sensitivity_policy == "sun_val_frozen" and sensitivity_threshold_key not in thresholds_map:
+        parent_ref = getattr(args, "parent_reference", None)
+        tau_value, record = _resolve_policy_threshold(
+            policy=sensitivity_policy,
+            dataset=dataset_name,
+            split=val_split,
+            epoch=start_epoch - 1 if start_epoch > 1 else 0,
+            scores=None,
+            labels=None,
+            previous_tau=None,
+            parent_reference=parent_ref,
+            source_key=getattr(args, "sensitivity_threshold_source_key", None),
+        )
+        if tau_value is not None and sensitivity_threshold_key:
+            thresholds_map.setdefault(sensitivity_threshold_key, float(tau_value))
+            args.frozen_sensitivity_record = record
+        else:
+            args.frozen_sensitivity_record = None
+    else:
+        args.frozen_sensitivity_record = None
     use_amp = args.precision == "amp" and device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     scheduler = create_scheduler(optimizer, args)
@@ -4680,6 +5105,14 @@ def train(rank, args):
     eval_context_lookup = getattr(args, "eval_context_lookup", {})
     eval_only = train_dataloader is None
     use_amp = args.precision == "amp" and device.type == "cuda"
+
+    sensitivity_policy = getattr(args, "sensitivity_threshold_policy", None)
+    compute_sensitivity_threshold = (
+        sensitivity_policy in {"f1_opt_on_val", "youden_on_val", "val_opt_youden"}
+        and val_dataloader is not None
+    )
+    need_val_outputs = compute_threshold or compute_sensitivity_threshold
+    sensitivity_threshold_key = getattr(args, "sensitivity_threshold_key", None)
 
     if best_monitor_value is not None:
         try:
@@ -4809,6 +5242,23 @@ def train(rank, args):
         test_metrics: Optional[Dict[str, Any]] = None
         curve_export_metadata: Optional[Dict[str, Any]] = None
         if rank == 0:
+            val_logits_tensor: Optional[torch.Tensor] = None
+            val_probabilities_tensor: Optional[torch.Tensor] = None
+            val_targets_tensor: Optional[torch.Tensor] = None
+            test_probabilities_tensor: Optional[torch.Tensor] = None
+            test_targets_tensor: Optional[torch.Tensor] = None
+            sensitivity_record: Optional[Dict[str, Any]] = None
+            sensitivity_tau: Optional[float] = None
+            sensitivity_tau_info: Optional[str] = None
+            sensitivity_metrics_raw: Dict[str, Any] = {}
+            morphology_block: Dict[str, Dict[str, Any]] = {}
+            frozen_sensitivity = getattr(args, "frozen_sensitivity_record", None)
+            if isinstance(frozen_sensitivity, Mapping):
+                sensitivity_record = dict(_convert_json_compatible(frozen_sensitivity))
+            if sensitivity_threshold_key:
+                existing_tau = thresholds.resolve_threshold(thresholds_map, sensitivity_threshold_key)
+                if existing_tau is not None:
+                    sensitivity_tau = float(existing_tau)
             print("No training data provided; running evaluation-only mode.")
             eval_tau, eval_tau_key = resolve_eval_tau(
                 threshold_key, sun_threshold_key
@@ -4826,12 +5276,23 @@ def train(rank, args):
                     loss_fn=loss_fn,
                     loss_mode=loss_mode,
                     split_name="Val",
+                    return_outputs=need_val_outputs,
                     tau=eval_tau,
                     tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
                     morphology_eval=morphology_eval,
                     eval_context=eval_context_lookup.get("Val"),
                 )
+                if isinstance(val_metrics, Mapping):
+                    raw_val_logits = val_metrics.pop("logits", None)
+                    if isinstance(raw_val_logits, torch.Tensor):
+                        val_logits_tensor = raw_val_logits.detach().cpu()
+                    raw_val_probabilities = val_metrics.pop("probabilities", None)
+                    if isinstance(raw_val_probabilities, torch.Tensor):
+                        val_probabilities_tensor = raw_val_probabilities.detach().cpu()
+                    raw_val_targets = val_metrics.pop("targets", None)
+                    if isinstance(raw_val_targets, torch.Tensor):
+                        val_targets_tensor = raw_val_targets.detach().cpu()
                 if tb_logger:
                     tb_logger.log_metrics("val", val_metrics, eval_epoch)
             if test_dataloader is not None:
@@ -4863,6 +5324,13 @@ def train(rank, args):
                     log_path=log_path,
                 )
                 if isinstance(test_metrics, Mapping):
+                    raw_test_probabilities = test_metrics.get("probabilities")
+                    if isinstance(raw_test_probabilities, torch.Tensor):
+                        test_probabilities_tensor = raw_test_probabilities.detach().cpu()
+                    raw_test_targets = test_metrics.get("targets")
+                    if isinstance(raw_test_targets, torch.Tensor):
+                        test_targets_tensor = raw_test_targets.detach().cpu()
+                    morphology_block = _build_morphology_block(test_metrics.get("strata"))
                     test_metrics.pop("_case_ids", None)
                     test_metrics.pop("_morphology_labels", None)
                     if curve_export_metadata:
@@ -4878,13 +5346,53 @@ def train(rank, args):
             test_metrics_export = (
                 _prepare_metric_export(test_metrics) if isinstance(test_metrics, Mapping) else {}
             )
+            base_metrics_for_sensitivity: Optional[Mapping[str, Any]] = (
+                test_metrics if isinstance(test_metrics, Mapping) else None
+            )
+            if sensitivity_policy:
+                tau_value, record = _resolve_sensitivity_threshold(
+                    policy=sensitivity_policy,
+                    threshold_key=sensitivity_threshold_key,
+                    dataset=dataset_name,
+                    split=val_split,
+                    epoch=int(eval_epoch),
+                    val_probabilities=val_probabilities_tensor,
+                    val_logits=val_logits_tensor,
+                    val_targets=val_targets_tensor,
+                    thresholds_map=thresholds_map,
+                    parent_reference=getattr(args, "parent_reference", None),
+                    source_key=getattr(args, "sensitivity_threshold_source_key", None),
+                )
+                if tau_value is not None:
+                    sensitivity_tau = float(tau_value)
+                if record:
+                    sensitivity_record = dict(_convert_json_compatible(record))
+            sensitivity_block: Dict[str, Any]
+            if (
+                sensitivity_tau is not None
+                and test_probabilities_tensor is not None
+                and test_targets_tensor is not None
+            ):
+                if sensitivity_tau_info is None:
+                    if isinstance(sensitivity_record, Mapping):
+                        info_value = sensitivity_record.get("info") or sensitivity_record.get("tau_info")
+                        if isinstance(info_value, str) and info_value:
+                            sensitivity_tau_info = info_value
+                    if not sensitivity_tau_info and sensitivity_threshold_key:
+                        sensitivity_tau_info = describe_tau_source(sensitivity_threshold_key)
+                sensitivity_metrics_raw = _compute_metrics_for_probability_threshold(
+                    probabilities=test_probabilities_tensor,
+                    targets=test_targets_tensor,
+                    tau=sensitivity_tau,
+                    base_metrics=base_metrics_for_sensitivity,
+                    tau_info=sensitivity_tau_info,
+                )
+                sensitivity_block = _build_metric_block(sensitivity_metrics_raw)
+            else:
+                sensitivity_metrics_raw = {}
+                sensitivity_block = {}
             val_block = _build_metric_block(val_metrics_export)
             test_primary_block = _build_metric_block(test_metrics_export)
-            sensitivity_block = _build_sensitivity_block(
-                test_metrics.get("strata")
-                if isinstance(test_metrics, Mapping)
-                else None
-            )
             threshold_sources: Dict[str, str] = {}
             if isinstance(val_metrics, Mapping):
                 val_tau_info = val_metrics.get("tau_info")
@@ -4894,37 +5402,69 @@ def train(rank, args):
                 test_tau_info = test_metrics.get("tau_info")
                 if isinstance(test_tau_info, str) and test_tau_info:
                     threshold_sources["test"] = test_tau_info
-            primary_metadata: Optional[Dict[str, Any]] = None
+            if sensitivity_tau_info:
+                threshold_sources["sensitivity"] = sensitivity_tau_info
+            cached_threshold_records = getattr(args, "cached_threshold_records", None)
+            tau_value: Optional[float] = None
             if isinstance(test_primary_block, Mapping):
+                tau_candidate = test_primary_block.get("tau")
+                if isinstance(tau_candidate, (int, float, np.integer, np.floating)) and math.isfinite(float(tau_candidate)):
+                    tau_value = float(tau_candidate)
+            tau_info_value = None
+            if isinstance(test_metrics, Mapping):
+                tau_info_candidate = test_metrics.get("tau_info")
+                if isinstance(tau_info_candidate, str) and tau_info_candidate:
+                    tau_info_value = tau_info_candidate
+            primary_record = _resolve_primary_threshold_record(
+                threshold_key=eval_tau_key,
+                threshold_records=cached_threshold_records if isinstance(cached_threshold_records, Mapping) else None,
+                frozen_record=getattr(args, "frozen_threshold_record", None),
+                parent_reference=getattr(args, "parent_reference", None),
+            )
+            primary_metadata: Optional[Dict[str, Any]]
+            if primary_record:
+                primary_metadata = dict(primary_record)
+            else:
                 primary_metadata = {}
-                tau_value = test_primary_block.get("tau")
-                if isinstance(tau_value, (int, float, np.integer, np.floating)) and math.isfinite(float(tau_value)):
-                    primary_metadata["tau"] = float(tau_value)
-                dataset_name, split_name, policy_name = _parse_threshold_key(eval_tau_key)
-                if getattr(args, "is_exp5a", False) and dataset_name and split_name:
-                    primary_metadata["policy"] = "sun_val_frozen"
-                elif getattr(args, "threshold_policy", None):
-                    primary_metadata["policy"] = str(getattr(args, "threshold_policy"))
-                elif policy_name:
-                    primary_metadata["policy"] = str(policy_name)
-                if dataset_name and split_name:
-                    primary_metadata["split"] = f"{dataset_name}/{split_name}"
-                elif split_name:
-                    primary_metadata["split"] = str(split_name)
-                if eval_tau_key:
-                    primary_metadata["source_key"] = str(eval_tau_key)
-                tau_info_value = None
-                if isinstance(test_metrics, Mapping):
-                    tau_info_value = test_metrics.get("tau_info")
-                if isinstance(tau_info_value, str) and tau_info_value:
-                    primary_metadata["info"] = tau_info_value
-                if not primary_metadata:
-                    primary_metadata = None
+            if tau_value is not None:
+                primary_metadata["tau"] = float(tau_value)
+            dataset_name_from_key, split_name_from_key, policy_name_from_key = _parse_threshold_key(eval_tau_key)
+            resolved_policy_label = (
+                str(getattr(args, "threshold_policy", "")).strip().lower() or None
+            )
+            if resolved_policy_label:
+                record_policy = primary_metadata.get("policy")
+                record_policy_lower = (
+                    str(record_policy).strip().lower() if record_policy is not None else None
+                )
+                if record_policy_lower and record_policy_lower != resolved_policy_label:
+                    raise ValueError(
+                        "Stored primary threshold record policy "
+                        f"'{record_policy}' does not match resolved policy '{resolved_policy_label}'."
+                    )
+                if not record_policy_lower:
+                    primary_metadata["policy"] = resolved_policy_label
+            elif policy_name_from_key:
+                primary_metadata.setdefault("policy", str(policy_name_from_key).strip().lower())
+            if dataset_name_from_key and split_name_from_key:
+                primary_metadata.setdefault(
+                    "split", f"{dataset_name_from_key}/{split_name_from_key}"
+                )
+            elif split_name_from_key:
+                primary_metadata.setdefault("split", str(split_name_from_key))
+            if eval_tau_key:
+                primary_metadata.setdefault("source_key", str(eval_tau_key))
+            if tau_info_value:
+                primary_metadata.setdefault("info", tau_info_value)
+            if not primary_metadata:
+                primary_metadata = None
+
             thresholds_block = _build_thresholds_block(
                 thresholds_map,
                 policy=getattr(args, "threshold_policy", None),
                 sources=threshold_sources,
                 primary=primary_metadata,
+                sensitivity=sensitivity_record,
             )
             selection_tag = _format_selection_tag(getattr(args, "early_stop_monitor", None))
             run_block = _build_run_metadata(args, selection_tag=selection_tag)
@@ -4940,6 +5480,8 @@ def train(rank, args):
                 "test_sensitivity": sensitivity_block,
                 "provenance": provenance_block,
             }
+            if morphology_block:
+                metrics_payload["test_morphology"] = morphology_block
             if run_block:
                 metrics_payload["run"] = run_block
             perturbation_block = _build_perturbation_export(test_metrics)
@@ -4958,6 +5500,10 @@ def train(rank, args):
             if getattr(args, "threshold_policy", None):
                 metrics_payload.setdefault(
                     "threshold_policy", args.threshold_policy
+                )
+            if sensitivity_policy:
+                metrics_payload.setdefault(
+                    "sensitivity_threshold_policy", sensitivity_policy
                 )
             if curve_export_metadata:
                 metrics_payload.setdefault("curve_exports", {})["test"] = (
@@ -5008,6 +5554,7 @@ def train(rank, args):
     last_train_lr_groups: Dict[str, float] = {}
     last_val_tau_info: Optional[str] = None
     last_test_tau_info: Optional[str] = None
+    last_sensitivity_tau_info: Optional[str] = None
     val_logits: Optional[torch.Tensor] = None
     val_targets: Optional[torch.Tensor] = None
     val_probabilities: Optional[torch.Tensor] = None
@@ -5020,6 +5567,21 @@ def train(rank, args):
     else:
         latest_threshold_record = None
     latest_thresholds_root: Optional[str] = None
+    frozen_sensitivity_initial = getattr(args, "frozen_sensitivity_record", None)
+    if isinstance(frozen_sensitivity_initial, Mapping):
+        latest_sensitivity_record = dict(_convert_json_compatible(frozen_sensitivity_initial))
+    else:
+        latest_sensitivity_record = None
+    latest_sensitivity_tau: Optional[float] = None
+    if sensitivity_threshold_key:
+        try:
+            existing_sensitivity_tau = thresholds.resolve_threshold(
+                thresholds_map, sensitivity_threshold_key
+            )
+        except Exception:
+            existing_sensitivity_tau = None
+        if existing_sensitivity_tau is not None:
+            latest_sensitivity_tau = float(existing_sensitivity_tau)
 
     for epoch in range(start_epoch, args.epochs + 1):
         if schedule_runtime is not None:
@@ -5094,7 +5656,7 @@ def train(rank, args):
                     loss_fn=loss_fn,
                     loss_mode=loss_mode,
                     split_name="Val",
-                    return_outputs=compute_threshold,
+                    return_outputs=need_val_outputs,
                     tau=eval_tau,
                     tau_info=eval_tau_info,
                     max_batches=args.limit_val_batches,
@@ -5244,6 +5806,9 @@ def train(rank, args):
                 frozen_record = getattr(args, "frozen_threshold_record", None)
                 if isinstance(frozen_record, Mapping):
                     threshold_record = dict(_convert_json_compatible(frozen_record))
+                sensitivity_threshold_record: Optional[Dict[str, Any]] = (
+                    dict(latest_sensitivity_record) if latest_sensitivity_record else None
+                )
                 if (
                     compute_threshold
                     and threshold_key is not None
@@ -5285,6 +5850,8 @@ def train(rank, args):
                         )
                         metrics_at_tau = _convert_json_compatible(metrics_at_tau)
                         threshold_record.setdefault("metrics_at_tau", metrics_at_tau)
+                        if threshold_key:
+                            threshold_record_cache[str(threshold_key)] = dict(threshold_record)
                         thresholds_root_path = Path(
                             getattr(args, "thresholds_root", None)
                             or (Path(args.output_dir).expanduser().parent / "thresholds")
@@ -5324,6 +5891,38 @@ def train(rank, args):
                         print(
                             f"Updated threshold {threshold_key} = {tau:.6f} -> {threshold_file_relpath}"
                         )
+                if sensitivity_policy and sensitivity_threshold_key:
+                    tau_value, record = _resolve_sensitivity_threshold(
+                        policy=sensitivity_policy,
+                        threshold_key=sensitivity_threshold_key,
+                        dataset=dataset_label,
+                        split=val_split_label,
+                        epoch=int(epoch),
+                        val_probabilities=val_probabilities,
+                        val_logits=val_logits,
+                        val_targets=val_targets,
+                        thresholds_map=updated_thresholds,
+                        parent_reference=getattr(args, "parent_reference", None),
+                        source_key=getattr(args, "sensitivity_threshold_source_key", None),
+                    )
+                    if tau_value is not None:
+                        latest_sensitivity_tau = float(tau_value)
+                    if record:
+                        sensitivity_threshold_record = dict(_convert_json_compatible(record))
+                        if sensitivity_threshold_key:
+                            threshold_record_cache[str(sensitivity_threshold_key)] = dict(
+                                sensitivity_threshold_record
+                            )
+                elif sensitivity_threshold_key and sensitivity_threshold_key in updated_thresholds:
+                    try:
+                        latest_sensitivity_tau = float(updated_thresholds[sensitivity_threshold_key])
+                    except (TypeError, ValueError):
+                        latest_sensitivity_tau = latest_sensitivity_tau
+                if sensitivity_threshold_record is not None:
+                    latest_sensitivity_record = dict(sensitivity_threshold_record)
+                    info_value = sensitivity_threshold_record.get("info") or sensitivity_threshold_record.get("tau_info")
+                    if isinstance(info_value, str) and info_value:
+                        last_sensitivity_tau_info = info_value
                 model_to_save = _unwrap_model(model)
                 payload = {
                     "epoch": epoch,
@@ -5370,6 +5969,13 @@ def train(rank, args):
                     payload.setdefault("threshold_records", {})[
                         threshold_key
                     ] = threshold_record
+                if (
+                    sensitivity_threshold_record is not None
+                    and sensitivity_threshold_key is not None
+                ):
+                    payload.setdefault("threshold_records", {})[
+                        sensitivity_threshold_key
+                    ] = sensitivity_threshold_record
                 if thresholds_root_path is not None:
                     payload["thresholds_root"] = str(thresholds_root_path)
                     latest_thresholds_root = str(thresholds_root_path)
@@ -5395,7 +6001,8 @@ def train(rank, args):
                 _update_checkpoint_pointer(ckpt_pointer, final_path)
                 val_block = _build_metric_block(val_metrics_export)
                 test_primary_block = _build_metric_block(test_metrics_export)
-                sensitivity_block: Dict[str, Dict[str, Any]] = {}
+                sensitivity_block: Dict[str, Any] = {}
+                morphology_block_epoch: Dict[str, Dict[str, Any]] = {}
                 provenance_block = _build_metrics_provenance(
                     args, experiment4_trace=experiment4_trace
                 )
@@ -5404,11 +6011,16 @@ def train(rank, args):
                     threshold_sources["val"] = val_tau_info
                 if last_test_tau_info:
                     threshold_sources["test"] = last_test_tau_info
+                if isinstance(sensitivity_threshold_record, Mapping):
+                    info_value = sensitivity_threshold_record.get("info") or sensitivity_threshold_record.get("tau_info")
+                    if isinstance(info_value, str) and info_value:
+                        threshold_sources["sensitivity"] = info_value
                 thresholds_block = _build_thresholds_block(
                     updated_thresholds,
                     policy=getattr(args, "threshold_policy", None),
                     sources=threshold_sources,
                     primary=threshold_record,
+                    sensitivity=sensitivity_threshold_record,
                 )
                 run_block = _build_run_metadata(args, selection_tag=selection_tag)
                 metrics_payload: Dict[str, Any] = {
@@ -5422,6 +6034,8 @@ def train(rank, args):
                     "test_sensitivity": sensitivity_block,
                     "provenance": provenance_block,
                 }
+                if morphology_block_epoch:
+                    metrics_payload["test_morphology"] = morphology_block_epoch
                 if run_block:
                     metrics_payload["run"] = run_block
                 dataset_summary = getattr(args, "dataset_summary", None)
@@ -5443,6 +6057,10 @@ def train(rank, args):
                     metrics_payload["thresholds"] = thresholds_block
                 if getattr(args, "threshold_policy", None):
                     metrics_payload.setdefault("threshold_policy", args.threshold_policy)
+                if sensitivity_policy:
+                    metrics_payload.setdefault(
+                        "sensitivity_threshold_policy", sensitivity_policy
+                    )
                 metrics_path = ckpt_stem.with_suffix(".metrics.json")
                 with open(metrics_path, "w") as f:
                     json.dump(metrics_payload, f, indent=2)
@@ -5591,6 +6209,69 @@ def train(rank, args):
             metrics=final_test_metrics,
             log_path=log_path,
         )
+        final_morphology_block: Dict[str, Dict[str, Any]] = {}
+        final_test_probabilities_tensor: Optional[torch.Tensor] = None
+        final_test_targets_tensor: Optional[torch.Tensor] = None
+        if isinstance(final_test_metrics, Mapping):
+            raw_final_probabilities = final_test_metrics.get("probabilities")
+            if isinstance(raw_final_probabilities, torch.Tensor):
+                final_test_probabilities_tensor = raw_final_probabilities.detach().cpu()
+            raw_final_targets = final_test_metrics.get("targets")
+            if isinstance(raw_final_targets, torch.Tensor):
+                final_test_targets_tensor = raw_final_targets.detach().cpu()
+            final_morphology_block = _build_morphology_block(final_test_metrics.get("strata"))
+        sensitivity_record_final: Optional[Dict[str, Any]] = (
+            dict(latest_sensitivity_record) if latest_sensitivity_record else None
+        )
+        sensitivity_tau_final = latest_sensitivity_tau
+        if sensitivity_tau_final is None and sensitivity_policy and sensitivity_threshold_key:
+            tau_value, record = _resolve_sensitivity_threshold(
+                policy=sensitivity_policy,
+                threshold_key=sensitivity_threshold_key,
+                dataset=dataset_name,
+                split=val_split,
+                epoch=int(final_eval_epoch),
+                val_probabilities=val_probabilities,
+                val_logits=val_logits,
+                val_targets=val_targets,
+                thresholds_map=thresholds_map,
+                parent_reference=getattr(args, "parent_reference", None),
+                source_key=getattr(args, "sensitivity_threshold_source_key", None),
+            )
+            if tau_value is not None:
+                sensitivity_tau_final = float(tau_value)
+            if record:
+                sensitivity_record_final = dict(_convert_json_compatible(record))
+        if (
+            sensitivity_record_final is not None
+            and sensitivity_threshold_key
+        ):
+            threshold_record_cache[str(sensitivity_threshold_key)] = dict(
+                sensitivity_record_final
+            )
+        if sensitivity_tau_final is not None and sensitivity_threshold_key:
+            thresholds_map[sensitivity_threshold_key] = float(sensitivity_tau_final)
+        sensitivity_tau_info_final: Optional[str] = None
+        if isinstance(sensitivity_record_final, Mapping):
+            info_value = sensitivity_record_final.get("info") or sensitivity_record_final.get("tau_info")
+            if isinstance(info_value, str) and info_value:
+                sensitivity_tau_info_final = info_value
+        if not sensitivity_tau_info_final and sensitivity_threshold_key:
+            sensitivity_tau_info_final = describe_tau_source(sensitivity_threshold_key)
+        sensitivity_metrics_final = _compute_metrics_for_probability_threshold(
+            probabilities=final_test_probabilities_tensor,
+            targets=final_test_targets_tensor,
+            tau=sensitivity_tau_final,
+            base_metrics=final_test_metrics if isinstance(final_test_metrics, Mapping) else None,
+            tau_info=sensitivity_tau_info_final,
+        )
+        final_sensitivity_block = _build_metric_block(sensitivity_metrics_final)
+        if sensitivity_tau_info_final:
+            last_sensitivity_tau_info = sensitivity_tau_info_final
+        if sensitivity_record_final is not None:
+            latest_sensitivity_record = dict(sensitivity_record_final)
+            if sensitivity_tau_final is not None:
+                latest_sensitivity_tau = float(sensitivity_tau_final)
         final_test_metrics.pop("_case_ids", None)
         final_test_metrics.pop("_morphology_labels", None)
         if curve_export_metadata:
@@ -5673,6 +6354,13 @@ def train(rank, args):
             last_payload.setdefault("threshold_records", {})[
                 threshold_key
             ] = latest_threshold_record
+        if (
+            latest_sensitivity_record is not None
+            and sensitivity_threshold_key is not None
+        ):
+            last_payload.setdefault("threshold_records", {})[
+                sensitivity_threshold_key
+            ] = latest_sensitivity_record
         if latest_thresholds_root is not None:
             last_payload["thresholds_root"] = latest_thresholds_root
         last_candidate_name = (
@@ -5702,11 +6390,7 @@ def train(rank, args):
         _update_checkpoint_pointer(last_pointer_path, last_final_path)
         val_block = _build_metric_block(last_val_metrics_export)
         test_primary_block = _build_metric_block(last_test_metrics_export)
-        sensitivity_block = _build_sensitivity_block(
-            final_test_metrics.get("strata")
-            if isinstance(final_test_metrics, Mapping)
-            else None
-        )
+        sensitivity_block = final_sensitivity_block
         provenance_block = _build_metrics_provenance(
             args, experiment4_trace=experiment4_trace
         )
@@ -5715,11 +6399,14 @@ def train(rank, args):
             threshold_sources["val"] = last_val_tau_info
         if last_test_tau_info:
             threshold_sources["test"] = last_test_tau_info
+        if last_sensitivity_tau_info:
+            threshold_sources["sensitivity"] = last_sensitivity_tau_info
         thresholds_block = _build_thresholds_block(
             thresholds_map,
             policy=getattr(args, "threshold_policy", None),
             sources=threshold_sources,
             primary=latest_threshold_record,
+            sensitivity=sensitivity_record_final,
         )
         run_block = _build_run_metadata(args, selection_tag=selection_tag)
         last_metrics_payload: Dict[str, Any] = {
@@ -5735,6 +6422,8 @@ def train(rank, args):
             "test_sensitivity": sensitivity_block,
             "provenance": provenance_block,
         }
+        if final_morphology_block:
+            last_metrics_payload["test_morphology"] = final_morphology_block
         if run_block:
             last_metrics_payload["run"] = run_block
         perturbation_block = _build_perturbation_export(final_test_metrics)
@@ -5761,6 +6450,10 @@ def train(rank, args):
             last_metrics_payload["thresholds"] = thresholds_block
         if getattr(args, "threshold_policy", None):
             last_metrics_payload.setdefault("threshold_policy", args.threshold_policy)
+        if sensitivity_policy:
+            last_metrics_payload.setdefault(
+                "sensitivity_threshold_policy", sensitivity_policy
+            )
         if curve_export_metadata:
             last_metrics_payload.setdefault("curve_exports", {})["test"] = curve_export_metadata
         last_metrics_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.metrics.json"

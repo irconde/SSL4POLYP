@@ -7,4 +7,5 @@ __all__ = [
     "exp5a_report",
     "exp5b_report",
     "exp5c_report",
+    "result_loader",
 ]

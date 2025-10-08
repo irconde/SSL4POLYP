@@ -6,7 +6,8 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Literal, overload
 
 import numpy as np
 from sklearn.metrics import (  # type: ignore[import]
@@ -18,6 +19,8 @@ from sklearn.metrics import (  # type: ignore[import]
     recall_score,
     roc_auc_score,
 )
+
+from .result_loader import GuardrailViolation, ResultLoader
 
 PRIMARY_METRICS: Tuple[str, ...] = (
     "auprc",
@@ -63,6 +66,15 @@ class Exp2Run:
     cases: Dict[str, Tuple[EvalFrame, ...]]
     provenance: Dict[str, Any]
     metrics_path: Path
+
+
+def _get_loader(*, strict: bool = True) -> ResultLoader:
+    return ResultLoader(
+        expected_primary_policy="f1_opt_on_val",
+        expected_sensitivity_policy="youden_on_val",
+        require_sensitivity=True,
+        strict=strict,
+    )
 
 
 @dataclass
@@ -281,8 +293,13 @@ def _coerce_metric_block(block: Optional[Mapping[str, Any]]) -> Dict[str, float]
     return metrics
 
 
-def load_run(metrics_path: Path) -> Exp2Run:
+def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Exp2Run:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    active_loader = loader or _get_loader()
+    try:
+        active_loader.validate(metrics_path, payload)
+    except GuardrailViolation as exc:
+        raise GuardrailViolation(f"{exc} (from {metrics_path})") from exc
     provenance_raw = payload.get("provenance")
     provenance = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
     model_name = _clean_text(provenance.get("model"))
@@ -324,12 +341,41 @@ def load_run(metrics_path: Path) -> Exp2Run:
     )
 
 
-def discover_runs(root: Path, *, models: Optional[Sequence[str]] = None) -> Dict[str, Dict[int, Exp2Run]]:
+@overload
+def discover_runs(
+    root: Path,
+    *,
+    models: Optional[Sequence[str]] = None,
+    strict: bool = True,
+    return_loader: Literal[False] = False,
+) -> Dict[str, Dict[int, Exp2Run]]:
+    ...
+
+
+@overload
+def discover_runs(
+    root: Path,
+    *,
+    models: Optional[Sequence[str]] = None,
+    strict: bool = True,
+    return_loader: Literal[True],
+) -> Tuple[Dict[str, Dict[int, Exp2Run]], ResultLoader]:
+    ...
+
+
+def discover_runs(
+    root: Path,
+    *,
+    models: Optional[Sequence[str]] = None,
+    strict: bool = True,
+    return_loader: bool = False,
+) -> Union[Dict[str, Dict[int, Exp2Run]], Tuple[Dict[str, Dict[int, Exp2Run]], ResultLoader]]:
     root = root.expanduser()
     metrics_paths = sorted(root.rglob("*.metrics.json"))
     runs: Dict[str, Dict[int, Exp2Run]] = {}
     model_filter = {name.lower() for name in models} if models else None
     processed: Dict[str, Path] = {}
+    loader = _get_loader(strict=strict)
     for metrics_path in metrics_paths:
         if metrics_path.name.endswith("_best.metrics.json"):
             continue
@@ -342,12 +388,14 @@ def discover_runs(root: Path, *, models: Optional[Sequence[str]] = None) -> Dict
         if stem.endswith("_last") and base in processed and not processed[base].stem.endswith("_last"):
             continue
         try:
-            run = load_run(metrics_path)
-        except (ValueError, FileNotFoundError) as exc:
+            run = load_run(metrics_path, loader=loader)
+        except (ValueError, FileNotFoundError, GuardrailViolation) as exc:
             raise RuntimeError(f"Failed to load metrics from {metrics_path}") from exc
         if model_filter and run.model.lower() not in model_filter:
             continue
         runs.setdefault(run.model, {})[run.seed] = run
+    if return_loader:
+        return runs, loader
     return runs
 
 

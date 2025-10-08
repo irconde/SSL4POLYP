@@ -7,11 +7,13 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import DefaultDict, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import DefaultDict, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union, overload
+from typing import Literal
 
 import numpy as np
 
 from .exp3_report import FrameRecord, compute_strata_metrics
+from .result_loader import ResultLoader, GuardrailViolation
 
 PRIMARY_METRICS: Tuple[str, ...] = ("auprc", "f1")
 MODEL_LABELS: Dict[str, str] = {
@@ -33,10 +35,22 @@ class RunResult:
     tau: float
     metrics: Dict[str, float]
     val_metrics: Dict[str, float]
-    sensitivity: Dict[str, Dict[str, float]]
+    sensitivity: Dict[str, float]
+    morphology: Dict[str, Dict[str, float]]
     frames: List[FrameRecord]
     cases: Dict[str, List[FrameRecord]]
     provenance: Dict[str, object]
+    metrics_path: Path
+
+
+def _get_loader(*, strict: bool = True) -> ResultLoader:
+    return ResultLoader(
+        expected_primary_policy="f1_opt_on_val",
+        expected_sensitivity_policy="youden_on_val",
+        require_sensitivity=True,
+        required_curve_keys=("test",),
+        strict=strict,
+    )
 
 
 def _normalise_case_id(raw: Optional[str], fallback_index: int) -> str:
@@ -136,9 +150,14 @@ def _load_outputs(outputs_path: Path, tau: float) -> Tuple[List[FrameRecord], Di
     return frames, dict(cases)
 
 
-def load_run(metrics_path: Path) -> RunResult:
+def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> RunResult:
     with metrics_path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
+    active_loader = loader or _get_loader()
+    try:
+        active_loader.validate(metrics_path, payload)
+    except GuardrailViolation as exc:
+        raise GuardrailViolation(f"{exc} (from {metrics_path})") from exc
     provenance = dict(payload.get("provenance") or {})
     model_name = provenance.get("model")
     if not model_name:
@@ -172,17 +191,24 @@ def load_run(metrics_path: Path) -> RunResult:
         if num is not None
     }
     sensitivity_raw = payload.get("test_sensitivity") or {}
-    sensitivity: Dict[str, Dict[str, float]] = {}
-    for stratum, stats in sensitivity_raw.items():
-        if not isinstance(stats, Mapping):
-            continue
-        filtered: Dict[str, float] = {}
-        for key, value in stats.items():
-            numeric = _coerce_float(value)
-            if numeric is not None:
-                filtered[key] = float(numeric)
-        if filtered:
-            sensitivity[stratum] = filtered
+    sensitivity_metrics: Dict[str, float] = {
+        key: float(num)
+        for key, num in ((k, _coerce_float(v)) for k, v in sensitivity_raw.items())
+        if num is not None
+    }
+    morphology_raw = payload.get("test_morphology") or {}
+    morphology: Dict[str, Dict[str, float]] = {}
+    if isinstance(morphology_raw, Mapping):
+        for stratum, stats in morphology_raw.items():
+            if not isinstance(stats, Mapping):
+                continue
+            filtered: Dict[str, float] = {}
+            for key, value in stats.items():
+                numeric = _coerce_float(value)
+                if numeric is not None:
+                    filtered[key] = float(numeric)
+            if filtered:
+                morphology[stratum] = filtered
     outputs_path = _resolve_outputs_path(metrics_path)
     frames, cases = _load_outputs(outputs_path, float(tau_value))
     return RunResult(
@@ -192,22 +218,56 @@ def load_run(metrics_path: Path) -> RunResult:
         tau=float(tau_value),
         metrics=metrics,
         val_metrics=val_metrics,
-        sensitivity=sensitivity,
+    sensitivity=sensitivity_metrics,
+    morphology=morphology,
         frames=frames,
         cases=cases,
         provenance=provenance,
+        metrics_path=metrics_path,
     )
 
 
-def discover_runs(root: Path) -> Dict[str, Dict[float, Dict[int, RunResult]]]:
+@overload
+def discover_runs(
+    root: Path,
+    *,
+    strict: bool = True,
+    return_loader: Literal[False] = False,
+) -> Dict[str, Dict[float, Dict[int, RunResult]]]:
+    ...
+
+
+@overload
+def discover_runs(
+    root: Path,
+    *,
+    strict: bool = True,
+    return_loader: Literal[True],
+) -> Tuple[Dict[str, Dict[float, Dict[int, RunResult]]], ResultLoader]:
+    ...
+
+
+def discover_runs(
+    root: Path,
+    *,
+    strict: bool = True,
+    return_loader: bool = False,
+) -> Union[Dict[str, Dict[float, Dict[int, RunResult]]], Tuple[Dict[str, Dict[float, Dict[int, RunResult]]], ResultLoader]]:
     runs: DefaultDict[str, DefaultDict[float, Dict[int, RunResult]]] = defaultdict(lambda: defaultdict(dict))
+    loader = _get_loader(strict=strict)
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
-        run = load_run(metrics_path)
+        try:
+            run = load_run(metrics_path, loader=loader)
+        except (ValueError, FileNotFoundError, GuardrailViolation) as exc:
+            raise RuntimeError(f"Failed to load metrics from {metrics_path}") from exc
         runs[run.model][run.percent][run.seed] = run
-    return {
+    result = {
         model: {percent: dict(seed_map) for percent, seed_map in per_model.items()}
         for model, per_model in runs.items()
     }
+    if return_loader:
+        return result, loader
+    return result
 
 
 def compute_learning_curves(
@@ -624,16 +684,35 @@ def summarize_runs(
     }
 
 
+def collect_summary(
+    runs_root: Path,
+    *,
+    bootstrap: int = 1000,
+    rng_seed: int = 12345,
+    strict: bool = True,
+) -> Tuple[Dict[str, Dict[float, Dict[int, RunResult]]], Dict[str, object], ResultLoader]:
+    runs, loader = discover_runs(runs_root, strict=strict, return_loader=True)
+    if not runs:
+        return runs, {}, loader
+    summary = summarize_runs(runs, bootstrap=max(0, bootstrap), rng_seed=rng_seed)
+    return runs, summary, loader
+
+
 def generate_report(
     runs_root: Path,
     *,
     bootstrap: int = 1000,
     rng_seed: int = 12345,
+    strict: bool = True,
 ) -> str:
-    runs = discover_runs(runs_root)
+    runs, summary, _ = collect_summary(
+        runs_root,
+        bootstrap=bootstrap,
+        rng_seed=rng_seed,
+        strict=strict,
+    )
     if not runs:
         return "No Experiment 4 runs found.\n"
-    summary = summarize_runs(runs, bootstrap=max(0, bootstrap), rng_seed=rng_seed)
     return render_report(summary)
 
 

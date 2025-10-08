@@ -24,6 +24,7 @@ def _write_run(
     seed: int,
     tau: float,
     rows: Iterable[dict[str, object]],
+    csv_digest: str = "deadbeefcafebabe",
 ) -> Path:
     run_name = f"{model}__sun_full_s{seed}"
     metrics_path = root / f"{run_name}.metrics.json"
@@ -36,13 +37,34 @@ def _write_run(
         label = int(cast(int, row["label"]))
         frames.append(EvalFrame(frame_id=frame_id, case_id=case_id, prob=prob, label=label))
     metrics = _metrics_from_frames(frames, tau)
+    primary_block = {
+        metric: metrics.get(metric, float("nan")) for metric in PRIMARY_METRICS
+    }
+    primary_block.update(
+        {
+            "tau": tau,
+            "tp": metrics.get("tp", 0),
+            "fp": metrics.get("fp", 0),
+            "tn": metrics.get("tn", 0),
+            "fn": metrics.get("fn", 0),
+            "n_pos": metrics.get("n_pos", 0),
+            "n_neg": metrics.get("n_neg", 0),
+        }
+    )
     payload = {
         "seed": seed,
-        "test_primary": {
-            "tau": tau,
-            **{metric: metrics.get(metric, float("nan")) for metric in PRIMARY_METRICS},
+        "test_primary": primary_block,
+        "test_sensitivity": dict(primary_block),
+        "thresholds": {
+            "policy": "f1_opt_on_val",
+            "primary": {"policy": "f1_opt_on_val", "tau": tau},
+            "sensitivity": {"policy": "youden_on_val", "tau": tau},
         },
-        "provenance": {"model": model},
+        "provenance": {
+            "model": model,
+            "sun_full_test_csv_sha256": csv_digest,
+            "splits": {"sun_full_test": {"csv_sha256": csv_digest}},
+        },
     }
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_path.write_text(json.dumps(payload), encoding="utf-8")
@@ -114,3 +136,14 @@ def test_summarize_runs_and_deltas(tmp_path: Path) -> None:
     assert recall_delta.ci_upper is not None
     assert recall_delta.ci_lower <= recall_delta.ci_upper
     assert recall_delta.samples  # Bootstrap samples collected
+
+
+def test_discover_runs_csv_guardrail(tmp_path: Path) -> None:
+    rows = [
+        {"frame_id": "f1", "case_id": "c1", "prob": 0.9, "label": 1},
+        {"frame_id": "f2", "case_id": "c1", "prob": 0.1, "label": 0},
+    ]
+    _write_run(tmp_path, model="ssl_colon", seed=1, tau=0.5, rows=rows, csv_digest="aaaa")
+    _write_run(tmp_path, model="ssl_colon", seed=2, tau=0.5, rows=rows, csv_digest="bbbb")
+    with pytest.raises(RuntimeError):
+        discover_runs(tmp_path)

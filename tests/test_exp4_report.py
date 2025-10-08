@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from pathlib import Path
 
@@ -30,10 +31,16 @@ def _write_run(
     seed: int,
     auprc: float,
     f1_score: float,
+    csv_digest: str = "deadbeefcafebabe",
 ) -> None:
     base = f"{model}_p{int(percent):02d}_s{seed}"
     metrics_path = root / f"{base}_last.metrics.json"
     outputs_path = root / f"{base}_test_outputs.csv"
+    curve_dir = root / "curves"
+    curve_dir.mkdir(parents=True, exist_ok=True)
+    curve_path = curve_dir / f"{base}_roc_curve.csv"
+    curve_path.write_text("threshold,false_positive_rate,true_positive_rate\n0.0,0.0,0.0\n1.0,1.0,1.0\n", encoding="utf-8")
+    curve_digest = hashlib.sha256(curve_path.read_bytes()).hexdigest()
     payload = {
         "seed": seed,
         "epoch": 5,
@@ -49,9 +56,27 @@ def _write_run(
             "recall": 0.6,
             "balanced_accuracy": 0.6,
             "loss": 0.3,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
         },
         "test_sensitivity": {
-            "overall": {"auprc": auprc, "f1": f1_score, "tp": 2, "fp": 0, "tn": 2, "fn": 0}
+            "auprc": auprc,
+            "f1": f1_score,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "recall": 0.6,
+            "precision": 0.6,
+            "balanced_accuracy": 0.6,
+            "tau": 0.4,
+            "loss": 0.32,
+            "n_pos": 2,
+            "n_neg": 2,
         },
         "provenance": {
             "model": model,
@@ -59,8 +84,32 @@ def _write_run(
             "train_seed": seed,
             "pack_seed": 42,
             "split": "test",
+            "sun_full_test_csv_sha256": csv_digest,
+            "splits": {
+                "sun_full_test": {
+                    "csv_sha256": csv_digest,
+                }
+            },
         },
-        "thresholds": {"policy": "youden", "values": {"demo": 0.5}},
+        "thresholds": {
+            "policy": "f1_opt_on_val",
+            "values": {"demo": 0.5},
+            "primary": {
+                "policy": "f1_opt_on_val",
+                "tau": 0.5,
+                "split": "sun_full/val",
+            },
+            "sensitivity": {
+                "policy": "youden_on_val",
+                "tau": 0.4,
+            },
+        },
+        "curve_exports": {
+            "test": {
+                "path": curve_path.relative_to(metrics_path.parent).as_posix(),
+                "sha256": curve_digest,
+            }
+        },
     }
     metrics_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     _write_outputs_csv(outputs_path)
@@ -113,3 +162,10 @@ def test_exp4_summary_pipeline(tmp_path: Path, bootstrap: int) -> None:
     assert "Experiment 4 learning curve summary" in report
     assert "SSL-Colon" in report
     assert "ΔAULC" in report
+
+
+def test_exp4_csv_digest_guardrail(tmp_path: Path) -> None:
+    _write_run(tmp_path, model="sup_imnet", percent=50.0, seed=13, auprc=0.55, f1_score=0.5, csv_digest="aaaabbbb")
+    _write_run(tmp_path, model="ssl_colon", percent=50.0, seed=13, auprc=0.70, f1_score=0.65, csv_digest="ccccdddd")
+    with pytest.raises(RuntimeError):
+        exp4_report.discover_runs(tmp_path)
