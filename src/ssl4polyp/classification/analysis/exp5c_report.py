@@ -1,8 +1,6 @@
 """Aggregation utilities for Experiment 5C few-shot adaptation results."""
 from __future__ import annotations
 
-import csv
-import json
 import math
 from collections import defaultdict
 from dataclasses import dataclass
@@ -19,6 +17,9 @@ from sklearn.metrics import (  # type: ignore[import]
     recall_score,
     roc_auc_score,
 )
+
+from .common_loader import CommonFrame, get_default_loader, load_common_run
+from .result_loader import GuardrailViolation, ResultLoader
 
 TARGET_MODEL = "ssl_colon"
 BASELINE_MODELS: Tuple[str, ...] = ("ssl_imnet", "sup_imnet")
@@ -58,6 +59,24 @@ class ClusterSet:
     negatives: Tuple[Tuple[str, ...], ...]
 
 
+def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
+    mapping: Dict[str, EvalFrame] = {}
+    for frame in frames:
+        row = frame.row
+        case_id = _clean_text(row.get("case_id")) or frame.case_id
+        sequence_id = _clean_text(row.get("sequence_id"))
+        center_id = _clean_text(row.get("center_id")) or _clean_text(row.get("origin"))
+        mapping[frame.frame_id] = EvalFrame(
+            frame_id=frame.frame_id,
+            prob=frame.prob,
+            label=frame.label,
+            case_id=case_id,
+            sequence_id=sequence_id,
+            center_id=center_id,
+        )
+    return mapping
+
+
 def _clean_text(value: object) -> Optional[str]:
     if value in (None, ""):
         return None
@@ -85,6 +104,17 @@ def _coerce_float(value: object) -> Optional[float]:
     return numeric
 
 
+def _extract_metrics(block: Optional[Mapping[str, Any]]) -> Dict[str, float]:
+    if not isinstance(block, Mapping):
+        return {}
+    metrics: Dict[str, float] = {}
+    for key, value in block.items():
+        numeric = _coerce_float(value)
+        if numeric is not None:
+            metrics[str(key)] = float(numeric)
+    return metrics
+
+
 def _coerce_int(value: object) -> Optional[int]:
     if value is None:
         return None
@@ -101,40 +131,6 @@ def _coerce_int(value: object) -> Optional[int]:
         except ValueError:
             return None
     return None
-
-
-def _resolve_outputs_path(metrics_path: Path) -> Path:
-    stem = metrics_path.stem
-    base = stem[:-5] if stem.endswith("_last") else stem
-    return metrics_path.with_name(f"{base}_test_outputs.csv")
-
-
-def _read_outputs(outputs_path: Path) -> Dict[str, EvalFrame]:
-    if not outputs_path.exists():
-        raise FileNotFoundError(f"Missing test outputs CSV: {outputs_path}")
-    frames: Dict[str, EvalFrame] = {}
-    with outputs_path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for index, row in enumerate(reader):
-            frame_id = _clean_text(row.get("frame_id")) or f"frame_{index}"
-            prob = _coerce_float(row.get("prob"))
-            label = _coerce_int(row.get("label"))
-            if prob is None or label is None:
-                continue
-            case_id = _clean_text(row.get("case_id"))
-            sequence_id = _clean_text(row.get("sequence_id"))
-            center_id = _clean_text(row.get("center_id")) or _clean_text(row.get("origin"))
-            frames[frame_id] = EvalFrame(
-                frame_id=frame_id,
-                prob=float(prob),
-                label=int(label),
-                case_id=case_id,
-                sequence_id=sequence_id,
-                center_id=center_id,
-            )
-    if not frames:
-        raise ValueError(f"No evaluation rows parsed from {outputs_path}")
-    return frames
 
 
 def _normalize_budget(value: object, *, fallback: Optional[int] = None) -> int:
@@ -202,50 +198,36 @@ def _compute_binary_metrics(probs: np.ndarray, labels: np.ndarray, tau: float) -
     }
 
 
-def load_run(metrics_path: Path) -> FewShotRun:
-    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-    provenance_raw = payload.get("provenance") or {}
-    provenance = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
-    model_name = _clean_text(provenance.get("model")) or metrics_path.stem.split("__", 1)[0]
-    seed_value = _coerce_int(payload.get("seed"))
-    if seed_value is None:
-        seed_value = _coerce_int(provenance.get("train_seed"))
-    if seed_value is None:
-        raise ValueError(f"Metrics file '{metrics_path}' does not specify a seed")
-    test_block = payload.get("test_primary") or {}
-    tau_value = _coerce_float(test_block.get("tau"))
-    if tau_value is None:
-        raise ValueError(f"Metrics file '{metrics_path}' is missing test_primary.tau")
-    test_metrics: Dict[str, float] = {}
-    for key, value in test_block.items():
-        numeric = _coerce_float(value)
-        if numeric is not None:
-            test_metrics[key] = numeric
-    val_block = payload.get("val") or {}
-    val_metrics: Dict[str, float] = {}
-    for key, value in val_block.items():
-        numeric = _coerce_float(value)
-        if numeric is not None:
-            val_metrics[key] = numeric
-    dataset_summary_raw = payload.get("dataset") or {}
-    dataset_summary = dict(dataset_summary_raw) if isinstance(dataset_summary_raw, Mapping) else {}
+def load_run(
+    metrics_path: Path,
+    *,
+    loader: Optional[ResultLoader] = None,
+) -> FewShotRun:
+    active_loader = loader or get_default_loader()
+    base_run = load_common_run(metrics_path, loader=active_loader)
+    payload = base_run.payload
+    provenance = dict(base_run.provenance)
+    test_metrics = dict(base_run.primary_metrics)
+    val_block = payload.get("val") if isinstance(payload.get("val"), Mapping) else None
+    val_metrics = _extract_metrics(val_block)
+    dataset_block = payload.get("dataset") if isinstance(payload.get("dataset"), Mapping) else None
+    dataset_summary = dict(dataset_block) if isinstance(dataset_block, Mapping) else {}
     budget_value = provenance.get("fewshot_budget")
     if budget_value is None:
-        train_summary = dataset_summary.get("train")
+        train_summary = dataset_summary.get("train") if isinstance(dataset_summary.get("train"), Mapping) else None
         if isinstance(train_summary, Mapping):
             budget_value = train_summary.get("fewshot_budget") or train_summary.get("budget") or train_summary.get("frames")
         if budget_value is None:
-            pack_spec = provenance.get("train_pack") or dataset_summary.get("train", {}).get("pack_spec")
+            pack_spec = provenance.get("train_pack") or (train_summary.get("pack_spec") if isinstance(train_summary, Mapping) else None)
             if isinstance(pack_spec, str) and "_s" in pack_spec:
                 budget_value = pack_spec
     budget = _normalize_budget(budget_value, fallback=None)
-    outputs_path = _resolve_outputs_path(metrics_path)
-    frames = _read_outputs(outputs_path)
+    frames = _frames_to_eval(base_run.frames)
     return FewShotRun(
-        model=model_name,
-        seed=int(seed_value),
+        model=base_run.model,
+        seed=base_run.seed,
         budget=int(budget),
-        tau=float(tau_value),
+        tau=base_run.tau,
         test_metrics=test_metrics,
         val_metrics=val_metrics,
         provenance=provenance,
@@ -259,13 +241,15 @@ def discover_runs(
     root: Path,
     *,
     models: Optional[Sequence[str]] = None,
+    loader: Optional[ResultLoader] = None,
 ) -> Dict[str, Dict[int, Dict[int, FewShotRun]]]:
     model_filter = {str(m) for m in models} if models else None
     runs: DefaultDict[str, DefaultDict[int, Dict[int, FewShotRun]]] = defaultdict(lambda: defaultdict(dict))
+    active_loader = loader or get_default_loader()
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
         try:
-            run = load_run(metrics_path)
-        except (OSError, ValueError, json.JSONDecodeError):
+            run = load_run(metrics_path, loader=active_loader)
+        except (OSError, ValueError, GuardrailViolation):
             continue
         if model_filter and run.model not in model_filter:
             continue

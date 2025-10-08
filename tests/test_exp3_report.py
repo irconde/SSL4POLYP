@@ -33,7 +33,53 @@ def test_compute_strata_metrics_counts(tau: float) -> None:
 def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]], tau: float = 0.5) -> None:
     run_prefix = f"{model}__sun_morphology_s{seed}"
     metrics_path = root / f"{run_prefix}_last.metrics.json"
-    metrics_path.write_text(json.dumps({"seed": seed, "test": {"tau": tau}}), encoding="utf-8")
+    tp = fp = tn = fn = 0
+    n_pos = n_neg = 0
+    for row in rows:
+        label = int(row.get("label", 0))
+        pred = int(row.get("pred", 0))
+        if label == 1:
+            n_pos += 1
+            if pred == 1:
+                tp += 1
+            else:
+                fn += 1
+        else:
+            n_neg += 1
+            if pred == 1:
+                fp += 1
+            else:
+                tn += 1
+    metrics_payload = {
+        "seed": seed,
+        "test_primary": {
+            "tau": tau,
+            "tp": tp,
+            "fp": fp,
+            "tn": tn,
+            "fn": fn,
+            "n_pos": n_pos,
+            "n_neg": n_neg,
+        },
+        "test_sensitivity": {
+            "tau": tau,
+            "tp": tp,
+            "fp": fp,
+            "tn": tn,
+            "fn": fn,
+            "n_pos": n_pos,
+            "n_neg": n_neg,
+        },
+        "thresholds": {
+            "primary": {"policy": "f1_opt_on_val", "tau": tau},
+            "sensitivity": {"policy": "youden_on_val", "tau": tau},
+        },
+        "provenance": {
+            "model": model,
+            "test_outputs_csv_sha256": "deadbeef",
+        },
+    }
+    metrics_path.write_text(json.dumps(metrics_payload), encoding="utf-8")
     outputs_path = root / f"{run_prefix}_test_outputs.csv"
     with outputs_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["case_id", "prob", "label", "pred", "morphology"])
