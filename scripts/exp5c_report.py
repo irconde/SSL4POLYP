@@ -14,6 +14,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 _exp5c_module = importlib.import_module("ssl4polyp.classification.analysis.exp5c_report")
+from ssl4polyp.classification.analysis.display import (  # type: ignore[import]
+    PLACEHOLDER,
+    format_ci,
+    format_mean_std,
+    format_signed,
+)
 
 DiscoverRunsFn = Callable[..., Mapping[str, Any]]
 SummarizeRunsFn = Callable[..., Mapping[str, Any]]
@@ -115,10 +121,8 @@ def _format_mean_std(stats: Mapping[str, object]) -> str:
     mean = stats.get("mean") if isinstance(stats, Mapping) else None
     std = stats.get("std") if isinstance(stats, Mapping) else None
     if not isinstance(mean, (int, float)):
-        return "—"
-    if isinstance(std, (int, float)):
-        return f"{float(mean):.3f}±{float(std):.3f}"
-    return f"{float(mean):.3f}"
+        return PLACEHOLDER
+    return format_mean_std(mean, std if isinstance(std, (int, float)) else None)
 
 
 def _emit_summary(summary: Mapping[str, object], models: Sequence[str]) -> None:
@@ -164,13 +168,17 @@ def _emit_summary(summary: Mapping[str, object], models: Sequence[str]) -> None:
                 ci = stats.get("ci") if isinstance(stats.get("ci"), Mapping) else None
                 if not isinstance(delta, (int, float)):
                     continue
+                delta_text = format_signed(delta)
+                ci_text = PLACEHOLDER
                 if isinstance(ci, Mapping):
                     lower = ci.get("lower") if isinstance(ci.get("lower"), (int, float)) else None
                     upper = ci.get("upper") if isinstance(ci.get("upper"), (int, float)) else None
                     if lower is not None and upper is not None:
-                        fragments.append(f"S={budget}:{float(delta):+.3f} [{float(lower):+.3f},{float(upper):+.3f}]")
-                        continue
-                fragments.append(f"S={budget}:{float(delta):+.3f}")
+                        ci_text = format_ci(lower, upper)
+                if ci_text != PLACEHOLDER:
+                    fragments.append(f"S={budget}:{delta_text} {ci_text}")
+                else:
+                    fragments.append(f"S={budget}:{delta_text}")
             if fragments:
                 print(f"  {baseline}: " + ", ".join(fragments))
     sample_eff = summary.get("sample_efficiency") if isinstance(summary.get("sample_efficiency"), Mapping) else {}

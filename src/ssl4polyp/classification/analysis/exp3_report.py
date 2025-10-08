@@ -11,6 +11,12 @@ from .common_loader import get_default_loader, load_common_run
 from .result_loader import ResultLoader
 from .common_metrics import compute_binary_metrics
 from .seed_checks import ensure_expected_seeds
+from .display import (
+    PLACEHOLDER,
+    format_mean_std as _format_mean_std_value,
+    format_scalar,
+    format_with_ci,
+)
 
 
 _STRATA = ("overall", "flat_plus_negs", "polypoid_plus_negs")
@@ -271,17 +277,19 @@ def summarise_composition(metrics: Mapping[str, Dict[str, float]]) -> Dict[str, 
 def format_mean_std(values: Sequence[float]) -> str:
     mean, std = aggregate_mean_std(values)
     if math.isnan(mean):
-        return "—"
-    return f"{mean:.3f} ± {std:.3f}"
+        return PLACEHOLDER
+    return _format_mean_std_value(mean, std)
 
 
 def format_ci(point: float, samples: Sequence[float]) -> str:
     if not samples or math.isnan(point):
-        return "—"
+        return PLACEHOLDER
     arr = np.array(samples, dtype=float)
+    if arr.size == 0:
+        return PLACEHOLDER
     lower = float(np.quantile(arr, 0.025))
     upper = float(np.quantile(arr, 0.975))
-    return f"{point:.3f} (95% CI: {lower:.3f}–{upper:.3f})"
+    return format_with_ci(point, lower, upper, ci_label="95% CI")
 
 
 def model_label(model: str) -> str:
@@ -393,7 +401,7 @@ def generate_report(
             n_pos = int(stats.get("n_pos", 0))
             n_neg = int(stats.get("n_neg", 0))
             prevalence = stats.get("prevalence", float("nan"))
-            prevalence_text = "—" if math.isnan(prevalence) else f"{prevalence:.3f}"
+            prevalence_text = format_scalar(prevalence)
             lines.append(
                 f"| {_STRATUM_LABELS.get(stratum, stratum)} | {n_pos} | {n_neg} | {prevalence_text} |"
             )

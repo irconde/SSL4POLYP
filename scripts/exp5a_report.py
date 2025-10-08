@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import sys
 from pathlib import Path
@@ -12,6 +11,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+
+from ssl4polyp.classification.analysis.display import (  # type: ignore[import]
+    PLACEHOLDER,
+    format_ci,
+    format_mean_std,
+    format_scalar,
+    format_signed,
+)
+
+import importlib
 
 _exp5a_module = importlib.import_module("ssl4polyp.classification.analysis.exp5a_report")
 
@@ -94,24 +103,22 @@ def _stringify_path(path: Path) -> str:
 
 def _format_ci(ci: Mapping[str, Any] | None) -> str:
     if not isinstance(ci, Mapping):
-        return "—"
+        return PLACEHOLDER
     lower = ci.get("lower") if isinstance(ci.get("lower"), (int, float)) else None
     upper = ci.get("upper") if isinstance(ci.get("upper"), (int, float)) else None
     if lower is None or upper is None:
-        return "—"
-    return f"[{float(lower):+.3f},{float(upper):+.3f}]"
+        return PLACEHOLDER
+    return format_ci(lower, upper)
 
 
 def _format_mean_std(stats: Mapping[str, Any] | None) -> str:
     if not isinstance(stats, Mapping):
-        return "—"
+        return PLACEHOLDER
     mean = stats.get("mean") if isinstance(stats.get("mean"), (int, float)) else None
     std = stats.get("std") if isinstance(stats.get("std"), (int, float)) else None
     if mean is None:
-        return "—"
-    if std is None:
-        return f"{float(mean):.3f}"
-    return f"{float(mean):.3f}±{float(std):.3f}"
+        return PLACEHOLDER
+    return format_mean_std(mean, std)
 
 
 def _emit_summary(summary: Mapping[str, Any]) -> None:
@@ -159,12 +166,22 @@ def _emit_summary(summary: Mapping[str, Any]) -> None:
                 value = metrics_block.get(metric) if isinstance(metrics_block, Mapping) else None
                 ci = ci_block.get(metric) if isinstance(ci_block, Mapping) else None
                 if isinstance(value, (int, float)):
-                    print(f"      {metric}: {float(value):.3f} {_format_ci(ci)}")
+                    value_text = format_scalar(value)
+                    ci_text = _format_ci(ci)
+                    if ci_text != PLACEHOLDER:
+                        print(f"      {metric}: {value_text} {ci_text}")
+                    else:
+                        print(f"      {metric}: {value_text}")
             for metric in ("auprc", "f1"):
                 delta_val = delta_block.get(metric) if isinstance(delta_block, Mapping) else None
                 delta_ci = delta_ci_block.get(metric) if isinstance(delta_ci_block, Mapping) else None
                 if isinstance(delta_val, (int, float)):
-                    print(f"      Δ{metric}: {float(delta_val):+.3f} {_format_ci(delta_ci)}")
+                    delta_text = format_signed(delta_val)
+                    ci_text = _format_ci(delta_ci)
+                    if ci_text != PLACEHOLDER:
+                        print(f"      Δ{metric}: {delta_text} {ci_text}")
+                    else:
+                        print(f"      Δ{metric}: {delta_text}")
     pairwise = summary.get("pairwise") if isinstance(summary.get("pairwise"), Mapping) else {}
     if isinstance(pairwise, Mapping) and pairwise:
         print("\nPairwise Δ(SSL-Colon − baseline):")
@@ -179,7 +196,10 @@ def _emit_summary(summary: Mapping[str, Any]) -> None:
                 summary_ci = payload.get("summary_ci") if isinstance(payload.get("summary_ci"), Mapping) else None
                 delta_display = _format_mean_std(summary_block)
                 ci_display = _format_ci(summary_ci)
-                print(f"    {baseline}: {delta_display} {ci_display}")
+                if ci_display != PLACEHOLDER:
+                    print(f"    {baseline}: {delta_display} {ci_display}")
+                else:
+                    print(f"    {baseline}: {delta_display}")
                 seeds_block = payload.get("seeds") if isinstance(payload.get("seeds"), Sequence) else None
                 if not seeds_block:
                     continue
@@ -191,9 +211,12 @@ def _emit_summary(summary: Mapping[str, Any]) -> None:
                     delta_val = entry.get("delta")
                     ci = entry.get("ci") if isinstance(entry.get("ci"), Mapping) else None
                     if isinstance(seed_id, int) and isinstance(delta_val, (int, float)):
-                        fragments.append(
-                            f"seed={seed_id}:{float(delta_val):+.3f} {_format_ci(ci)}"
-                        )
+                        delta_text = format_signed(delta_val)
+                        ci_text = _format_ci(ci)
+                        if ci_text != PLACEHOLDER:
+                            fragments.append(f"seed={seed_id}:{delta_text} {ci_text}")
+                        else:
+                            fragments.append(f"seed={seed_id}:{delta_text}")
                 if fragments:
                     print("      " + ", ".join(fragments))
 

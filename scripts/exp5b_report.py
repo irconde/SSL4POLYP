@@ -11,6 +11,7 @@ from ssl4polyp.classification.analysis.exp5b_report import (
     summarize_runs,
     write_severity_csv,
 )
+from ssl4polyp.classification.analysis.display import format_mean_std  # type: ignore[import]
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,12 +72,9 @@ def _emit_summary(summary: dict[str, object], models: Sequence[str]) -> None:
                     continue
                 mean = stats.get("mean")
                 std = stats.get("std")
-                if mean is None:
+                if not isinstance(mean, (int, float)):
                     continue
-                if std is None or not isinstance(std, (int, float)):
-                    metrics_display.append(f"{metric}={mean:.4f}")
-                else:
-                    metrics_display.append(f"{metric}={mean:.4f}±{std:.4f}")
+                metrics_display.append(f"{metric}={format_mean_std(mean, std)}")
             if metrics_display:
                 print(f"  {family}: " + "; ".join(metrics_display))
 

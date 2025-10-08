@@ -17,6 +17,15 @@ from .exp3_report import FrameRecord, compute_strata_metrics
 from .result_loader import ResultLoader, GuardrailViolation
 from .common_metrics import _coerce_float, _coerce_int
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
+from .display import (
+    format_ci,
+    format_interval_label,
+    format_mean_std,
+    format_percent,
+    format_percent_numeric,
+    format_scalar,
+    format_signed,
+)
 
 PRIMARY_METRICS: Tuple[str, ...] = ("auprc", "f1")
 MODEL_LABELS: Dict[str, str] = {
@@ -285,7 +294,7 @@ def compute_slopes(
                 delta_metric = points[end]["mean"] - points[start]["mean"]
                 delta_percent = end - start
                 slope_value = delta_metric / delta_percent if delta_percent else float("nan")
-                label = _format_interval_label(start, end)
+                label = format_interval_label(start, end)
                 interval_slopes[label] = slope_value
             if interval_slopes:
                 metric_slopes[model] = interval_slopes
@@ -827,7 +836,7 @@ def _render_learning_table(curves: Mapping[str, Dict[float, Mapping[str, float]]
             if not stats:
                 row_values.append("—")
             else:
-                row_values.append(_format_mean_std(stats.get("mean"), stats.get("std")))
+                row_values.append(format_mean_std(stats.get("mean"), stats.get("std")))
         rows.append("| " + " | ".join(row_values) + " |")
     return rows
 
@@ -845,7 +854,7 @@ def _render_slope_table(slopes: Mapping[str, Dict[str, float]]) -> List[str]:
         row = [MODEL_LABELS.get(model, model)]
         for interval in intervals:
             value = stats.get(interval, float("nan"))
-            row.append(_format_signed(value))
+            row.append(format_signed(value))
         rows.append("| " + " | ".join(row) + " |")
     return rows
 
@@ -864,7 +873,7 @@ def _render_aulc_table(aulc: Mapping[str, Mapping[str, float]]) -> List[str]:
         row = [MODEL_LABELS.get(model, model)]
         for metric in PRIMARY_METRICS:
             value = aulc.get(metric, {}).get(model, float("nan"))
-            row.append(_format_scalar(value))
+            row.append(format_scalar(value))
         rows.append("| " + " | ".join(row) + " |")
     return rows
 
@@ -897,7 +906,7 @@ def _render_pairwise_table(entries: Mapping[float, Mapping[str, object]]) -> Lis
             + " | ".join(
                 [
                     _format_percent(percent),
-                    _format_signed(delta_value if delta_value is not None else float("nan")),
+                    format_signed(delta_value if delta_value is not None else float("nan")),
                     _format_ci(ci_low, ci_high),
                     str(seeds_value),
                     str(replicate_count),
@@ -940,7 +949,7 @@ def _render_aulc_delta_table(aulc_delta: Mapping[str, Mapping[str, object]]) -> 
                     [
                         MODEL_LABELS.get(baseline, baseline),
                         METRIC_LABELS.get(metric, metric.upper()),
-                        _format_signed(delta_value if delta_value is not None else float("nan")),
+                        format_signed(delta_value if delta_value is not None else float("nan")),
                         _format_ci(ci_low, ci_high),
                         str(seeds_value),
                         str(replicate_count),
@@ -968,7 +977,7 @@ def _render_s_at_target_table(
     rows = [header, separator]
     for metric in PRIMARY_METRICS:
         target_value = targets.get(metric, float("nan"))
-        row = [METRIC_LABELS.get(metric, metric.upper()), _format_scalar(target_value)]
+        row = [METRIC_LABELS.get(metric, metric.upper()), format_scalar(target_value)]
         per_metric = s_at_target.get(metric, {}) if isinstance(s_at_target, Mapping) else {}
         for model in ordered_models:
             percent = per_metric.get(model)
@@ -996,12 +1005,6 @@ def _format_signed(value: float) -> str:
     if value is None or math.isnan(float(value)):
         return "—"
     return f"{float(value):+.3f}"
-
-
-def _format_scalar(value: float) -> str:
-    if value is None or math.isnan(float(value)):
-        return "—"
-    return f"{float(value):.3f}"
 
 
 def _format_ci(lower: float, upper: float) -> str:

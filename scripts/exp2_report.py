@@ -14,6 +14,12 @@ from ssl4polyp.classification.analysis.exp2_report import (  # type: ignore[impo
     discover_runs,
     summarize_runs,
 )
+from ssl4polyp.classification.analysis.display import (  # type: ignore[import]
+    PLACEHOLDER,
+    format_ci,
+    format_mean_std,
+    format_signed,
+)
 
 _METRIC_LABELS = {
     "auprc": "AUPRC",
@@ -36,8 +42,8 @@ def _format_model_block(model: str, summary: Exp2Summary) -> Iterable[str]:
         if not aggregate:
             continue
         label = _METRIC_LABELS.get(metric, metric)
-        std_term = f" ± {aggregate.std:.4f}" if aggregate.n > 1 else ""
-        lines.append(f"  {label}: {aggregate.mean:.4f}{std_term} (n={aggregate.n})")
+        mean_std = format_mean_std(aggregate.mean, aggregate.std)
+        lines.append(f"  {label}: {mean_std} (n={aggregate.n})")
     return lines
 
 
@@ -54,13 +60,19 @@ def _format_delta_block(
         if delta is None:
             continue
         label = _METRIC_LABELS.get(metric, metric)
-        if delta.ci_lower is not None and delta.ci_upper is not None:
-            lines.append(
-                f"  {label}: {delta.mean:.4f} (95% CI: {delta.ci_lower:.4f}, {delta.ci_upper:.4f})"
-            )
+        mean_text = format_signed(delta.mean)
+        ci_text = (
+            format_ci(delta.ci_lower, delta.ci_upper)
+            if delta.ci_lower is not None and delta.ci_upper is not None
+            else PLACEHOLDER
+        )
+        if ci_text != PLACEHOLDER:
+            lines.append(f"  {label}: {mean_text} (95% CI: {ci_text})")
         else:
-            lines.append(f"  {label}: {delta.mean:.4f}")
-        per_seed_parts = [f"s{seed}={value:.4f}" for seed, value in sorted(delta.per_seed.items())]
+            lines.append(f"  {label}: {mean_text}")
+        per_seed_parts = [
+            f"s{seed}={format_signed(value)}" for seed, value in sorted(delta.per_seed.items())
+        ]
         if per_seed_parts:
             lines.append("    per-seed: " + ", ".join(per_seed_parts))
     return lines
