@@ -441,7 +441,7 @@ def summarize_runs(
                     ci_upper=ci[1] if ci else None,
                     samples=tuple(samples),
                 )
-            paired_deltas[metric] = summary
+                paired_deltas[metric] = summary
     return Exp2Summary(
         model_metrics=model_metrics,
         paired_deltas=paired_deltas,

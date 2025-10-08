@@ -47,11 +47,27 @@ class CommonRun:
     cases: Dict[str, Tuple[CommonFrame, ...]]
 
 
-def get_default_loader(*, strict: bool = True) -> ResultLoader:
+def get_default_loader(
+    *,
+    strict: bool = True,
+    primary_policy: str | None = "f1_opt_on_val",
+    sensitivity_policy: str | None = "youden_on_val",
+    require_sensitivity: bool = True,
+    required_curve_keys: Sequence[str] = (),
+) -> ResultLoader:
+    """Return a :class:`ResultLoader` configured for the reporting contract.
+
+    Experiments share the same guardrails but differ in the threshold policies
+    that should be present in each ``metrics.json`` payload. Allowing callers to
+    override the policies keeps the validation logic centralised while making
+    the expectations explicit at the call-site.
+    """
+
     return ResultLoader(
-        expected_primary_policy="f1_opt_on_val",
-        expected_sensitivity_policy="youden_on_val",
-        require_sensitivity=True,
+        expected_primary_policy=primary_policy,
+        expected_sensitivity_policy=sensitivity_policy,
+        require_sensitivity=require_sensitivity,
+        required_curve_keys=tuple(required_curve_keys),
         strict=strict,
     )
 

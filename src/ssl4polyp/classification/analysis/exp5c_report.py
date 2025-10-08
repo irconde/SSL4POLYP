@@ -32,6 +32,15 @@ AULC_METRICS: Tuple[str, ...] = ("auprc", "f1")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 
 
+def _get_loader(*, strict: bool = True) -> ResultLoader:
+    return get_default_loader(
+        strict=strict,
+        primary_policy="sun_val_frozen",
+        sensitivity_policy="val_opt_youden",
+        require_sensitivity=True,
+    )
+
+
 @dataclass(frozen=True)
 class EvalFrame:
     frame_id: str
@@ -105,7 +114,7 @@ def load_run(
     *,
     loader: Optional[ResultLoader] = None,
 ) -> FewShotRun:
-    active_loader = loader or get_default_loader()
+    active_loader = loader or _get_loader()
     base_run = load_common_run(metrics_path, loader=active_loader)
     payload = base_run.payload
     provenance = dict(base_run.provenance)
@@ -147,7 +156,7 @@ def discover_runs(
 ) -> Dict[str, Dict[int, Dict[int, FewShotRun]]]:
     model_filter = {str(m) for m in models} if models else None
     runs: DefaultDict[str, DefaultDict[int, Dict[int, FewShotRun]]] = defaultdict(lambda: defaultdict(dict))
-    active_loader = loader or get_default_loader()
+    active_loader = loader or _get_loader()
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
         try:
             run = load_run(metrics_path, loader=active_loader)
@@ -522,7 +531,7 @@ def _compute_aulc_deltas(
 def summarize_runs(
     runs_by_model: Mapping[str, Mapping[int, Mapping[int, FewShotRun]]],
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
     target_model: str = "ssl_imnet",
     target_budget: int = 500,

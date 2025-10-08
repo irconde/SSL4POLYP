@@ -323,7 +323,7 @@ def compute_pairwise_deltas(
     runs_by_model: Mapping[str, Mapping[float, Mapping[int, RunResult]]],
     metric: str,
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> Dict[str, Dict[float, Dict[str, object]]]:
@@ -387,7 +387,7 @@ def compute_aulc_deltas(
     runs_by_model: Mapping[str, Mapping[float, Mapping[int, RunResult]]],
     metric: str,
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> Dict[str, Dict[str, object]]:
@@ -670,7 +670,7 @@ def compute_s_at_target(
 def summarize_runs(
     runs_by_model: Mapping[str, Mapping[float, Mapping[int, RunResult]]],
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
 ) -> Dict[str, object]:
     if runs_by_model:
@@ -730,7 +730,7 @@ def summarize_runs(
 def collect_summary(
     runs_root: Path,
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
     strict: bool = True,
 ) -> Tuple[Dict[str, Dict[float, Dict[int, RunResult]]], Dict[str, object], ResultLoader]:
@@ -744,7 +744,7 @@ def collect_summary(
 def generate_report(
     runs_root: Path,
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
     strict: bool = True,
 ) -> str:
