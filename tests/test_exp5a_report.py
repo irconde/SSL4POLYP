@@ -9,6 +9,7 @@ from ssl4polyp.classification.analysis.exp5a_report import (  # type: ignore[imp
     discover_runs,
     load_run,
     summarize_runs,
+    EXPECTED_SEEDS,
 )
 
 
@@ -22,11 +23,13 @@ def _write_outputs(path: Path, rows: list[dict[str, object]]) -> None:
         "origin",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        handle.write(",".join(fieldnames) + "\n")
-        for row in rows:
-            values = [str(row.get(field, "")) for field in fieldnames]
-            handle.write(",".join(values) + "\n")
+    variant = path.with_name(path.name.replace("_test_outputs", ".metrics_test_outputs"))
+    for output_path in {path, variant}:
+        with output_path.open("w", encoding="utf-8") as handle:
+            handle.write(",".join(fieldnames) + "\n")
+            for row in rows:
+                values = [str(row.get(field, "")) for field in fieldnames]
+                handle.write(",".join(values) + "\n")
 
 
 def _write_metrics(path: Path, payload: dict[str, object]) -> None:
@@ -72,6 +75,8 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
     sun_outputs_path = sun_dir / "seed1_test_outputs.csv"
     _write_outputs(outputs_path, _polyp_rows())
     _write_outputs(sun_outputs_path, _sun_rows())
+    alt_sun_outputs_path = colon_dir.parent / "sun_parent" / "seed1_test_outputs.csv"
+    _write_outputs(alt_sun_outputs_path, _sun_rows())
     metrics_payload = {
         "seed": 1,
         "test_primary": {
@@ -134,15 +139,16 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
 
 def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
     root = tmp_path / "results"
-    colon_dir = root / "ssl_colon" / "seed1"
-    sup_dir = root / "sup_imnet" / "seed1"
-    colon_dir.mkdir(parents=True, exist_ok=True)
-    sup_dir.mkdir(parents=True, exist_ok=True)
-    _write_outputs(colon_dir / "ssl_colon__seed1_last_test_outputs.csv", _polyp_rows())
-    _write_outputs(sup_dir / "sup_imnet__seed1_last_test_outputs.csv", _polyp_rows())
+    for seed in EXPECTED_SEEDS:
+        colon_dir = root / "ssl_colon" / f"seed{seed}"
+        sup_dir = root / "sup_imnet" / f"seed{seed}"
+        colon_dir.mkdir(parents=True, exist_ok=True)
+        sup_dir.mkdir(parents=True, exist_ok=True)
+        _write_outputs(colon_dir / f"ssl_colon__seed{seed}_last_test_outputs.csv", _polyp_rows())
+        _write_outputs(sup_dir / f"sup_imnet__seed{seed}_last_test_outputs.csv", _polyp_rows())
     parent_payload = _sun_payload(tau=0.45, offset=-0.08)
     colon_metrics = {
-        "seed": 1,
+        "seed": 0,  # placeholder updated per seed
         "test_primary": {
             "tau": 0.55,
             "auprc": 0.8,
@@ -174,14 +180,14 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "test_outputs_csv_sha256": "deadbeef",
             "parent_run": {
                 "metrics": {
-                    "path": "../sun_parent/seed1.metrics.json",
+                    "path": "../sun_parent/seed.metrics.json",
                     "payload": parent_payload,
                 },
             },
         },
     }
     sup_metrics = {
-        "seed": 1,
+        "seed": 0,
         "test_primary": {
             "tau": 0.6,
             "auprc": 0.7,
@@ -213,18 +219,34 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "test_outputs_csv_sha256": "deadbeef",
             "parent_run": {
                 "metrics": {
-                    "path": "../sun_parent/seed1.metrics.json",
+                    "path": "../sun_parent/seed.metrics.json",
                     "payload": parent_payload,
                 },
             },
         },
     }
-    _write_metrics(colon_dir / "ssl_colon__seed1_last.metrics.json", colon_metrics)
-    _write_metrics(sup_dir / "sup_imnet__seed1_last.metrics.json", sup_metrics)
+    for seed in EXPECTED_SEEDS:
+        colon_metrics_seed = dict(colon_metrics)
+        colon_metrics_seed["seed"] = seed
+        colon_metrics_seed["provenance"] = dict(colon_metrics["provenance"])
+        colon_metrics_seed["provenance"]["parent_run"] = {
+            "metrics": {"path": f"../sun_parent/seed{seed}.metrics.json", "payload": parent_payload},
+        }
+        sup_metrics_seed = dict(sup_metrics)
+        sup_metrics_seed["seed"] = seed
+        sup_metrics_seed["provenance"] = dict(sup_metrics["provenance"])
+        sup_metrics_seed["provenance"]["parent_run"] = {
+            "metrics": {"path": f"../sun_parent/seed{seed}.metrics.json", "payload": parent_payload},
+        }
+        colon_dir = root / "ssl_colon" / f"seed{seed}"
+        sup_dir = root / "sup_imnet" / f"seed{seed}"
+        _write_metrics(colon_dir / f"ssl_colon__seed{seed}_last.metrics.json", colon_metrics_seed)
+        _write_metrics(sup_dir / f"sup_imnet__seed{seed}_last.metrics.json", sup_metrics_seed)
     runs = discover_runs(root)
     summary = summarize_runs(runs, bootstrap=10, rng_seed=123)
     assert "models" in summary
     assert "ssl_colon" in summary["models"]
+    assert summary["validated_seeds"] == list(EXPECTED_SEEDS)
     colon_entry = summary["models"]["ssl_colon"]
     assert "performance" in colon_entry
     assert "seeds" in colon_entry

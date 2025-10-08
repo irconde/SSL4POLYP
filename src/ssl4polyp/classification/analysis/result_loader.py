@@ -280,6 +280,8 @@ def build_report_manifest(
     bootstrap: Optional[int] = None,
     extra_outputs: Optional[Iterable[Path]] = None,
     metadata: Optional[MutableMapping[str, Any]] = None,
+    validated_seeds: Optional[Sequence[int]] = None,
+    seed_groups: Optional[Mapping[str, Sequence[int]]] = None,
 ) -> Dict[str, Any]:
     manifest: Dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -289,6 +291,13 @@ def build_report_manifest(
         "csv_digests": loader.csv_digests,
         "curve_digests": loader.curve_digests,
     }
+    if validated_seeds is not None:
+        manifest["validated_seeds"] = [int(seed) for seed in validated_seeds]
+    if seed_groups:
+        manifest["seed_groups"] = {
+            str(key): [int(seed) for seed in value]
+            for key, value in seed_groups.items()
+        }
     if metadata:
         manifest.update(metadata)
     outputs: list[Dict[str, Any]] = []

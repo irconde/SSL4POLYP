@@ -9,12 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import DefaultDict, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union, overload
 from typing import Literal
+from types import MappingProxyType
 
 import numpy as np
 
 from .exp3_report import FrameRecord, compute_strata_metrics
 from .result_loader import ResultLoader, GuardrailViolation
 from .common_metrics import _coerce_float, _coerce_int
+from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
 PRIMARY_METRICS: Tuple[str, ...] = ("auprc", "f1")
 MODEL_LABELS: Dict[str, str] = {
@@ -26,6 +28,7 @@ METRIC_LABELS: Dict[str, str] = {"auprc": "AUPRC", "f1": "F1"}
 TARGET_MODEL = "ssl_colon"
 BASELINE_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 PREFERRED_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet", "ssl_colon")
+EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 
 
 @dataclass
@@ -322,6 +325,7 @@ def compute_pairwise_deltas(
     *,
     bootstrap: int = 1000,
     rng_seed: int = 12345,
+    expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> Dict[str, Dict[float, Dict[str, object]]]:
     colon_runs = runs_by_model.get(TARGET_MODEL)
     if not colon_runs:
@@ -338,9 +342,17 @@ def compute_pairwise_deltas(
         for percent in shared_percents:
             colon_by_seed = colon_runs.get(percent, {})
             baseline_by_seed = baseline_runs.get(percent, {})
-            seeds = sorted(set(colon_by_seed.keys()) & set(baseline_by_seed.keys()))
-            if not seeds:
+            if not colon_by_seed or not baseline_by_seed:
                 continue
+            ensure_expected_seeds(
+                {
+                    f"{TARGET_MODEL}@p{percent:g}": colon_by_seed,
+                    f"{baseline}@p{percent:g}": baseline_by_seed,
+                },
+                expected_seeds=expected_seeds,
+                context=f"Experiment 4 pairwise Δ at p{percent}",
+            )
+            seeds = list(expected_seeds)
             deltas: List[float] = []
             for seed in seeds:
                 colon_value = colon_by_seed[seed].metrics.get(metric)
@@ -351,12 +363,13 @@ def compute_pairwise_deltas(
             if not deltas:
                 continue
             mean_delta = float(np.mean(deltas))
-            replicates = bootstrap_metric_delta(
+            replicates = bootstrap_metric_delta_with_expected(
                 {seed: colon_by_seed[seed] for seed in seeds},
                 {seed: baseline_by_seed[seed] for seed in seeds},
                 metric=metric,
                 bootstrap=bootstrap,
                 rng_seed=rng_seed,
+                expected_seeds=expected_seeds,
             )
             ci = compute_ci_bounds(replicates)
             per_percent[percent] = {
@@ -376,6 +389,7 @@ def compute_aulc_deltas(
     *,
     bootstrap: int = 1000,
     rng_seed: int = 12345,
+    expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> Dict[str, Dict[str, object]]:
     colon_runs = runs_by_model.get(TARGET_MODEL)
     if not colon_runs:
@@ -388,18 +402,22 @@ def compute_aulc_deltas(
         shared_percents = sorted(set(colon_runs.keys()) & set(baseline_runs.keys()))
         if not shared_percents:
             continue
-        seeds: Optional[set[int]] = None
-        for percent in shared_percents:
-            colon_seed_set = set(colon_runs.get(percent, {}).keys())
-            baseline_seed_set = set(baseline_runs.get(percent, {}).keys())
-            overlap = colon_seed_set & baseline_seed_set
-            if seeds is None:
-                seeds = set(overlap)
-            else:
-                seeds &= overlap
-        if not seeds:
-            continue
-        sorted_seeds = sorted(seeds)
+        per_percent_groups = {
+            f"{TARGET_MODEL}@p{percent:g}": colon_runs.get(percent, {})
+            for percent in shared_percents
+        }
+        per_percent_groups.update(
+            {
+                f"{baseline}@p{percent:g}": baseline_runs.get(percent, {})
+                for percent in shared_percents
+            }
+        )
+        ensure_expected_seeds(
+            per_percent_groups,
+            expected_seeds=expected_seeds,
+            context=f"Experiment 4 ΔAULC vs {baseline}",
+        )
+        sorted_seeds = list(expected_seeds)
         deltas: List[float] = []
         for seed in sorted_seeds:
             colon_values = [colon_runs[p][seed].metrics.get(metric) for p in shared_percents]
@@ -418,13 +436,14 @@ def compute_aulc_deltas(
         if not deltas:
             continue
         mean_delta = float(np.mean(deltas))
-        replicates = bootstrap_aulc_delta(
+        replicates = bootstrap_aulc_delta_with_expected(
             {percent: {seed: colon_runs[percent][seed] for seed in sorted_seeds} for percent in shared_percents},
             {percent: {seed: baseline_runs[percent][seed] for seed in sorted_seeds} for percent in shared_percents},
             percents=shared_percents,
             metric=metric,
             bootstrap=bootstrap,
             rng_seed=rng_seed,
+            expected_seeds=expected_seeds,
         )
         ci = compute_ci_bounds(replicates)
         results[baseline] = {
@@ -445,11 +464,33 @@ def bootstrap_metric_delta(
     bootstrap: int,
     rng_seed: int,
 ) -> List[float]:
+    return bootstrap_metric_delta_with_expected(
+        colon_runs,
+        baseline_runs,
+        metric=metric,
+        bootstrap=bootstrap,
+        rng_seed=rng_seed,
+        expected_seeds=EXPECTED_SEEDS,
+    )
+
+
+def bootstrap_metric_delta_with_expected(
+    colon_runs: Mapping[int, RunResult],
+    baseline_runs: Mapping[int, RunResult],
+    *,
+    metric: str,
+    bootstrap: int,
+    rng_seed: int,
+    expected_seeds: Sequence[int],
+) -> List[float]:
     if bootstrap <= 0:
         return []
-    seeds = sorted(set(colon_runs.keys()) & set(baseline_runs.keys()))
-    if not seeds:
-        return []
+    ensure_expected_seeds(
+        {"colon": colon_runs, "baseline": baseline_runs},
+        expected_seeds=expected_seeds,
+        context="Experiment 4 bootstrap metric delta",
+    )
+    seeds = list(expected_seeds)
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
     for _ in range(bootstrap):
@@ -496,20 +537,30 @@ def bootstrap_aulc_delta(
     bootstrap: int,
     rng_seed: int,
 ) -> List[float]:
+    return bootstrap_aulc_delta_with_expected(
+        colon_runs,
+        baseline_runs,
+        percents=percents,
+        metric=metric,
+        bootstrap=bootstrap,
+        rng_seed=rng_seed,
+        expected_seeds=EXPECTED_SEEDS,
+    )
+
+
+def bootstrap_aulc_delta_with_expected(
+    colon_runs: Mapping[float, Mapping[int, RunResult]],
+    baseline_runs: Mapping[float, Mapping[int, RunResult]],
+    *,
+    percents: Sequence[float],
+    metric: str,
+    bootstrap: int,
+    rng_seed: int,
+    expected_seeds: Sequence[int],
+) -> List[float]:
     if bootstrap <= 0:
         return []
-    seeds: Optional[set[int]] = None
-    for percent in percents:
-        colon_seed_set = set(colon_runs.get(percent, {}).keys())
-        baseline_seed_set = set(baseline_runs.get(percent, {}).keys())
-        overlap = colon_seed_set & baseline_seed_set
-        if seeds is None:
-            seeds = set(overlap)
-        else:
-            seeds &= overlap
-    if not seeds:
-        return []
-    sorted_seeds = sorted(seeds)
+    sorted_seeds = list(expected_seeds)
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
     for _ in range(bootstrap):
@@ -622,15 +673,40 @@ def summarize_runs(
     bootstrap: int = 1000,
     rng_seed: int = 12345,
 ) -> Dict[str, object]:
+    if runs_by_model:
+        seed_groups = {
+            f"{model}@p{percent:g}": seeds
+            for model, per_percent in runs_by_model.items()
+            for percent, seeds in per_percent.items()
+        }
+        seed_validation = ensure_expected_seeds(
+            seed_groups,
+            expected_seeds=EXPECTED_SEEDS,
+            context="Experiment 4",
+        )
+    else:
+        seed_validation = SeedValidationResult((), MappingProxyType({}))
     curves = compute_learning_curves(runs_by_model)
     slopes = compute_slopes(curves)
     aulc = compute_aulc(curves)
     pairwise = {
-        metric: compute_pairwise_deltas(runs_by_model, metric, bootstrap=max(0, bootstrap), rng_seed=rng_seed)
+        metric: compute_pairwise_deltas(
+            runs_by_model,
+            metric,
+            bootstrap=max(0, bootstrap),
+            rng_seed=rng_seed,
+            expected_seeds=seed_validation.expected_seeds,
+        )
         for metric in PRIMARY_METRICS
     }
     aulc_delta = {
-        metric: compute_aulc_deltas(runs_by_model, metric, bootstrap=max(0, bootstrap), rng_seed=rng_seed)
+        metric: compute_aulc_deltas(
+            runs_by_model,
+            metric,
+            bootstrap=max(0, bootstrap),
+            rng_seed=rng_seed,
+            expected_seeds=seed_validation.expected_seeds,
+        )
         for metric in PRIMARY_METRICS
     }
     targets = determine_targets(curves)
@@ -644,6 +720,10 @@ def summarize_runs(
         "aulc_delta": aulc_delta,
         "targets": targets,
         "s_at_target": s_at_target,
+        "validated_seeds": list(seed_validation.expected_seeds),
+        "seed_groups": {
+            key: list(values) for key, values in seed_validation.observed_seeds.items()
+        },
     }
 
 
@@ -972,4 +1052,5 @@ __all__ = [
     "summarize_runs",
     "generate_report",
     "render_report",
+    "EXPECTED_SEEDS",
 ]

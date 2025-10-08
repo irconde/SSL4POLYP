@@ -72,12 +72,16 @@ def main() -> None:
     else:
         print(report)
     if args.manifest is not None:
+        validated_seeds = summary.get("validated_seeds") if summary else None
+        seed_groups = summary.get("seed_groups") if summary else None
         manifest = build_report_manifest(
             output_path=args.output,
             loader=loader,
             runs=loader.loaded_runs,
             rng_seed=args.seed,
             bootstrap=max(0, args.bootstrap),
+            validated_seeds=validated_seeds,
+            seed_groups=seed_groups if isinstance(seed_groups, dict) else None,
         )
         args.manifest.parent.mkdir(parents=True, exist_ok=True)
         args.manifest.write_text(json.dumps(manifest, indent=2), encoding="utf-8")

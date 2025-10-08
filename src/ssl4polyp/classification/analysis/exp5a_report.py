@@ -4,12 +4,14 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
 
 from .common_loader import (
     CommonFrame,
+    _extract_metrics,
     get_default_loader,
     load_common_run,
     load_outputs_csv,
@@ -24,6 +26,7 @@ from .common_metrics import (
     _coerce_float,
     _coerce_int,
 )
+from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
 PRIMARY_METRICS: Tuple[str, ...] = (
     "auprc",
@@ -36,6 +39,7 @@ PRIMARY_METRICS: Tuple[str, ...] = (
 )
 PAIRWISE_BASELINES: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 CI_LEVEL = 0.95
+EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 
 
 @dataclass(frozen=True)
@@ -373,6 +377,14 @@ def summarize_runs(
     bootstrap: int = 1000,
     rng_seed: int = 12345,
 ) -> Dict[str, Any]:
+    if not runs_by_model:
+        seed_validation = SeedValidationResult((), MappingProxyType({}))
+    else:
+        seed_validation = ensure_expected_seeds(
+            runs_by_model,
+            expected_seeds=EXPECTED_SEEDS,
+            context="Experiment 5A",
+        )
     summary: Dict[str, Any] = {
         "metadata": {
             "metrics": list(PRIMARY_METRICS),
@@ -382,6 +394,10 @@ def summarize_runs(
         },
         "models": {},
         "pairwise": {},
+        "validated_seeds": list(seed_validation.expected_seeds),
+        "seed_groups": {
+            key: list(values) for key, values in seed_validation.observed_seeds.items()
+        },
     }
     model_entries: Dict[str, Any] = {}
     for model, runs in sorted(runs_by_model.items()):
@@ -453,12 +469,21 @@ def summarize_runs(
                 baseline_runs = runs_by_model.get(baseline, {})
                 if not baseline_runs:
                     continue
+                ensure_expected_seeds(
+                    {
+                        "ssl_colon": colon_runs,
+                        baseline: baseline_runs,
+                    },
+                    expected_seeds=seed_validation.expected_seeds,
+                    context=f"Experiment 5A pairwise ({baseline})",
+                )
                 rows: List[Dict[str, Any]] = []
                 deltas: List[float] = []
                 aggregate_replicates: List[float] = []
-                for seed, colon_run in colon_runs.items():
+                for seed in seed_validation.expected_seeds:
+                    colon_run = colon_runs.get(seed)
                     baseline_run = baseline_runs.get(seed)
-                    if baseline_run is None:
+                    if colon_run is None or baseline_run is None:
                         continue
                     colon_value = _coerce_float(colon_run.metrics.get(metric))
                     baseline_value = _coerce_float(baseline_run.metrics.get(metric))
@@ -673,4 +698,5 @@ __all__ = [
     "write_domain_shift_csv",
     "write_seed_metrics_csv",
     "write_pairwise_csv",
+    "EXPECTED_SEEDS",
 ]
