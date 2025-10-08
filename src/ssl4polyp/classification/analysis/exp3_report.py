@@ -10,6 +10,7 @@ import numpy as np
 from .common_loader import get_default_loader, load_common_run
 from .result_loader import ResultLoader
 from .common_metrics import compute_binary_metrics
+from .seed_checks import ensure_expected_seeds
 
 
 _STRATA = ("overall", "flat_plus_negs", "polypoid_plus_negs")
@@ -23,6 +24,8 @@ _STRATUM_LABELS = {
     "flat_plus_negs": "Flat + Negs",
     "polypoid_plus_negs": "Polypoid + Negs",
 }
+EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
+
 _PRIMARY_METRICS = (
     "auprc",
     "auroc",
@@ -178,10 +181,14 @@ def bootstrap_deltas(
     *,
     bootstrap: int = 1000,
     rng_seed: int = 12345,
+    expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> Tuple[Dict[str, float], Dict[str, List[float]]]:
-    seeds = sorted(set(colon_runs.keys()) & set(baseline_runs.keys()))
-    if not seeds:
-        raise ValueError("No overlapping seeds between models for delta computation")
+    ensure_expected_seeds(
+        {"treatment": colon_runs, "baseline": baseline_runs},
+        expected_seeds=expected_seeds,
+        context="Experiment 3 pairwise delta",
+    )
+    seeds = list(expected_seeds)
     point_estimates: Dict[str, float] = {}
     replicates: Dict[str, List[float]] = {key: [] for key in _STRATA}
     for stratum in _STRATA:
@@ -344,6 +351,11 @@ def generate_report(
     runs_by_model = discover_runs(runs_root)
     if not runs_by_model:
         raise FileNotFoundError(f"No metrics files found under {runs_root}")
+    ensure_expected_seeds(
+        runs_by_model,
+        expected_seeds=EXPECTED_SEEDS,
+        context="Experiment 3",
+    )
     metrics_by_model, composition_reference = _collect_metrics(runs_by_model)
     if not metrics_by_model:
         raise RuntimeError("Unable to collect metrics for any model")

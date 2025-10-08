@@ -10,6 +10,7 @@ from ssl4polyp.classification.analysis.exp3_report import (  # type: ignore[impo
     FrameRecord,
     compute_strata_metrics,
     generate_report,
+    EXPECTED_SEEDS,
 )
 
 
@@ -90,12 +91,15 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
         },
     }
     metrics_path.write_text(json.dumps(metrics_payload), encoding="utf-8")
-    outputs_path = root / f"{run_prefix}_test_outputs.csv"
-    with outputs_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["case_id", "prob", "label", "pred", "morphology"])
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
+    outputs_primary = root / f"{run_prefix}_test_outputs.csv"
+    outputs_with_suffix = root / f"{run_prefix}.metrics_test_outputs.csv"
+    outputs_expected = metrics_path.with_name(f"{metrics_path.stem}_test_outputs.csv")
+    for path in {outputs_primary, outputs_with_suffix, outputs_expected}:
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["case_id", "prob", "label", "pred", "morphology"])
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
 
 
 def test_generate_report_smoke(tmp_path: Path) -> None:
@@ -110,8 +114,20 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         {"case_id": "b", "prob": 0.4, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "c", "prob": 0.3, "label": 0, "pred": 0, "morphology": "other"},
     ]
-    _write_run(tmp_path, "ssl_colon", seed=1, rows=colon_rows, tau=0.5)
-    _write_run(tmp_path, "sup_imnet", seed=1, rows=sup_rows, tau=0.5)
+    alt_sup_rows = [
+        {"case_id": "a", "prob": 0.65, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.45, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "c", "prob": 0.25, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    alt_colon_rows = [
+        {"case_id": "a", "prob": 0.88, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.82, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "c", "prob": 0.18, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    for seed in EXPECTED_SEEDS:
+        _write_run(tmp_path, "ssl_colon", seed=seed, rows=colon_rows if seed != 29 else alt_colon_rows, tau=0.5)
+        sup_payload = sup_rows if seed != 47 else alt_sup_rows
+        _write_run(tmp_path, "sup_imnet", seed=seed, rows=sup_payload, tau=0.5)
 
     report = generate_report(tmp_path, bootstrap=10, rng_seed=7)
 

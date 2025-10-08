@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from ssl4polyp.classification.analysis import exp4_report
+from ssl4polyp.classification.analysis.exp4_report import EXPECTED_SEEDS  # type: ignore[import]
 
 
 def _write_outputs_csv(path: Path) -> None:
@@ -35,7 +36,9 @@ def _write_run(
 ) -> None:
     base = f"{model}_p{int(percent):02d}_s{seed}"
     metrics_path = root / f"{base}_last.metrics.json"
-    outputs_path = root / f"{base}_test_outputs.csv"
+    outputs_primary = root / f"{base}_test_outputs.csv"
+    outputs_with_suffix = root / f"{base}.metrics_test_outputs.csv"
+    outputs_expected = metrics_path.with_name(f"{metrics_path.stem}_test_outputs.csv")
     curve_dir = root / "curves"
     curve_dir.mkdir(parents=True, exist_ok=True)
     curve_path = curve_dir / f"{base}_roc_curve.csv"
@@ -112,22 +115,24 @@ def _write_run(
         },
     }
     metrics_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    _write_outputs_csv(outputs_path)
+    for path in {outputs_primary, outputs_with_suffix, outputs_expected}:
+        _write_outputs_csv(path)
 
 
 @pytest.mark.parametrize("bootstrap", [0])
 def test_exp4_summary_pipeline(tmp_path: Path, bootstrap: int) -> None:
     runs_root = tmp_path
-    specs = [
-        ("sup_imnet", 50.0, 13, 0.55, 0.50),
-        ("sup_imnet", 100.0, 13, 0.58, 0.52),
-        ("ssl_imnet", 50.0, 13, 0.60, 0.56),
-        ("ssl_imnet", 100.0, 13, 0.62, 0.58),
-        ("ssl_colon", 50.0, 13, 0.70, 0.65),
-        ("ssl_colon", 100.0, 13, 0.82, 0.72),
+    base_specs = [
+        ("sup_imnet", 50.0, 0.55, 0.50),
+        ("sup_imnet", 100.0, 0.58, 0.52),
+        ("ssl_imnet", 50.0, 0.60, 0.56),
+        ("ssl_imnet", 100.0, 0.62, 0.58),
+        ("ssl_colon", 50.0, 0.70, 0.65),
+        ("ssl_colon", 100.0, 0.82, 0.72),
     ]
-    for model, percent, seed, auprc, f1_score in specs:
-        _write_run(runs_root, model=model, percent=percent, seed=seed, auprc=auprc, f1_score=f1_score)
+    for seed in EXPECTED_SEEDS:
+        for model, percent, auprc, f1_score in base_specs:
+            _write_run(runs_root, model=model, percent=percent, seed=seed, auprc=auprc, f1_score=f1_score)
 
     runs = exp4_report.discover_runs(runs_root)
     assert set(runs.keys()) == {"sup_imnet", "ssl_imnet", "ssl_colon"}
@@ -151,6 +156,7 @@ def test_exp4_summary_pipeline(tmp_path: Path, bootstrap: int) -> None:
     assert s_at_target["auprc"]["ssl_colon"] == pytest.approx(50.0)
     assert s_at_target["auprc"]["ssl_imnet"] == pytest.approx(100.0)
 
+    assert summary["validated_seeds"] == list(EXPECTED_SEEDS)
     pairwise_sup = summary["pairwise"]["auprc"]["sup_imnet"][50.0]
     assert pairwise_sup["delta"] == pytest.approx(0.70 - 0.55)
     assert pairwise_sup["replicates"] == []
@@ -166,6 +172,6 @@ def test_exp4_summary_pipeline(tmp_path: Path, bootstrap: int) -> None:
 
 def test_exp4_csv_digest_guardrail(tmp_path: Path) -> None:
     _write_run(tmp_path, model="sup_imnet", percent=50.0, seed=13, auprc=0.55, f1_score=0.5, csv_digest="aaaabbbb")
-    _write_run(tmp_path, model="ssl_colon", percent=50.0, seed=13, auprc=0.70, f1_score=0.65, csv_digest="ccccdddd")
+    _write_run(tmp_path, model="ssl_colon", percent=50.0, seed=29, auprc=0.70, f1_score=0.65, csv_digest="ccccdddd")
     with pytest.raises(RuntimeError):
         exp4_report.discover_runs(tmp_path)

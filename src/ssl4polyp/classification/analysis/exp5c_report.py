@@ -5,6 +5,7 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -20,6 +21,7 @@ from .common_metrics import (
     _coerce_float,
     _coerce_int,
 )
+from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
 TARGET_MODEL = "ssl_colon"
 BASELINE_MODELS: Tuple[str, ...] = ("ssl_imnet", "sup_imnet")
@@ -27,6 +29,7 @@ AGG_METRICS: Tuple[str, ...] = ("auprc", "f1", "auroc", "balanced_accuracy", "mc
 VAL_METRICS: Tuple[str, ...] = ("auprc", "auroc", "loss")
 PAIRWISE_METRICS: Tuple[str, ...] = ("auprc", "f1")
 AULC_METRICS: Tuple[str, ...] = ("auprc", "f1")
+EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 
 
 @dataclass(frozen=True)
@@ -293,17 +296,15 @@ def _bootstrap_aulc_delta(
     shared_budgets = sorted(set(colon_runs_per_budget.keys()) & set(baseline_runs_per_budget.keys()))
     if not shared_budgets:
         return []
-    shared_seeds: Optional[List[int]] = None
-    for budget in shared_budgets:
-        colon_map = colon_runs_per_budget.get(budget, {})
-        baseline_map = baseline_runs_per_budget.get(budget, {})
-        seeds = set(colon_map.keys()) & set(baseline_map.keys())
-        if shared_seeds is None:
-            shared_seeds = sorted(seeds)
-        else:
-            shared_seeds = sorted(set(shared_seeds) & seeds)
-    if not shared_seeds:
-        return []
+    ensure_expected_seeds(
+        {
+            **{f"colon@b{budget}": colon_runs_per_budget.get(budget, {}) for budget in shared_budgets},
+            **{f"baseline@b{budget}": baseline_runs_per_budget.get(budget, {}) for budget in shared_budgets},
+        },
+        expected_seeds=EXPECTED_SEEDS,
+        context="Experiment 5C bootstrap ΔAULC",
+    )
+    shared_seeds = list(EXPECTED_SEEDS)
     rng = np.random.default_rng(rng_seed)
     cluster_cache: Dict[int, ClusterSet] = {}
     replicates: List[float] = []
@@ -351,6 +352,7 @@ def _compute_pairwise_deltas(
     metric: str,
     bootstrap: int,
     rng_seed: int,
+    expected_seeds: Sequence[int],
 ) -> Dict[str, Dict[int, Dict[str, Any]]]:
     colon_runs = runs_by_model.get(TARGET_MODEL)
     if not colon_runs:
@@ -365,9 +367,15 @@ def _compute_pairwise_deltas(
         for budget in shared_budgets:
             colon_seed_map = colon_runs.get(budget, {})
             baseline_seed_map = baseline_runs.get(budget, {})
-            seeds = _collect_shared_seeds(colon_seed_map, baseline_seed_map)
-            if not seeds:
-                continue
+            ensure_expected_seeds(
+                {
+                    f"{TARGET_MODEL}@b{budget}": colon_seed_map,
+                    f"{baseline}@b{budget}": baseline_seed_map,
+                },
+                expected_seeds=expected_seeds,
+                context=f"Experiment 5C pairwise ({baseline}) budget {budget}",
+            )
+            seeds = list(expected_seeds)
             deltas: List[float] = []
             colon_sequence = [colon_seed_map[seed] for seed in seeds]
             baseline_sequence = [baseline_seed_map[seed] for seed in seeds]
@@ -444,6 +452,7 @@ def _compute_aulc_deltas(
     metric: str,
     bootstrap: int,
     rng_seed: int,
+    expected_seeds: Sequence[int],
 ) -> Dict[str, Dict[str, Any]]:
     colon_runs = runs_by_model.get(TARGET_MODEL)
     if not colon_runs:
@@ -458,18 +467,21 @@ def _compute_aulc_deltas(
         if not shared_budgets:
             continue
         per_seed_deltas: List[float] = []
-        shared_seeds: Optional[List[int]] = None
-        for budget in shared_budgets:
-            colon_seed_map = colon_runs.get(budget, {})
-            baseline_seed_map = baseline_runs.get(budget, {})
-            seeds = set(colon_seed_map.keys()) & set(baseline_seed_map.keys())
-            if shared_seeds is None:
-                shared_seeds = sorted(seeds)
-            else:
-                shared_seeds = sorted(set(shared_seeds) & seeds)
-        if not shared_seeds:
-            continue
-        for seed in shared_seeds:
+        ensure_expected_seeds(
+            {
+                **{
+                    f"{TARGET_MODEL}@b{budget}": colon_runs.get(budget, {})
+                    for budget in shared_budgets
+                },
+                **{
+                    f"{baseline}@b{budget}": baseline_runs.get(budget, {})
+                    for budget in shared_budgets
+                },
+            },
+            expected_seeds=expected_seeds,
+            context=f"Experiment 5C ΔAULC ({baseline})",
+        )
+        for seed in expected_seeds:
             colon_series: List[float] = []
             baseline_series: List[float] = []
             budgets = []
@@ -495,6 +507,7 @@ def _compute_aulc_deltas(
             metric=metric,
             bootstrap=bootstrap,
             rng_seed=rng_seed,
+            expected_seeds=expected_seeds,
         )
         results[baseline] = {
             "delta": float(np.mean(per_seed_deltas)) if per_seed_deltas else float("nan"),
@@ -514,6 +527,19 @@ def summarize_runs(
     target_model: str = "ssl_imnet",
     target_budget: int = 500,
 ) -> Dict[str, Any]:
+    if runs_by_model:
+        seed_groups = {
+            f"{model}@b{budget}": seed_map
+            for model, per_budget in runs_by_model.items()
+            for budget, seed_map in per_budget.items()
+        }
+        seed_validation = ensure_expected_seeds(
+            seed_groups,
+            expected_seeds=EXPECTED_SEEDS,
+            context="Experiment 5C",
+        )
+    else:
+        seed_validation = SeedValidationResult((), MappingProxyType({}))
     performance: Dict[str, Dict[int, Dict[str, Any]]] = {}
     for model, model_budgets in runs_by_model.items():
         model_entry: Dict[int, Dict[str, Any]] = {}
@@ -585,6 +611,7 @@ def summarize_runs(
             metric=metric,
             bootstrap=max(0, bootstrap),
             rng_seed=rng_seed,
+            expected_seeds=seed_validation.expected_seeds,
         )
     aulc_summary: Dict[str, Dict[str, Any]] = {}
     for metric in AULC_METRICS:
@@ -596,6 +623,7 @@ def summarize_runs(
             metric=metric,
             bootstrap=max(0, bootstrap),
             rng_seed=rng_seed,
+            expected_seeds=seed_validation.expected_seeds,
         )
     sample_efficiency: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {}
     for metric in PAIRWISE_METRICS:
@@ -661,6 +689,10 @@ def summarize_runs(
         "aulc": aulc_summary,
         "aulc_deltas": aulc_deltas,
         "sample_efficiency": sample_efficiency,
+        "validated_seeds": list(seed_validation.expected_seeds),
+        "seed_groups": {
+            key: list(values) for key, values in seed_validation.observed_seeds.items()
+        },
     }
 
 
@@ -826,4 +858,5 @@ __all__ = [
     "write_pairwise_csv",
     "write_aulc_csv",
     "write_sample_efficiency_csv",
+    "EXPECTED_SEEDS",
 ]

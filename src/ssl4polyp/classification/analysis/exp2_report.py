@@ -10,8 +10,10 @@ from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Se
 from typing import Literal, overload
 
 import numpy as np
+from types import MappingProxyType
 from .result_loader import GuardrailViolation, ResultLoader
 from .common_metrics import _clean_text, _coerce_float, _coerce_int, compute_binary_metrics
+from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
 PRIMARY_METRICS: Tuple[str, ...] = (
     "auprc",
@@ -24,6 +26,7 @@ PRIMARY_METRICS: Tuple[str, ...] = (
 )
 DEFAULT_PAIRED_MODELS: Tuple[str, str] = ("ssl_colon", "ssl_imnet")
 CI_LEVEL = 0.95
+EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 
 
 __all__ = [
@@ -33,6 +36,7 @@ __all__ = [
     "MetricAggregate",
     "DeltaSummary",
     "Exp2Summary",
+    "EXPECTED_SEEDS",
     "load_run",
     "discover_runs",
     "summarize_runs",
@@ -111,6 +115,7 @@ class DeltaSummary:
 class Exp2Summary:
     model_metrics: Dict[str, Dict[str, MetricAggregate]]
     paired_deltas: Dict[str, DeltaSummary]
+    seed_validation: SeedValidationResult
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -120,6 +125,10 @@ class Exp2Summary:
             },
             "paired_deltas": {
                 metric: summary.as_dict() for metric, summary in self.paired_deltas.items()
+            },
+            "validated_seeds": list(self.seed_validation.expected_seeds),
+            "seed_groups": {
+                key: list(values) for key, values in self.seed_validation.observed_seeds.items()
             },
         }
 
@@ -363,6 +372,19 @@ def summarize_runs(
     bootstrap: int = 2000,
     rng_seed: Optional[int] = 20240521,
 ) -> Exp2Summary:
+    if not runs_by_model:
+        empty_validation = SeedValidationResult((), MappingProxyType({}))
+        return Exp2Summary(
+            model_metrics={},
+            paired_deltas={},
+            seed_validation=empty_validation,
+        )
+
+    seed_validation = ensure_expected_seeds(
+        runs_by_model,
+        expected_seeds=EXPECTED_SEEDS,
+        context="Experiment 2",
+    )
     model_metrics: Dict[str, Dict[str, MetricAggregate]] = {}
     for model, runs in runs_by_model.items():
         per_metric: Dict[str, MetricAggregate] = {}
@@ -379,8 +401,13 @@ def summarize_runs(
         model_a, model_b = paired_models
         runs_a = runs_by_model.get(model_a, {})
         runs_b = runs_by_model.get(model_b, {})
-        seeds = sorted(set(runs_a.keys()) & set(runs_b.keys()))
-        if seeds:
+        if runs_a and runs_b:
+            ensure_expected_seeds(
+                {model_a: runs_a, model_b: runs_b},
+                expected_seeds=seed_validation.expected_seeds,
+                context=f"Experiment 2 pairwise ({model_a} vs {model_b})",
+            )
+            seeds = list(seed_validation.expected_seeds)
             per_seed_delta: Dict[str, Dict[int, float]] = {metric: {} for metric in metrics}
             for seed in seeds:
                 run_a = runs_a[seed]
@@ -414,5 +441,9 @@ def summarize_runs(
                     ci_upper=ci[1] if ci else None,
                     samples=tuple(samples),
                 )
-                paired_deltas[metric] = summary
-    return Exp2Summary(model_metrics=model_metrics, paired_deltas=paired_deltas)
+            paired_deltas[metric] = summary
+    return Exp2Summary(
+        model_metrics=model_metrics,
+        paired_deltas=paired_deltas,
+        seed_validation=seed_validation,
+    )
