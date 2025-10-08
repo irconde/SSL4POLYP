@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import csv
-import json
 import math
 from collections import defaultdict
 from dataclasses import dataclass
@@ -18,6 +16,14 @@ from sklearn.metrics import (  # type: ignore[import]
     recall_score,
     roc_auc_score,
 )
+
+from .common_loader import (
+    CommonFrame,
+    get_default_loader,
+    load_common_run,
+    load_outputs_csv,
+)
+from .result_loader import GuardrailViolation, ResultLoader
 
 PRIMARY_METRICS: Tuple[str, ...] = (
     "auprc",
@@ -61,6 +67,23 @@ class Exp5ARun:
 class ClusterSet:
     positives: Tuple[Tuple[str, ...], ...]
     negatives: Tuple[Tuple[str, ...], ...]
+
+
+def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
+    mapping: Dict[str, EvalFrame] = {}
+    for frame in frames:
+        center_id = _clean_text(frame.row.get("center_id")) or _clean_text(frame.row.get("origin"))
+        sequence_id = _clean_text(frame.row.get("sequence_id"))
+        origin = _clean_text(frame.row.get("origin"))
+        mapping[frame.frame_id] = EvalFrame(
+            frame_id=frame.frame_id,
+            prob=frame.prob,
+            label=frame.label,
+            center_id=center_id,
+            sequence_id=sequence_id,
+            origin=origin,
+        )
+    return mapping
 
 
 def _clean_text(value: object) -> Optional[str]:
@@ -108,47 +131,11 @@ def _coerce_int(value: object) -> Optional[int]:
     return None
 
 
-def _resolve_outputs_path(metrics_path: Path) -> Path:
-    stem = metrics_path.stem
-    base = stem[:-5] if stem.endswith("_last") else stem
-    return metrics_path.with_name(f"{base}_test_outputs.csv")
-
-
 def _resolve_relative_path(base: Path, candidate: str) -> Path:
     candidate_path = Path(candidate).expanduser()
     if candidate_path.is_absolute():
         return candidate_path
     return (base.parent / candidate_path).resolve()
-
-
-def _read_outputs(outputs_path: Path) -> Dict[str, EvalFrame]:
-    if not outputs_path.exists():
-        raise FileNotFoundError(f"Missing test outputs CSV: {outputs_path}")
-    frames: Dict[str, EvalFrame] = {}
-    with outputs_path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for index, row in enumerate(reader):
-            frame_id = _clean_text(row.get("frame_id")) or f"frame_{index}"
-            prob = _coerce_float(row.get("prob"))
-            label = _coerce_int(row.get("label"))
-            if prob is None or label is None:
-                continue
-            center_id = _clean_text(row.get("center_id")) or _clean_text(row.get("origin"))
-            sequence_id = _clean_text(row.get("sequence_id"))
-            origin = _clean_text(row.get("origin"))
-            frames[frame_id] = EvalFrame(
-                frame_id=frame_id,
-                prob=float(prob),
-                label=int(label),
-                center_id=center_id,
-                sequence_id=sequence_id,
-                origin=origin,
-            )
-    if not frames:
-        raise ValueError(f"No evaluation rows parsed from {outputs_path}")
-    return frames
-
-
 def _compute_binary_metrics(probs: np.ndarray, labels: np.ndarray, tau: float) -> Dict[str, float]:
     if probs.size == 0:
         return {metric: float("nan") for metric in PRIMARY_METRICS}
@@ -308,56 +295,65 @@ def _derive_delta(
     return deltas
 
 
-def load_run(metrics_path: Path) -> Exp5ARun:
-    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-    provenance_raw = payload.get("provenance") or {}
-    provenance = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
-    model_name = _clean_text(provenance.get("model")) or metrics_path.stem.split("__", 1)[0]
-    seed_value = _coerce_int(payload.get("seed"))
-    if seed_value is None:
-        seed_value = _coerce_int(provenance.get("train_seed"))
-    if seed_value is None:
-        raise ValueError(f"Metrics file '{metrics_path}' does not specify a seed")
-    test_block = payload.get("test_primary") or {}
-    tau_value = _coerce_float(test_block.get("tau"))
-    if tau_value is None:
-        raise ValueError(f"Metrics file '{metrics_path}' is missing test_primary.tau")
-    test_metrics: Dict[str, float] = {}
-    for key, value in test_block.items():
-        numeric = _coerce_float(value)
-        if numeric is not None:
-            test_metrics[key] = numeric
-    delta_block = payload.get("domain_shift_delta") if isinstance(payload.get("domain_shift_delta"), Mapping) else None
-    parent_payload, parent_metrics_path, parent_outputs_path = _load_parent_payload(provenance, metrics_path)
-    sun_block = parent_payload.get("test_primary") if isinstance(parent_payload, Mapping) else None
-    sun_metrics: Dict[str, float] = {}
-    if isinstance(sun_block, Mapping):
-        for key, value in sun_block.items():
-            numeric = _coerce_float(value)
-            if numeric is not None:
-                sun_metrics[key] = numeric
+def load_run(
+    metrics_path: Path,
+    *,
+    loader: Optional[ResultLoader] = None,
+) -> Exp5ARun:
+    active_loader = loader or get_default_loader()
+    base_run = load_common_run(metrics_path, loader=active_loader)
+    payload = base_run.payload
+    provenance = dict(base_run.provenance)
+    test_metrics = dict(base_run.primary_metrics)
+    delta_block = (
+        payload.get("domain_shift_delta")
+        if isinstance(payload.get("domain_shift_delta"), Mapping)
+        else None
+    )
+    parent_payload, parent_metrics_path, parent_outputs_path = _load_parent_payload(
+        provenance, metrics_path
+    )
+    sun_metrics = _extract_metrics(
+        parent_payload.get("test_primary") if isinstance(parent_payload, Mapping) else None
+    )
+    sun_tau = _coerce_float(sun_metrics.get("tau")) if sun_metrics else None
+    sun_frames: Optional[Dict[str, EvalFrame]] = None
+    if parent_metrics_path and parent_metrics_path.exists():
+        try:
+            parent_run = load_common_run(parent_metrics_path, loader=active_loader)
+        except (OSError, ValueError, GuardrailViolation):
+            parent_run = None
+        else:
+            sun_metrics = dict(parent_run.primary_metrics)
+            sun_tau = parent_run.tau
+            sun_frames = _frames_to_eval(parent_run.frames)
+    if sun_frames is None and parent_outputs_path and parent_outputs_path.exists():
+        if sun_tau is not None:
+            try:
+                parent_frames, _ = load_outputs_csv(parent_outputs_path, tau=float(sun_tau))
+            except (OSError, ValueError):
+                sun_frames = None
+            else:
+                sun_frames = _frames_to_eval(parent_frames)
     if not delta_block:
         delta_metrics = _derive_delta(test_metrics, sun_metrics)
     else:
-        metrics_subblock = delta_block.get("metrics") if isinstance(delta_block.get("metrics"), Mapping) else None
+        metrics_subblock = (
+            delta_block.get("metrics")
+            if isinstance(delta_block.get("metrics"), Mapping)
+            else None
+        )
         delta_metrics = {
             key: float(value)
             for key, value in (metrics_subblock or {}).items()
-            if isinstance(value, (int, float, np.integer, np.floating)) and math.isfinite(float(value))
+            if isinstance(value, (int, float, np.integer, np.floating))
+            and math.isfinite(float(value))
         }
-    outputs_path = _resolve_outputs_path(metrics_path)
-    frames = _read_outputs(outputs_path)
-    sun_frames = None
-    sun_tau = _coerce_float(sun_metrics.get("tau")) if sun_metrics else None
-    if parent_outputs_path and parent_outputs_path.exists():
-        try:
-            sun_frames = _read_outputs(parent_outputs_path)
-        except (FileNotFoundError, ValueError):
-            sun_frames = None
+    frames = _frames_to_eval(base_run.frames)
     return Exp5ARun(
-        model=model_name,
-        seed=int(seed_value),
-        tau=float(tau_value),
+        model=base_run.model,
+        seed=base_run.seed,
+        tau=base_run.tau,
         metrics=test_metrics,
         delta=delta_metrics,
         sun_metrics=sun_metrics,
@@ -369,7 +365,12 @@ def load_run(metrics_path: Path) -> Exp5ARun:
     )
 
 
-def discover_runs(root: Path, *, models: Optional[Sequence[str]] = None) -> Dict[str, Dict[int, Exp5ARun]]:
+def discover_runs(
+    root: Path,
+    *,
+    models: Optional[Sequence[str]] = None,
+    loader: Optional[ResultLoader] = None,
+) -> Dict[str, Dict[int, Exp5ARun]]:
     root = root.expanduser()
     metrics_paths = {
         path
@@ -378,10 +379,11 @@ def discover_runs(root: Path, *, models: Optional[Sequence[str]] = None) -> Dict
     }
     runs: Dict[str, Dict[int, Exp5ARun]] = {}
     model_filter = {name.lower() for name in models} if models else None
+    active_loader = loader or get_default_loader()
     for metrics_path in sorted(metrics_paths):
         try:
-            run = load_run(metrics_path)
-        except (ValueError, FileNotFoundError) as exc:
+            run = load_run(metrics_path, loader=active_loader)
+        except (ValueError, FileNotFoundError, GuardrailViolation) as exc:
             raise RuntimeError(f"Failed to load metrics from {metrics_path}") from exc
         if model_filter and run.model.lower() not in model_filter:
             continue

@@ -80,6 +80,25 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
             "auroc": 0.88,
             "f1": 0.7,
             "recall": 0.72,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+        },
+        "test_sensitivity": {
+            "tau": 0.5,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+        },
+        "thresholds": {
+            "primary": {"policy": "f1_opt_on_val", "tau": 0.5},
+            "sensitivity": {"policy": "youden_on_val", "tau": 0.5},
         },
         "domain_shift_delta": {
             "metrics": {
@@ -89,6 +108,7 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
         },
         "provenance": {
             "model": "ssl_colon",
+            "test_outputs_csv_sha256": "deadbeef",
             "parent_run": {
                 "metrics": {
                     "path": "../sun_parent/seed1.metrics.json",
@@ -129,9 +149,29 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "auroc": 0.9,
             "f1": 0.75,
             "recall": 0.78,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+        },
+        "test_sensitivity": {
+            "tau": 0.55,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+        },
+        "thresholds": {
+            "primary": {"policy": "f1_opt_on_val", "tau": 0.55},
+            "sensitivity": {"policy": "youden_on_val", "tau": 0.55},
         },
         "provenance": {
             "model": "ssl_colon",
+            "test_outputs_csv_sha256": "deadbeef",
             "parent_run": {
                 "metrics": {
                     "path": "../sun_parent/seed1.metrics.json",
@@ -148,9 +188,29 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "auroc": 0.82,
             "f1": 0.68,
             "recall": 0.7,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+        },
+        "test_sensitivity": {
+            "tau": 0.6,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+        },
+        "thresholds": {
+            "primary": {"policy": "f1_opt_on_val", "tau": 0.6},
+            "sensitivity": {"policy": "youden_on_val", "tau": 0.6},
         },
         "provenance": {
             "model": "sup_imnet",
+            "test_outputs_csv_sha256": "deadbeef",
             "parent_run": {
                 "metrics": {
                     "path": "../sun_parent/seed1.metrics.json",

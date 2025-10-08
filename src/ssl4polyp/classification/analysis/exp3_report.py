@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import csv
-import json
 import math
-import re
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +16,9 @@ from sklearn.metrics import (  # type: ignore[import]
     recall_score,
     roc_auc_score,
 )
+
+from .common_loader import get_default_loader, load_common_run
+from .result_loader import ResultLoader
 
 
 _STRATA = ("overall", "flat_plus_negs", "polypoid_plus_negs")
@@ -80,16 +80,7 @@ class RunDataset:
     cases: Dict[str, List[FrameRecord]]
 
 
-def _normalise_case_id(raw: Optional[str], fallback_index: int) -> str:
-    if raw is None:
-        return f"case_{fallback_index}"
-    text = str(raw).strip()
-    if not text:
-        return f"case_{fallback_index}"
-    return text
-
-
-def _normalise_morphology(raw: Optional[str]) -> str:
+def _normalise_morphology(raw: Optional[object]) -> str:
     if raw is None:
         return "unknown"
     text = str(raw).strip()
@@ -190,58 +181,43 @@ def compute_strata_metrics(frames: Sequence[FrameRecord], tau: float) -> Dict[st
     return metrics
 
 
-def load_run(metrics_path: Path) -> RunDataset:
-    with metrics_path.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-    seed = int(payload.get("seed"))
-    test_block = payload.get("test") or {}
-    if "tau" not in test_block:
-        raise ValueError(f"Metrics file '{metrics_path}' does not contain test.tau")
-    tau = float(test_block["tau"])
-    stem = metrics_path.stem
-    if stem.endswith("_last"):
-        run_name = stem[:-5]
-    else:
-        run_name = stem
-    model_name = run_name.split("__", 1)[0]
-    match = re.search(r"_s(\d+)$", run_name)
-    if match is None:
-        raise ValueError(f"Unable to determine seed from metrics file '{metrics_path}'")
-    parsed_seed = int(match.group(1))
-    if parsed_seed != seed:
-        seed = parsed_seed
-    outputs_path = metrics_path.with_name(f"{run_name}_test_outputs.csv")
-    if not outputs_path.exists():
-        raise FileNotFoundError(f"Missing test outputs CSV: {outputs_path}")
+def load_run(
+    metrics_path: Path,
+    *,
+    loader: Optional[ResultLoader] = None,
+) -> RunDataset:
+    base_run = load_common_run(metrics_path, loader=loader or get_default_loader())
     frames: List[FrameRecord] = []
     cases: DefaultDict[str, List[FrameRecord]] = defaultdict(list)
-    with outputs_path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for index, row in enumerate(reader):
-            try:
-                prob = float(row.get("prob", "nan"))
-            except (TypeError, ValueError):
-                continue
-            try:
-                label = int(row.get("label", 0))
-            except (TypeError, ValueError):
-                label = 0
-            try:
-                pred = int(row.get("pred", 0))
-            except (TypeError, ValueError):
-                pred = 1 if prob >= tau else 0
-            case_id = _normalise_case_id(row.get("case_id") or row.get("sequence_id"), index)
-            morphology = _normalise_morphology(row.get("morphology"))
-            record = FrameRecord(prob=prob, label=label, pred=pred, case_id=case_id, morphology=morphology)
-            frames.append(record)
-            cases[case_id].append(record)
-    return RunDataset(model=model_name, seed=seed, tau=tau, frames=frames, cases=dict(cases))
+    for frame in base_run.frames:
+        morphology = _normalise_morphology(frame.row.get("morphology"))
+        record = FrameRecord(
+            prob=frame.prob,
+            label=frame.label,
+            pred=frame.pred,
+            case_id=frame.case_id,
+            morphology=morphology,
+        )
+        frames.append(record)
+        cases[frame.case_id].append(record)
+    return RunDataset(
+        model=base_run.model,
+        seed=base_run.seed,
+        tau=base_run.tau,
+        frames=frames,
+        cases=dict(cases),
+    )
 
 
-def discover_runs(root: Path) -> Dict[str, Dict[int, RunDataset]]:
+def discover_runs(
+    root: Path,
+    *,
+    loader: Optional[ResultLoader] = None,
+) -> Dict[str, Dict[int, RunDataset]]:
     runs: DefaultDict[str, Dict[int, RunDataset]] = defaultdict(dict)
+    active_loader = loader or get_default_loader()
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
-        run = load_run(metrics_path)
+        run = load_run(metrics_path, loader=active_loader)
         runs[run.model][run.seed] = run
     return runs
 
