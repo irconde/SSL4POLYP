@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import math
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
 
 __all__ = [
+    "CurveMetadata",
     "GuardrailViolation",
+    "LoadedResult",
     "ResultLoader",
     "compute_file_sha256",
     "build_report_manifest",
@@ -66,6 +70,43 @@ def _canonical_policy(raw: Optional[object]) -> Optional[str]:
     return text or None
 
 
+@dataclass(frozen=True)
+class CurveMetadata:
+    """Normalised description of a curve export entry."""
+
+    key: str
+    path: Path
+    sha256: str
+    metadata: Mapping[str, Any]
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "key": self.key,
+            "path": str(self.path),
+            "sha256": self.sha256,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class LoadedResult:
+    """Container for a validated metrics payload."""
+
+    metrics_path: Path
+    payload: Mapping[str, Any]
+    primary_metrics: Mapping[str, float]
+    sensitivity_metrics: Mapping[str, float]
+    curves: Mapping[str, CurveMetadata]
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "metrics_path": str(self.metrics_path),
+            "primary_metrics": dict(self.primary_metrics),
+            "sensitivity_metrics": dict(self.sensitivity_metrics),
+            "curves": {key: value.as_dict() for key, value in self.curves.items()},
+        }
+
+
 @dataclass
 class ResultLoader:
     expected_primary_policy: Optional[str] = None
@@ -93,13 +134,47 @@ class ResultLoader:
     def loaded_runs(self) -> Sequence[Mapping[str, Any]]:
         return tuple(self._loaded_runs)
 
-    def validate(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
-        self._validate_thresholds(metrics_path, payload)
-        self._validate_confusion(metrics_path, payload, "test_primary")
-        self._validate_confusion(metrics_path, payload, "test_sensitivity")
-        self._validate_csv_hashes(metrics_path, payload)
-        self._validate_curve_exports(metrics_path, payload)
-        self._register_run(payload, metrics_path)
+    def validate(self, metrics_path: Path, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        normalised = self.normalise_payload(payload)
+        self._validate_thresholds(metrics_path, normalised)
+        self._validate_confusion(metrics_path, normalised, "test_primary")
+        self._validate_confusion(metrics_path, normalised, "test_sensitivity")
+        self._validate_csv_hashes(metrics_path, normalised)
+        self._validate_curve_exports(metrics_path, normalised)
+        self._register_run(normalised, metrics_path)
+        return normalised
+
+    def load(self, metrics_path: Path) -> LoadedResult:
+        payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+        return self.extract(metrics_path, payload)
+
+    def extract(self, metrics_path: Path, payload: Mapping[str, Any]) -> LoadedResult:
+        normalised = self.validate(metrics_path, payload)
+        primary_metrics = self._extract_metric_block(normalised.get("test_primary"))
+        sensitivity_metrics = self._extract_metric_block(normalised.get("test_sensitivity"))
+        curves = self._normalise_curves(metrics_path, normalised)
+        return LoadedResult(
+            metrics_path=metrics_path,
+            payload=MappingProxyType(dict(normalised)),
+            primary_metrics=MappingProxyType(dict(primary_metrics)),
+            sensitivity_metrics=MappingProxyType(dict(sensitivity_metrics)),
+            curves=MappingProxyType(curves),
+        )
+
+    @staticmethod
+    def normalise_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
+        normalised: Dict[str, Any] = dict(payload)
+        test_primary = normalised.get("test_primary")
+        if not isinstance(test_primary, Mapping):
+            test_block = normalised.get("test")
+            if isinstance(test_block, Mapping):
+                normalised["test_primary"] = dict(test_block)
+        test_sensitivity = normalised.get("test_sensitivity")
+        if not isinstance(test_sensitivity, Mapping):
+            sensitivity_block = normalised.get("test_secondary")
+            if isinstance(sensitivity_block, Mapping):
+                normalised["test_sensitivity"] = dict(sensitivity_block)
+        return normalised
 
     def _validate_thresholds(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
         thresholds = payload.get("thresholds")
@@ -269,6 +344,51 @@ class ResultLoader:
                     record[field] = provenance[field]
         record.setdefault("seed", payload.get("seed"))
         self._loaded_runs.append(record)
+
+    def _normalise_curves(
+        self, metrics_path: Path, payload: Mapping[str, Any]
+    ) -> Dict[str, CurveMetadata]:
+        exports = payload.get("curve_exports")
+        curves: Dict[str, CurveMetadata] = {}
+        if not isinstance(exports, Mapping):
+            return curves
+        for key, entry in exports.items():
+            if not isinstance(entry, Mapping):
+                continue
+            raw_path = entry.get("path")
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                continue
+            rel_path = Path(raw_path)
+            resolved_path = rel_path if rel_path.is_absolute() else (metrics_path.parent / rel_path)
+            computed_digest = compute_file_sha256(resolved_path)
+            sha_field = entry.get("sha256")
+            if isinstance(sha_field, str) and sha_field.strip():
+                digest = sha_field.strip().lower()
+            else:
+                digest = computed_digest
+            metadata = {
+                str(k): entry[k]
+                for k in entry.keys()
+                if k not in {"path", "sha256"}
+            }
+            curves[str(key)] = CurveMetadata(
+                key=str(key),
+                path=resolved_path.resolve(),
+                sha256=digest,
+                metadata=MappingProxyType(metadata),
+            )
+        return curves
+
+    def _extract_metric_block(self, block: Optional[Mapping[str, Any]]) -> Dict[str, float]:
+        if not isinstance(block, Mapping):
+            return {}
+        metrics: Dict[str, float] = {}
+        for key, value in block.items():
+            numeric = _as_float(value)
+            if numeric is None:
+                continue
+            metrics[str(key)] = float(numeric)
+        return metrics
 
 
 def build_report_manifest(
