@@ -261,6 +261,15 @@ The paper’s experiments map to manifests in `config/exp/`.  Launch them with
 | 5B | `config/exp/exp5b.yaml` | Zero-shot SUN robustness under perturbations (encoder frozen) | Evaluate exp1/2 checkpoints at seeds 13/29/47 (fixed corruption seed) | `none` |
 | 5C | `config/exp/exp5c.yaml` | Few-shot PolypGen adaptation with head+2 tuning (50–500 frames) | Fine-tune per support size with seeds 13/29/47 (fixed pack seed per size) | `head+2` |
 
+Exp‑1 does not ship a dedicated `exp1_report.py` wrapper because the full
+fine-tuning runs already emit the metrics and curve exports that the paper
+tabulates.  The manifest enables ROC/PR curve dumps directly in
+`train_classification.py`, so downstream consumers can point generic utilities
+such as `scripts/aggregate_metrics.py` at the per-seed JSON files without any
+extra stratified post-processing.  The later experiments (Exp‑2 onward) require
+additional pairing, stratification or bootstrap logic, which is why bespoke
+analysis modules exist for them.
+
 Each few-shot pack `polypgen_fewshot_s{S}` reuses the same generation seed and enforces sequence-level disjointness, but its test fold is the complement of that support budget within `polypgen_clean_test_extended`. Results should therefore reference the specific pack size used rather than assuming a shared PolypGen test split across all budgets.
 
 Exp‑5C training follows a two-phase regime: a 3-epoch classifier-head warm-up (encoder frozen, head LR `1e-3`), then 47 epochs with the full encoder unfrozen, using head LR `5e-4` and a reduced backbone LR (`2e-5` for the ViT backbones shipped here).
