@@ -7,18 +7,9 @@ from pathlib import Path
 from typing import DefaultDict, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
-from sklearn.metrics import (  # type: ignore[import]
-    average_precision_score,
-    balanced_accuracy_score,
-    f1_score,
-    matthews_corrcoef,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
-
 from .common_loader import get_default_loader, load_common_run
 from .result_loader import ResultLoader
+from .common_metrics import compute_binary_metrics
 
 
 _STRATA = ("overall", "flat_plus_negs", "polypoid_plus_negs")
@@ -87,74 +78,27 @@ def _normalise_morphology(raw: Optional[object]) -> str:
     return text.lower() if text else "unknown"
 
 
-def _binary_metrics(probabilities: np.ndarray, preds: np.ndarray, labels: np.ndarray) -> Dict[str, float]:
-    total = labels.size
+def _binary_metrics(probabilities: np.ndarray, labels: np.ndarray, tau: float) -> Dict[str, float]:
+    base = compute_binary_metrics(probabilities, labels, tau, metric_keys=_PRIMARY_METRICS)
+    metrics = dict(base)
+    total = int(labels.size)
     if total == 0:
-        return {
-            "count": 0,
-            "n_pos": 0,
-            "n_neg": 0,
-            "prevalence": float("nan"),
-            "tp": 0,
-            "fp": 0,
-            "tn": 0,
-            "fn": 0,
-            "auprc": float("nan"),
-            "auroc": float("nan"),
-            "recall": float("nan"),
-            "precision": float("nan"),
-            "f1": float("nan"),
-            "balanced_accuracy": float("nan"),
-            "mcc": float("nan"),
-            "loss": float("nan"),
-        }
-    n_pos = int(np.sum(labels == 1))
-    n_neg = int(np.sum(labels == 0))
-    prevalence = float(n_pos) / float(total) if total > 0 else float("nan")
-    tp = int(np.sum((preds == 1) & (labels == 1)))
-    fp = int(np.sum((preds == 1) & (labels == 0)))
-    tn = int(np.sum((preds == 0) & (labels == 0)))
-    fn = int(np.sum((preds == 0) & (labels == 1)))
-    try:
-        auprc = float(average_precision_score(labels, probabilities))
-    except ValueError:
-        auprc = float("nan")
-    try:
-        auroc = float(roc_auc_score(labels, probabilities))
-    except ValueError:
-        auroc = float("nan")
-    recall = float(recall_score(labels, preds, zero_division=0))
-    precision = float(precision_score(labels, preds, zero_division=0))
-    f1 = float(f1_score(labels, preds, zero_division=0))
-    try:
-        balanced_acc = float(balanced_accuracy_score(labels, preds))
-    except ValueError:
-        balanced_acc = float("nan")
-    try:
-        mcc = float(matthews_corrcoef(labels, preds))
-    except ValueError:
-        mcc = float("nan")
+        metrics.setdefault("count", 0.0)
+        metrics.setdefault("n_pos", 0.0)
+        metrics.setdefault("n_neg", 0.0)
+        metrics.setdefault("prevalence", float("nan"))
+        metrics.setdefault("tp", 0.0)
+        metrics.setdefault("fp", 0.0)
+        metrics.setdefault("tn", 0.0)
+        metrics.setdefault("fn", 0.0)
+        metrics["loss"] = float("nan")
+        return metrics
     eps = 1e-12
     clipped = np.clip(probabilities, eps, 1.0 - eps)
-    loss = float(np.mean(-(labels * np.log(clipped) + (1 - labels) * np.log(1 - clipped))))
-    return {
-        "count": total,
-        "n_pos": n_pos,
-        "n_neg": n_neg,
-        "prevalence": prevalence,
-        "tp": tp,
-        "fp": fp,
-        "tn": tn,
-        "fn": fn,
-        "auprc": auprc,
-        "auroc": auroc,
-        "recall": recall,
-        "precision": precision,
-        "f1": f1,
-        "balanced_accuracy": balanced_acc,
-        "mcc": mcc,
-        "loss": loss,
-    }
+    metrics["loss"] = float(
+        np.mean(-(labels * np.log(clipped) + (1 - labels) * np.log(1 - clipped)))
+    )
+    return metrics
 
 
 def compute_strata_metrics(frames: Sequence[FrameRecord], tau: float) -> Dict[str, Dict[str, float]]:
@@ -162,21 +106,18 @@ def compute_strata_metrics(frames: Sequence[FrameRecord], tau: float) -> Dict[st
         return {}
     probs = np.array([record.prob for record in frames], dtype=float)
     labels = np.array([record.label for record in frames], dtype=int)
-    preds = (probs >= float(tau)).astype(int)
     morph = np.array([record.morphology for record in frames])
     metrics: Dict[str, Dict[str, float]] = {}
-    metrics["overall"] = _binary_metrics(probs, preds, labels)
+    metrics["overall"] = _binary_metrics(probs, labels, tau)
     pos_mask = labels == 1
     neg_mask = labels == 0
     flat_mask = neg_mask | (pos_mask & (morph == "flat"))
     if np.any(pos_mask & (morph == "flat")):
-        metrics["flat_plus_negs"] = _binary_metrics(
-            probs[flat_mask], preds[flat_mask], labels[flat_mask]
-        )
+        metrics["flat_plus_negs"] = _binary_metrics(probs[flat_mask], labels[flat_mask], tau)
     polypoid_mask = neg_mask | (pos_mask & (morph == "polypoid"))
     if np.any(pos_mask & (morph == "polypoid")):
         metrics["polypoid_plus_negs"] = _binary_metrics(
-            probs[polypoid_mask], preds[polypoid_mask], labels[polypoid_mask]
+            probs[polypoid_mask], labels[polypoid_mask], tau
         )
     return metrics
 

@@ -14,6 +14,7 @@ import numpy as np
 
 from .exp3_report import FrameRecord, compute_strata_metrics
 from .result_loader import ResultLoader, GuardrailViolation
+from .common_metrics import _coerce_float, _coerce_int
 
 PRIMARY_METRICS: Tuple[str, ...] = ("auprc", "f1")
 MODEL_LABELS: Dict[str, str] = {
@@ -65,44 +66,6 @@ def _normalise_morphology(raw: Optional[str]) -> str:
         return "unknown"
     text = str(raw).strip()
     return text.lower() if text else "unknown"
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    if value is None:
-        return None
-    if isinstance(value, (int, float, np.integer, np.floating)):
-        numeric = float(value)
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            numeric = float(text)
-        except ValueError:
-            return None
-    else:
-        return None
-    if not math.isfinite(numeric):
-        return None
-    return numeric
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, (int, np.integer)):
-        return int(value)
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            return int(text)
-        except ValueError:
-            return None
-    return None
 
 
 def _resolve_outputs_path(metrics_path: Path) -> Path:

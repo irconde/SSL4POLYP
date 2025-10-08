@@ -30,6 +30,16 @@ def test_compute_strata_metrics_counts(tau: float) -> None:
     assert metrics["polypoid_plus_negs"]["n_neg"] == 2
 
 
+def test_compute_strata_metrics_excludes_missing_strata() -> None:
+    records = [
+        FrameRecord(prob=0.7, label=1, pred=1, case_id="case_polyp", morphology="polypoid"),
+        FrameRecord(prob=0.2, label=0, pred=0, case_id="case_neg", morphology="unknown"),
+    ]
+    metrics = compute_strata_metrics(records, tau=0.5)
+    assert "flat_plus_negs" not in metrics
+    assert "polypoid_plus_negs" in metrics
+
+
 def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]], tau: float = 0.5) -> None:
     run_prefix = f"{model}__sun_morphology_s{seed}"
     metrics_path = root / f"{run_prefix}_last.metrics.json"

@@ -10,17 +10,8 @@ from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Se
 from typing import Literal, overload
 
 import numpy as np
-from sklearn.metrics import (  # type: ignore[import]
-    average_precision_score,
-    balanced_accuracy_score,
-    f1_score,
-    matthews_corrcoef,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
-
 from .result_loader import GuardrailViolation, ResultLoader
+from .common_metrics import _clean_text, _coerce_float, _coerce_int, compute_binary_metrics
 
 PRIMARY_METRICS: Tuple[str, ...] = (
     "auprc",
@@ -133,51 +124,6 @@ class Exp2Summary:
         }
 
 
-def _clean_text(value: object) -> Optional[str]:
-    if value in (None, ""):
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    if value is None:
-        return None
-    if isinstance(value, (float, np.floating, int, np.integer)):
-        numeric = float(value)
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            numeric = float(text)
-        except ValueError:
-            return None
-    else:
-        return None
-    if not math.isfinite(numeric):
-        return None
-    return numeric
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, (int, np.integer)):
-        return int(value)
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            return int(text)
-        except ValueError:
-            return None
-    return None
-
-
 def _resolve_outputs_path(metrics_path: Path) -> Path:
     stem = metrics_path.stem
     base = stem[:-5] if stem.endswith("_last") else stem
@@ -210,62 +156,12 @@ def _read_outputs(outputs_path: Path) -> Tuple[List[EvalFrame], Dict[str, Tuple[
     return frames, {case: tuple(items) for case, items in cases.items()}
 
 
-def _compute_binary_metrics(probs: np.ndarray, labels: np.ndarray, tau: float) -> Dict[str, float]:
-    if probs.size == 0:
-        return {metric: float("nan") for metric in PRIMARY_METRICS}
-    preds = (probs >= float(tau)).astype(int)
-    total = int(labels.size)
-    n_pos = int(np.sum(labels == 1))
-    n_neg = int(np.sum(labels == 0))
-    prevalence = float(n_pos) / float(total) if total else float("nan")
-    tp = int(np.sum((preds == 1) & (labels == 1)))
-    fp = int(np.sum((preds == 1) & (labels == 0)))
-    tn = int(np.sum((preds == 0) & (labels == 0)))
-    fn = int(np.sum((preds == 0) & (labels == 1)))
-    try:
-        auprc = float(average_precision_score(labels, probs))
-    except ValueError:
-        auprc = float("nan")
-    try:
-        auroc = float(roc_auc_score(labels, probs))
-    except ValueError:
-        auroc = float("nan")
-    recall_val = float(recall_score(labels, preds, zero_division=0))
-    precision_val = float(precision_score(labels, preds, zero_division=0))
-    f1_val = float(f1_score(labels, preds, zero_division=0))
-    try:
-        balanced_acc = float(balanced_accuracy_score(labels, preds))
-    except ValueError:
-        balanced_acc = float("nan")
-    try:
-        mcc_val = float(matthews_corrcoef(labels, preds))
-    except ValueError:
-        mcc_val = float("nan")
-    return {
-        "auprc": auprc,
-        "auroc": auroc,
-        "recall": recall_val,
-        "precision": precision_val,
-        "f1": f1_val,
-        "balanced_accuracy": balanced_acc,
-        "mcc": mcc_val,
-        "prevalence": prevalence,
-        "tp": tp,
-        "fp": fp,
-        "tn": tn,
-        "fn": fn,
-        "n_pos": n_pos,
-        "n_neg": n_neg,
-        "count": total,
-    }
-
-
 def _metrics_from_frames(frames: Sequence[EvalFrame], tau: float) -> Dict[str, float]:
     if not frames:
         return {metric: float("nan") for metric in PRIMARY_METRICS}
     probs = np.array([frame.prob for frame in frames], dtype=float)
     labels = np.array([frame.label for frame in frames], dtype=int)
-    return _compute_binary_metrics(probs, labels, tau)
+    return compute_binary_metrics(probs, labels, tau)
 
 
 def _ci_bounds(values: Sequence[float], *, level: float = CI_LEVEL) -> Optional[Tuple[float, float]]:
