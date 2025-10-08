@@ -125,12 +125,21 @@ def compute_strata_metrics(frames: Sequence[FrameRecord], tau: float) -> Dict[st
     return metrics
 
 
+def _get_loader(*, strict: bool = True) -> ResultLoader:
+    return get_default_loader(
+        strict=strict,
+        primary_policy="f1_opt_on_val",
+        sensitivity_policy="sun_val_frozen",
+        require_sensitivity=True,
+    )
+
+
 def load_run(
     metrics_path: Path,
     *,
     loader: Optional[ResultLoader] = None,
 ) -> RunDataset:
-    base_run = load_common_run(metrics_path, loader=loader or get_default_loader())
+    base_run = load_common_run(metrics_path, loader=loader or _get_loader())
     frames: List[FrameRecord] = []
     cases: DefaultDict[str, List[FrameRecord]] = defaultdict(list)
     for frame in base_run.frames:
@@ -159,7 +168,7 @@ def discover_runs(
     loader: Optional[ResultLoader] = None,
 ) -> Dict[str, Dict[int, RunDataset]]:
     runs: DefaultDict[str, Dict[int, RunDataset]] = defaultdict(dict)
-    active_loader = loader or get_default_loader()
+    active_loader = loader or _get_loader()
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
         run = load_run(metrics_path, loader=active_loader)
         runs[run.model][run.seed] = run
@@ -179,7 +188,7 @@ def bootstrap_deltas(
     colon_runs: Mapping[int, RunDataset],
     baseline_runs: Mapping[int, RunDataset],
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> Tuple[Dict[str, float], Dict[str, List[float]]]:
@@ -208,7 +217,7 @@ def bootstrap_deltas(
         for seed in seeds:
             colon_run = colon_runs[seed]
             baseline_run = baseline_runs[seed]
-            case_ids = list(colon_run.cases.keys())
+            case_ids = sorted(set(colon_run.cases.keys()) & set(baseline_run.cases.keys()))
             if not case_ids:
                 valid = False
                 break
@@ -345,10 +354,11 @@ def _render_metric_table(
 def generate_report(
     runs_root: Path,
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
 ) -> str:
-    runs_by_model = discover_runs(runs_root)
+    loader = _get_loader()
+    runs_by_model = discover_runs(runs_root, loader=loader)
     if not runs_by_model:
         raise FileNotFoundError(f"No metrics files found under {runs_root}")
     ensure_expected_seeds(

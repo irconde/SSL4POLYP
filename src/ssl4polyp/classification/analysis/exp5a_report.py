@@ -67,6 +67,15 @@ class Exp5ARun:
     metrics_path: Path
 
 
+def _get_loader(*, strict: bool = True) -> ResultLoader:
+    return get_default_loader(
+        strict=strict,
+        primary_policy="sun_val_frozen",
+        sensitivity_policy=None,
+        require_sensitivity=False,
+    )
+
+
 def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
     mapping: Dict[str, EvalFrame] = {}
     for frame in frames:
@@ -193,7 +202,7 @@ def load_run(
     *,
     loader: Optional[ResultLoader] = None,
 ) -> Exp5ARun:
-    active_loader = loader or get_default_loader()
+    active_loader = loader or _get_loader()
     base_run = load_common_run(metrics_path, loader=active_loader)
     payload = base_run.payload
     provenance = dict(base_run.provenance)
@@ -272,7 +281,7 @@ def discover_runs(
     }
     runs: Dict[str, Dict[int, Exp5ARun]] = {}
     model_filter = {name.lower() for name in models} if models else None
-    active_loader = loader or get_default_loader()
+    active_loader = loader or _get_loader()
     for metrics_path in sorted(metrics_paths):
         try:
             run = load_run(metrics_path, loader=active_loader)
@@ -309,6 +318,41 @@ def _bootstrap_metrics(
     return results
 
 
+def _joint_sample_cluster_ids(
+    polyp_clusters: ClusterSet,
+    sun_clusters: ClusterSet,
+    rng: np.random.Generator,
+) -> Tuple[List[str], List[str]]:
+    def sample_with_uniform(clusters: Tuple[Tuple[str, ...], ...], uniforms: np.ndarray, count: int) -> List[str]:
+        if count == 0:
+            return []
+        if uniforms.size < count:
+            raise ValueError("Insufficient uniform samples for cluster resampling")
+        indices = np.floor(uniforms[:count] * count).astype(int)
+        indices = np.clip(indices, 0, count - 1)
+        sampled: List[str] = []
+        for idx in indices:
+            sampled.extend(clusters[idx])
+        return sampled
+
+    pos_count = max(len(polyp_clusters.positives), len(sun_clusters.positives))
+    neg_count = max(len(polyp_clusters.negatives), len(sun_clusters.negatives))
+    pos_uniforms = rng.random(pos_count) if pos_count else np.empty(0, dtype=float)
+    neg_uniforms = rng.random(neg_count) if neg_count else np.empty(0, dtype=float)
+
+    polyp_ids: List[str] = []
+    sun_ids: List[str] = []
+    polyp_ids.extend(
+        sample_with_uniform(polyp_clusters.positives, pos_uniforms, len(polyp_clusters.positives))
+    )
+    polyp_ids.extend(
+        sample_with_uniform(polyp_clusters.negatives, neg_uniforms, len(polyp_clusters.negatives))
+    )
+    sun_ids.extend(sample_with_uniform(sun_clusters.positives, pos_uniforms, len(sun_clusters.positives)))
+    sun_ids.extend(sample_with_uniform(sun_clusters.negatives, neg_uniforms, len(sun_clusters.negatives)))
+    return polyp_ids, sun_ids
+
+
 def _bootstrap_domain_shift(
     run: Exp5ARun,
     *,
@@ -325,8 +369,7 @@ def _bootstrap_domain_shift(
     sun_clusters = _build_cluster_set(run.sun_frames)
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
-        polyp_ids = sample_cluster_ids(polyp_clusters, rng)
-        sun_ids = sample_cluster_ids(sun_clusters, rng)
+        polyp_ids, sun_ids = _joint_sample_cluster_ids(polyp_clusters, sun_clusters, rng)
         if not polyp_ids or not sun_ids:
             continue
         polyp_values = _as_frames_metrics(run.frames, polyp_ids, run.tau)
@@ -374,7 +417,7 @@ def _bootstrap_pairwise(
 def summarize_runs(
     runs_by_model: Mapping[str, Mapping[int, Exp5ARun]],
     *,
-    bootstrap: int = 1000,
+    bootstrap: int = 2000,
     rng_seed: int = 12345,
 ) -> Dict[str, Any]:
     if not runs_by_model:
