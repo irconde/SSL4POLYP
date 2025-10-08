@@ -7,15 +7,6 @@ from pathlib import Path
 from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
-from sklearn.metrics import (  # type: ignore[import]
-    average_precision_score,
-    balanced_accuracy_score,
-    f1_score,
-    matthews_corrcoef,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
 
 from .common_loader import (
     CommonFrame,
@@ -24,6 +15,15 @@ from .common_loader import (
     load_outputs_csv,
 )
 from .result_loader import GuardrailViolation, ResultLoader
+from .common_metrics import (
+    ClusterSet,
+    build_cluster_set,
+    compute_binary_metrics,
+    sample_cluster_ids,
+    _clean_text,
+    _coerce_float,
+    _coerce_int,
+)
 
 PRIMARY_METRICS: Tuple[str, ...] = (
     "auprc",
@@ -63,12 +63,6 @@ class Exp5ARun:
     metrics_path: Path
 
 
-@dataclass(frozen=True)
-class ClusterSet:
-    positives: Tuple[Tuple[str, ...], ...]
-    negatives: Tuple[Tuple[str, ...], ...]
-
-
 def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
     mapping: Dict[str, EvalFrame] = {}
     for frame in frames:
@@ -86,104 +80,11 @@ def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
     return mapping
 
 
-def _clean_text(value: object) -> Optional[str]:
-    if value in (None, ""):
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    if value is None:
-        return None
-    if isinstance(value, (int, float, np.integer, np.floating)):
-        numeric = float(value)
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            numeric = float(text)
-        except ValueError:
-            return None
-    else:
-        return None
-    if not math.isfinite(numeric):
-        return None
-    return numeric
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, (int, np.integer)):
-        return int(value)
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            return int(text)
-        except ValueError:
-            return None
-    return None
-
-
 def _resolve_relative_path(base: Path, candidate: str) -> Path:
     candidate_path = Path(candidate).expanduser()
     if candidate_path.is_absolute():
         return candidate_path
     return (base.parent / candidate_path).resolve()
-def _compute_binary_metrics(probs: np.ndarray, labels: np.ndarray, tau: float) -> Dict[str, float]:
-    if probs.size == 0:
-        return {metric: float("nan") for metric in PRIMARY_METRICS}
-    preds = (probs >= float(tau)).astype(int)
-    total = int(labels.size)
-    n_pos = int(np.sum(labels == 1))
-    n_neg = int(np.sum(labels == 0))
-    prevalence = float(n_pos) / float(total) if total else float("nan")
-    tp = int(np.sum((preds == 1) & (labels == 1)))
-    fp = int(np.sum((preds == 1) & (labels == 0)))
-    tn = int(np.sum((preds == 0) & (labels == 0)))
-    fn = int(np.sum((preds == 0) & (labels == 1)))
-    try:
-        auprc = float(average_precision_score(labels, probs))
-    except ValueError:
-        auprc = float("nan")
-    try:
-        auroc = float(roc_auc_score(labels, probs))
-    except ValueError:
-        auroc = float("nan")
-    recall = float(recall_score(labels, preds, zero_division=0))
-    precision = float(precision_score(labels, preds, zero_division=0))
-    f1 = float(f1_score(labels, preds, zero_division=0))
-    try:
-        balanced_acc = float(balanced_accuracy_score(labels, preds))
-    except ValueError:
-        balanced_acc = float("nan")
-    try:
-        mcc = float(matthews_corrcoef(labels, preds))
-    except ValueError:
-        mcc = float("nan")
-    return {
-        "count": total,
-        "n_pos": n_pos,
-        "n_neg": n_neg,
-        "prevalence": prevalence,
-        "tp": tp,
-        "fp": fp,
-        "tn": tn,
-        "fn": fn,
-        "auprc": auprc,
-        "auroc": auroc,
-        "recall": recall,
-        "precision": precision,
-        "f1": f1,
-        "balanced_accuracy": balanced_acc,
-        "mcc": mcc,
-    }
 
 
 def _as_frames_metrics(frames: Mapping[str, EvalFrame], frame_ids: Sequence[str], tau: float) -> Dict[str, float]:
@@ -192,47 +93,35 @@ def _as_frames_metrics(frames: Mapping[str, EvalFrame], frame_ids: Sequence[str]
         return {metric: float("nan") for metric in PRIMARY_METRICS}
     probs = np.array([entry.prob for entry in subset], dtype=float)
     labels = np.array([entry.label for entry in subset], dtype=int)
-    return _compute_binary_metrics(probs, labels, tau)
+    return compute_binary_metrics(probs, labels, tau)
 
 
 def _build_cluster_set(frames: Mapping[str, EvalFrame]) -> ClusterSet:
-    pos_clusters: DefaultDict[str, List[str]] = defaultdict(list)
-    neg_clusters: DefaultDict[str, List[str]] = defaultdict(list)
-    for record in frames.values():
-        if record.label == 1:
-            if record.center_id:
-                key = f"pos_center::{record.center_id}"
-            elif record.sequence_id:
-                key = f"pos_sequence::{record.sequence_id}"
-            else:
-                key = f"pos_frame::{record.frame_id}"
-            pos_clusters[key].append(record.frame_id)
-        else:
-            if record.sequence_id and record.center_id:
-                key = f"neg_center_seq::{record.center_id}::{record.sequence_id}"
-            elif record.sequence_id:
-                key = f"neg_sequence::{record.sequence_id}"
-            elif record.center_id:
-                key = f"neg_center::{record.center_id}"
-            else:
-                key = f"neg_frame::{record.frame_id}"
-            neg_clusters[key].append(record.frame_id)
-    positives = tuple(tuple(cluster) for cluster in pos_clusters.values())
-    negatives = tuple(tuple(cluster) for cluster in neg_clusters.values())
-    return ClusterSet(positives=positives, negatives=negatives)
+    def positive_key(record: EvalFrame) -> Optional[str]:
+        if record.center_id and record.sequence_id:
+            return f"pos_center_seq::{record.center_id}::{record.sequence_id}"
+        if record.center_id:
+            return f"pos_center::{record.center_id}"
+        if record.sequence_id:
+            return f"pos_sequence::{record.sequence_id}"
+        return None
 
+    def negative_key(record: EvalFrame) -> Optional[str]:
+        if record.sequence_id and record.center_id:
+            return f"neg_center_seq::{record.center_id}::{record.sequence_id}"
+        if record.sequence_id:
+            return f"neg_sequence::{record.sequence_id}"
+        if record.center_id:
+            return f"neg_center::{record.center_id}"
+        return None
 
-def _sample_cluster_ids(clusters: ClusterSet, rng: np.random.Generator) -> List[str]:
-    sampled: List[str] = []
-    if clusters.positives:
-        indices = rng.integers(0, len(clusters.positives), size=len(clusters.positives))
-        for idx in indices:
-            sampled.extend(clusters.positives[idx])
-    if clusters.negatives:
-        indices = rng.integers(0, len(clusters.negatives), size=len(clusters.negatives))
-        for idx in indices:
-            sampled.extend(clusters.negatives[idx])
-    return sampled
+    return build_cluster_set(
+        frames.values(),
+        is_positive=lambda record: record.label == 1,
+        record_id=lambda record: record.frame_id,
+        positive_key=positive_key,
+        negative_key=negative_key,
+    )
 
 
 def _ci_bounds(values: Sequence[float], *, level: float = CI_LEVEL) -> Optional[Dict[str, float]]:
@@ -404,7 +293,7 @@ def _bootstrap_metrics(
     clusters = _build_cluster_set(run.frames)
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
-        sample_ids = _sample_cluster_ids(clusters, rng)
+        sample_ids = sample_cluster_ids(clusters, rng)
         if not sample_ids:
             continue
         metric_values = _as_frames_metrics(run.frames, sample_ids, run.tau)
@@ -432,8 +321,8 @@ def _bootstrap_domain_shift(
     sun_clusters = _build_cluster_set(run.sun_frames)
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
-        polyp_ids = _sample_cluster_ids(polyp_clusters, rng)
-        sun_ids = _sample_cluster_ids(sun_clusters, rng)
+        polyp_ids = sample_cluster_ids(polyp_clusters, rng)
+        sun_ids = sample_cluster_ids(sun_clusters, rng)
         if not polyp_ids or not sun_ids:
             continue
         polyp_values = _as_frames_metrics(run.frames, polyp_ids, run.tau)
@@ -463,7 +352,7 @@ def _bootstrap_pairwise(
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
     for _ in range(bootstrap):
-        sample_ids = _sample_cluster_ids(clusters, rng)
+        sample_ids = sample_cluster_ids(clusters, rng)
         if not sample_ids:
             continue
         colon_metrics = _as_frames_metrics(colon_run.frames, sample_ids, colon_run.tau)

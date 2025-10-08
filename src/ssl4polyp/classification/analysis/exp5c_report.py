@@ -8,18 +8,18 @@ from pathlib import Path
 from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
-from sklearn.metrics import (  # type: ignore[import]
-    average_precision_score,
-    balanced_accuracy_score,
-    f1_score,
-    matthews_corrcoef,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
 
 from .common_loader import CommonFrame, get_default_loader, load_common_run
 from .result_loader import GuardrailViolation, ResultLoader
+from .common_metrics import (
+    ClusterSet,
+    build_cluster_set,
+    compute_binary_metrics,
+    sample_cluster_ids,
+    _clean_text,
+    _coerce_float,
+    _coerce_int,
+)
 
 TARGET_MODEL = "ssl_colon"
 BASELINE_MODELS: Tuple[str, ...] = ("ssl_imnet", "sup_imnet")
@@ -53,12 +53,6 @@ class FewShotRun:
     path: Path
 
 
-@dataclass(frozen=True)
-class ClusterSet:
-    positives: Tuple[Tuple[str, ...], ...]
-    negatives: Tuple[Tuple[str, ...], ...]
-
-
 def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
     mapping: Dict[str, EvalFrame] = {}
     for frame in frames:
@@ -77,33 +71,6 @@ def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
     return mapping
 
 
-def _clean_text(value: object) -> Optional[str]:
-    if value in (None, ""):
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _coerce_float(value: object) -> Optional[float]:
-    if value is None:
-        return None
-    if isinstance(value, (int, float, np.integer, np.floating)):
-        numeric = float(value)
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            numeric = float(text)
-        except ValueError:
-            return None
-    else:
-        return None
-    if not math.isfinite(numeric):
-        return None
-    return numeric
-
-
 def _extract_metrics(block: Optional[Mapping[str, Any]]) -> Dict[str, float]:
     if not isinstance(block, Mapping):
         return {}
@@ -113,24 +80,6 @@ def _extract_metrics(block: Optional[Mapping[str, Any]]) -> Dict[str, float]:
         if numeric is not None:
             metrics[str(key)] = float(numeric)
     return metrics
-
-
-def _coerce_int(value: object) -> Optional[int]:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, (int, np.integer)):
-        return int(value)
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            return int(text)
-        except ValueError:
-            return None
-    return None
 
 
 def _normalize_budget(value: object, *, fallback: Optional[int] = None) -> int:
@@ -146,56 +95,6 @@ def _normalize_budget(value: object, *, fallback: Optional[int] = None) -> int:
     if fallback is not None:
         return int(fallback)
     raise ValueError(f"Unable to resolve few-shot budget from value {value!r}")
-
-
-def _compute_binary_metrics(probs: np.ndarray, labels: np.ndarray, tau: float) -> Dict[str, float]:
-    if probs.size == 0:
-        return {metric: float("nan") for metric in AGG_METRICS}
-    preds = (probs >= float(tau)).astype(int)
-    total = labels.size
-    n_pos = int(np.sum(labels == 1))
-    n_neg = int(np.sum(labels == 0))
-    prevalence = float(n_pos) / float(total) if total else float("nan")
-    tp = int(np.sum((preds == 1) & (labels == 1)))
-    fp = int(np.sum((preds == 1) & (labels == 0)))
-    tn = int(np.sum((preds == 0) & (labels == 0)))
-    fn = int(np.sum((preds == 0) & (labels == 1)))
-    try:
-        auprc = float(average_precision_score(labels, probs))
-    except ValueError:
-        auprc = float("nan")
-    try:
-        auroc = float(roc_auc_score(labels, probs))
-    except ValueError:
-        auroc = float("nan")
-    recall = float(recall_score(labels, preds, zero_division=0))
-    precision = float(precision_score(labels, preds, zero_division=0))
-    f1 = float(f1_score(labels, preds, zero_division=0))
-    try:
-        balanced_acc = float(balanced_accuracy_score(labels, preds))
-    except ValueError:
-        balanced_acc = float("nan")
-    try:
-        mcc = float(matthews_corrcoef(labels, preds))
-    except ValueError:
-        mcc = float("nan")
-    return {
-        "count": total,
-        "n_pos": n_pos,
-        "n_neg": n_neg,
-        "prevalence": prevalence,
-        "tp": tp,
-        "fp": fp,
-        "tn": tn,
-        "fn": fn,
-        "auprc": auprc,
-        "auroc": auroc,
-        "recall": recall,
-        "precision": precision,
-        "f1": f1,
-        "balanced_accuracy": balanced_acc,
-        "mcc": mcc,
-    }
 
 
 def load_run(
@@ -294,31 +193,13 @@ def _mean_std(values: Sequence[float]) -> Tuple[float, float]:
 
 
 def _build_cluster_set(run: FewShotRun) -> ClusterSet:
-    pos_clusters: DefaultDict[str, List[str]] = defaultdict(list)
-    neg_clusters: DefaultDict[str, List[str]] = defaultdict(list)
-    for record in run.frames.values():
-        if record.label == 1:
-            center_key = record.center_id or record.case_id or f"pos_frame::{record.frame_id}"
-            pos_clusters[center_key].append(record.frame_id)
-        else:
-            seq_key = record.sequence_id or record.case_id or f"neg_frame::{record.frame_id}"
-            neg_clusters[seq_key].append(record.frame_id)
-    positive = tuple(tuple(cluster) for cluster in pos_clusters.values())
-    negative = tuple(tuple(cluster) for cluster in neg_clusters.values())
-    return ClusterSet(positives=positive, negatives=negative)
-
-
-def _sample_cluster_ids(clusters: ClusterSet, rng: np.random.Generator) -> List[str]:
-    sampled: List[str] = []
-    if clusters.positives:
-        indices = rng.integers(0, len(clusters.positives), size=len(clusters.positives))
-        for idx in indices:
-            sampled.extend(clusters.positives[idx])
-    if clusters.negatives:
-        indices = rng.integers(0, len(clusters.negatives), size=len(clusters.negatives))
-        for idx in indices:
-            sampled.extend(clusters.negatives[idx])
-    return sampled
+    return build_cluster_set(
+        run.frames.values(),
+        is_positive=lambda record: record.label == 1,
+        record_id=lambda record: record.frame_id,
+        positive_key=lambda record: record.center_id or record.case_id,
+        negative_key=lambda record: record.sequence_id or record.case_id,
+    )
 
 
 def _metrics_for_sample(run: FewShotRun, frame_ids: Sequence[str], metric: str) -> Optional[float]:
@@ -327,7 +208,7 @@ def _metrics_for_sample(run: FewShotRun, frame_ids: Sequence[str], metric: str) 
         return None
     probs = np.array([rec.prob for rec in records], dtype=float)
     labels = np.array([rec.label for rec in records], dtype=int)
-    metrics = _compute_binary_metrics(probs, labels, run.tau)
+    metrics = compute_binary_metrics(probs, labels, run.tau, metric_keys=AGG_METRICS)
     value = metrics.get(metric)
     if value is None or not math.isfinite(float(value)):
         return None
@@ -357,7 +238,7 @@ def _bootstrap_delta_across_seeds(
             if cluster_cache.get(colon_run.seed) is None:
                 cluster_cache[colon_run.seed] = _build_cluster_set(colon_run)
             clusters = cluster_cache[colon_run.seed]
-            frame_ids = _sample_cluster_ids(clusters, rng)
+            frame_ids = sample_cluster_ids(clusters, rng)
             colon_value = _metrics_for_sample(colon_run, frame_ids, metric)
             baseline_value = _metrics_for_sample(baseline_run, frame_ids, metric)
             if colon_value is None or baseline_value is None:
@@ -437,7 +318,7 @@ def _bootstrap_aulc_delta(
                 colon_reference = colon_runs_per_budget[first_budget][seed]
                 clusters = _build_cluster_set(colon_reference)
                 cluster_cache[seed] = clusters
-            frame_ids = _sample_cluster_ids(clusters, rng)
+            frame_ids = sample_cluster_ids(clusters, rng)
             valid = True
             for budget in shared_budgets:
                 colon_run = colon_runs_per_budget.get(budget, {}).get(seed)

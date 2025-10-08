@@ -1,6 +1,7 @@
 """Analysis utilities for SSL4Polyp classification experiments."""
 
 __all__ = [
+    "common_metrics",
     "exp2_report",
     "exp3_report",
     "exp4_report",
