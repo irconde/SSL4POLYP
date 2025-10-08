@@ -97,3 +97,10 @@ def test_test_overruns_to_capture_missing_labels(tmp_path, capfd):
     assert model._cursor == outputs.size(0)
     assert model._cursor > 2  # exceeded ``max_batches`` of 2 samples
     assert log_path.read_text().strip()
+
+
+def test_should_trigger_early_stop_respects_min_epochs():
+    helper = train_classification._should_trigger_early_stop
+    assert helper(no_improve_epochs=3, patience=3, epochs_completed=2, min_epochs=3) is False
+    assert helper(no_improve_epochs=2, patience=3, epochs_completed=5, min_epochs=3) is False
+    assert helper(no_improve_epochs=3, patience=3, epochs_completed=3, min_epochs=3) is True

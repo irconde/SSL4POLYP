@@ -2828,6 +2828,21 @@ def _format_selection_tag(monitor: Optional[str]) -> str:
     return "".join(formatted)
 
 
+def _should_trigger_early_stop(
+    no_improve_epochs: int,
+    patience: int,
+    epochs_completed: int,
+    min_epochs: int,
+) -> bool:
+    """Return ``True`` when early stopping criteria are met."""
+
+    if patience <= 0:
+        return False
+    if epochs_completed < max(min_epochs, 0):
+        return False
+    return no_improve_epochs >= patience
+
+
 def _find_existing_checkpoint(stem_path: Path) -> tuple[Optional[Path], bool]:
     pointer = stem_path.with_suffix(".pth")
     if pointer.exists() or pointer.is_symlink():
@@ -3161,6 +3176,9 @@ def apply_experiment_config(
     )
     args.early_stop_min_delta = early_cfg.get(
         "min_delta", getattr(args, "early_stop_min_delta", 0.0)
+    )
+    args.early_stop_min_epochs = early_cfg.get(
+        "min_epochs", getattr(args, "early_stop_min_epochs", 0)
     )
 
     args.threshold_policy = experiment_cfg.get(
@@ -4683,7 +4701,7 @@ def train(rank, args):
     grad_accum_steps = _resolve_grad_accum_steps(optimizer)
     total_seen_samples = 0
     total_batches_processed = 0
-    epochs_run = 0
+    epochs_run = max(0, start_epoch - 1)
     if schedule_runtime is not None and not schedule_runtime.is_active():
         schedule_runtime = None
 
@@ -4915,7 +4933,8 @@ def train(rank, args):
     global_step = 0
     no_improve_epochs = 0
     scheduler_name = getattr(args, "scheduler", "none").lower()
-    early_patience = getattr(args, "early_stop_patience", 0) or 0
+    early_patience = max(0, int(getattr(args, "early_stop_patience", 0) or 0))
+    early_min_epochs = max(0, int(getattr(args, "early_stop_min_epochs", 0) or 0))
     best_epoch: Optional[int] = None
     if best_monitor_value is not None:
         prior_epoch = start_epoch - 1
@@ -5390,15 +5409,34 @@ def train(rank, args):
         if early_patience > 0:
             if distributed:
                 stop_tensor = torch.tensor(
-                    [1 if (rank == 0 and no_improve_epochs >= early_patience) else 0],
+                    [
+                        1
+                        if (
+                            rank == 0
+                            and _should_trigger_early_stop(
+                                no_improve_epochs,
+                                early_patience,
+                                epochs_run,
+                                early_min_epochs,
+                            )
+                        )
+                        else 0
+                    ],
                     device=device,
                 )
                 dist.broadcast(stop_tensor, src=0)
                 if stop_tensor.item():
                     if rank == 0:
-                        print("Early stopping triggered after reaching patience limit.")
+                        print(
+                            "Early stopping triggered after reaching patience limit."
+                        )
                     break
-            elif rank == 0 and no_improve_epochs >= early_patience:
+            elif rank == 0 and _should_trigger_early_stop(
+                no_improve_epochs,
+                early_patience,
+                epochs_run,
+                early_min_epochs,
+            ):
                 print("Early stopping triggered after reaching patience limit.")
                 break
 
@@ -5829,6 +5867,12 @@ def get_args():
         type=float,
         default=0.0,
         help="Minimum change in the monitored metric to reset patience.",
+    )
+    parser.add_argument(
+        "--early-stop-min-epochs",
+        type=int,
+        default=0,
+        help="Minimum number of full epochs before early stopping can trigger.",
     )
     parser.add_argument(
         "--threshold-policy",

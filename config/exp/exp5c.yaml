@@ -26,6 +26,7 @@ protocol:
 weight_decay: 0.01
 early_stop:
   monitor: val_loss
-  patience: 8
-  min_delta: 1.0e-4
+  patience: 6
+  min_delta: 5.0e-5
+  min_epochs: 3
 epochs: 50
