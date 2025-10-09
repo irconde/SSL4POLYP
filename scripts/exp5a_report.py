@@ -32,6 +32,7 @@ discover_runs = cast(DiscoverRunsFn, _exp5a_module.discover_runs)
 summarize_runs = cast(SummarizeRunsFn, _exp5a_module.summarize_runs)
 write_performance_csv = cast(WriteCsvFn, _exp5a_module.write_performance_csv)
 write_domain_shift_csv = cast(WriteCsvFn, _exp5a_module.write_domain_shift_csv)
+write_composition_csv = cast(WriteCsvFn, _exp5a_module.write_composition_csv)
 write_seed_metrics_csv = cast(WriteCsvFn, _exp5a_module.write_seed_metrics_csv)
 write_pairwise_csv = cast(WriteCsvFn, _exp5a_module.write_pairwise_csv)
 
@@ -57,6 +58,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional path to export aggregated performance statistics as CSV.",
+    )
+    parser.add_argument(
+        "--composition-csv",
+        type=Path,
+        default=None,
+        help="Optional path to export PolypGen composition counts as CSV.",
     )
     parser.add_argument(
         "--domain-shift-csv",
@@ -85,8 +92,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bootstrap",
         type=int,
-        default=1000,
-        help="Number of bootstrap iterations for confidence intervals (default: 1000).",
+        default=2000,
+        help="Number of bootstrap iterations for confidence intervals (default: 2000).",
     )
     parser.add_argument(
         "--rng-seed",
@@ -122,6 +129,47 @@ def _format_mean_std(stats: Mapping[str, Any] | None) -> str:
 
 
 def _emit_summary(summary: Mapping[str, Any]) -> None:
+    composition = summary.get("composition") if isinstance(summary.get("composition"), Mapping) else None
+    if isinstance(composition, Mapping) and composition:
+        print("PolypGen test composition:")
+        n_pos = composition.get("n_pos")
+        n_neg = composition.get("n_neg")
+        total = composition.get("total")
+        prevalence = composition.get("prevalence")
+        sha256 = composition.get("sha256")
+        base_parts = []
+        if isinstance(n_pos, (int, float)):
+            base_parts.append(f"n_pos={int(n_pos)}")
+        if isinstance(n_neg, (int, float)):
+            base_parts.append(f"n_neg={int(n_neg)}")
+        if isinstance(total, (int, float)):
+            base_parts.append(f"total={int(total)}")
+        if isinstance(prevalence, (int, float)):
+            base_parts.append(f"prevalence={prevalence:.4f}")
+        if isinstance(sha256, str):
+            base_parts.append(f"sha256={sha256}")
+        if base_parts:
+            print("  " + ", ".join(base_parts))
+        per_center = composition.get("per_center") if isinstance(composition.get("per_center"), Mapping) else None
+        if isinstance(per_center, Mapping) and per_center:
+            print("  Per-center counts:")
+            for center, payload in sorted(per_center.items()):
+                if not isinstance(payload, Mapping):
+                    continue
+                center_parts = [f"{center}:"]
+                n_pos_center = payload.get("n_pos")
+                n_neg_center = payload.get("n_neg")
+                total_center = payload.get("total")
+                prevalence_center = payload.get("prevalence")
+                if isinstance(n_pos_center, (int, float)):
+                    center_parts.append(f"n_pos={int(n_pos_center)}")
+                if isinstance(n_neg_center, (int, float)):
+                    center_parts.append(f"n_neg={int(n_neg_center)}")
+                if isinstance(total_center, (int, float)):
+                    center_parts.append(f"total={int(total_center)}")
+                if isinstance(prevalence_center, (int, float)):
+                    center_parts.append(f"prevalence={prevalence_center:.4f}")
+                print("    " + " ".join(center_parts))
     models_obj = summary.get("models")
     models_block: Mapping[str, Any]
     if isinstance(models_obj, Mapping):
@@ -245,6 +293,10 @@ def main() -> None:
         path = args.performance_csv.expanduser()
         write_performance_csv(summary, path)
         print(f"Wrote performance table to {_stringify_path(path)}")
+    if args.composition_csv is not None:
+        path = args.composition_csv.expanduser()
+        write_composition_csv(summary, path)
+        print(f"Wrote composition table to {_stringify_path(path)}")
     if args.domain_shift_csv is not None:
         path = args.domain_shift_csv.expanduser()
         write_domain_shift_csv(summary, path)
