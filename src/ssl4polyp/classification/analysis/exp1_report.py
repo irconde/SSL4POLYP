@@ -153,13 +153,7 @@ class Exp1Summary:
 
 
 def _get_loader(*, strict: bool = True) -> ResultLoader:
-    return ResultLoader(
-        expected_primary_policy="f1_opt_on_val",
-        expected_sensitivity_policy="youden_on_val",
-        require_sensitivity=True,
-        required_curve_keys=(),
-        strict=strict,
-    )
+    return ResultLoader(exp_id="exp1", required_curve_keys=(), strict=strict)
 
 def _resolve_outputs_path(metrics_path: Path) -> Path:
     stem = metrics_path.stem

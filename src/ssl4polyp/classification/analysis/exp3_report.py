@@ -195,12 +195,7 @@ def compute_strata_metrics(frames: Sequence[FrameRecord], tau: float) -> Dict[st
 
 
 def _get_loader(*, strict: bool = True) -> ResultLoader:
-    return get_default_loader(
-        strict=strict,
-        primary_policy="f1_opt_on_val",
-        sensitivity_policy="youden_on_val",
-        require_sensitivity=True,
-    )
+    return get_default_loader(exp_id="exp3b", strict=strict)
 
 
 def load_run(

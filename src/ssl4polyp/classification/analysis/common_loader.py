@@ -49,24 +49,14 @@ class CommonRun:
 
 def get_default_loader(
     *,
+    exp_id: str,
     strict: bool = True,
-    primary_policy: str | None = "f1_opt_on_val",
-    sensitivity_policy: str | None = "youden_on_val",
-    require_sensitivity: bool = True,
     required_curve_keys: Sequence[str] = (),
 ) -> ResultLoader:
-    """Return a :class:`ResultLoader` configured for the reporting contract.
-
-    Experiments share the same guardrails but differ in the threshold policies
-    that should be present in each ``metrics.json`` payload. Allowing callers to
-    override the policies keeps the validation logic centralised while making
-    the expectations explicit at the call-site.
-    """
+    """Return a :class:`ResultLoader` configured for the reporting contract."""
 
     return ResultLoader(
-        expected_primary_policy=primary_policy,
-        expected_sensitivity_policy=sensitivity_policy,
-        require_sensitivity=require_sensitivity,
+        exp_id=exp_id,
         required_curve_keys=tuple(required_curve_keys),
         strict=strict,
     )
@@ -75,12 +65,11 @@ def get_default_loader(
 def load_common_run(
     metrics_path: Path,
     *,
-    loader: Optional[ResultLoader] = None,
+    loader: ResultLoader,
 ) -> CommonRun:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-    normalised_payload = ResultLoader.normalise_payload(payload)
-    active_loader = loader or get_default_loader()
-    active_loader.validate(metrics_path, normalised_payload)
+    active_loader = loader
+    normalised_payload = active_loader.validate(metrics_path, payload)
     provenance_block = normalised_payload.get("provenance")
     provenance = dict(provenance_block) if isinstance(provenance_block, Mapping) else {}
     model_name = _clean_text(provenance.get("model")) or _infer_model_from_filename(metrics_path)

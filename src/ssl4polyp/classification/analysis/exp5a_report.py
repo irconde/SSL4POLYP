@@ -95,12 +95,7 @@ class Exp5ARun:
 
 
 def _get_loader(*, strict: bool = True) -> ResultLoader:
-    return get_default_loader(
-        strict=strict,
-        primary_policy="sun_val_frozen",
-        sensitivity_policy=None,
-        require_sensitivity=False,
-    )
+    return get_default_loader(exp_id="exp5a", strict=strict)
 
 
 def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
