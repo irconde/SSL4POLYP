@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import hashlib
 import math
 import json
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
+
+from reporting.threshold_specs import THRESHOLD_SPECS
 
 import numpy as np
 
@@ -63,13 +66,6 @@ def _as_int(value: object) -> Optional[int]:
     return int(rounded)
 
 
-def _canonical_policy(raw: Optional[object]) -> Optional[str]:
-    if raw is None:
-        return None
-    text = str(raw).strip().lower()
-    return text or None
-
-
 @dataclass(frozen=True)
 class CurveMetadata:
     """Normalised description of a curve export entry."""
@@ -107,17 +103,17 @@ class LoadedResult:
         }
 
 
-@dataclass
 class ResultLoader:
-    expected_primary_policy: Optional[str] = None
-    expected_sensitivity_policy: Optional[str] = None
-    require_sensitivity: bool = False
-    required_curve_keys: Sequence[str] = ()
-    strict: bool = True
-
-    def __post_init__(self) -> None:
-        self.expected_primary_policy = _canonical_policy(self.expected_primary_policy)
-        self.expected_sensitivity_policy = _canonical_policy(self.expected_sensitivity_policy)
+    def __init__(
+        self,
+        exp_id: str,
+        *,
+        required_curve_keys: Sequence[str] = (),
+        strict: bool = True,
+    ) -> None:
+        self.exp_id = str(exp_id)
+        self.required_curve_keys = tuple(required_curve_keys)
+        self.strict = bool(strict)
         self._csv_digest_registry: Dict[str, str] = {}
         self._curve_digest_registry: Dict[str, str] = {}
         self._loaded_runs: list[Dict[str, Any]] = []
@@ -135,8 +131,25 @@ class ResultLoader:
         return tuple(self._loaded_runs)
 
     def validate(self, metrics_path: Path, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        if not isinstance(payload, Mapping):
+            raise GuardrailViolation(f"Metrics file '{metrics_path}' must contain a mapping payload")
         normalised = self.normalise_payload(payload)
-        self._validate_thresholds(metrics_path, normalised)
+        self._normalize_blocks(metrics_path, normalised)
+        try:
+            threshold_spec = THRESHOLD_SPECS[self.exp_id]
+        except KeyError as exc:  # pragma: no cover - defensive guard
+            raise GuardrailViolation(f"Unknown experiment id '{self.exp_id}'") from exc
+        val_path = self._validate_schema(metrics_path, normalised)
+        self._validate_thresholds(metrics_path, normalised, val_path, threshold_spec)
+        if "sensitivity" in threshold_spec:
+            if not isinstance(normalised.get("test_sensitivity"), Mapping):
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' is missing test_sensitivity metrics"
+                )
+        elif "test_sensitivity" in normalised:
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' unexpectedly defines test_sensitivity block"
+            )
         self._validate_confusion(metrics_path, normalised, "test_primary")
         self._validate_confusion(metrics_path, normalised, "test_sensitivity")
         self._validate_csv_hashes(metrics_path, normalised)
@@ -163,75 +176,121 @@ class ResultLoader:
 
     @staticmethod
     def normalise_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
-        normalised: Dict[str, Any] = dict(payload)
-        test_primary = normalised.get("test_primary")
-        if not isinstance(test_primary, Mapping):
-            test_block = normalised.get("test")
-            if isinstance(test_block, Mapping):
-                normalised["test_primary"] = dict(test_block)
-        test_sensitivity = normalised.get("test_sensitivity")
-        if not isinstance(test_sensitivity, Mapping):
-            sensitivity_block = normalised.get("test_secondary")
-            if isinstance(sensitivity_block, Mapping):
-                normalised["test_sensitivity"] = dict(sensitivity_block)
-        return normalised
+        return {str(key): value for key, value in dict(payload).items()}
 
-    def _validate_thresholds(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
+    def _normalize_blocks(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
+        bad = [key for key in payload.keys() if isinstance(key, str) and key.startswith("eval_")]
+        if bad:
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' contains disallowed evaluation keys: {sorted(bad)}"
+            )
+
+    def _validate_schema(self, metrics_path: Path, payload: Mapping[str, Any]) -> str:
+        for key in ("thresholds", "data", "test_primary"):
+            if key not in payload:
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' is missing required block '{key}'"
+                )
+        data_block = payload.get("data")
+        if not isinstance(data_block, Mapping):
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' data block must be a mapping"
+            )
+        required_splits = ("train", "val", "test")
+        for split in required_splits:
+            entry = data_block.get(split)
+            if not isinstance(entry, Mapping):
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' data.{split} must be a mapping"
+                )
+            path_value = entry.get("path")
+            sha_value = entry.get("sha256")
+            if not isinstance(path_value, str) or not path_value.strip():
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' data.{split}.path is required"
+                )
+            if not isinstance(sha_value, str) or not sha_value.strip():
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' data.{split}.sha256 is required"
+                )
+        val_info = data_block["val"]
+        val_path = str(val_info.get("path"))
+        if not val_path:
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' data.val.path is required"
+            )
+        test_primary = payload.get("test_primary")
+        if not isinstance(test_primary, Mapping):
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' test_primary block must be a mapping"
+            )
+        return val_path
+
+    def _validate_thresholds(
+        self,
+        metrics_path: Path,
+        payload: Mapping[str, Any],
+        val_path: str,
+        spec: Mapping[str, Mapping[str, Any]],
+    ) -> None:
         thresholds = payload.get("thresholds")
         if not isinstance(thresholds, Mapping):
-            if self.strict:
-                raise GuardrailViolation(f"Metrics file '{metrics_path}' is missing thresholds block")
-            return
-        primary = thresholds.get("primary")
-        if not isinstance(primary, Mapping):
-            if self.strict:
-                raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' does not provide thresholds.primary record"
-                )
-            return
-        policy = _canonical_policy(primary.get("policy"))
-        if self.expected_primary_policy and policy != self.expected_primary_policy:
             raise GuardrailViolation(
-                "Primary threshold policy mismatch for "
-                f"'{metrics_path}'. Expected '{self.expected_primary_policy}', found '{policy or 'none'}'."
+                f"Metrics file '{metrics_path}' is missing thresholds block"
             )
-        split_value = primary.get("split")
-        if split_value is None:
-            if self.strict:
+
+        def _check_slot(slot: str, slot_spec: Mapping[str, Any]) -> None:
+            block = thresholds.get(slot)
+            if not isinstance(block, Mapping):
                 raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' is missing thresholds.primary.split"
+                    f"Metrics file '{metrics_path}' does not define thresholds.{slot}"
                 )
-        else:
-            split_text = str(split_value).strip()
-            if not split_text and self.strict:
+            policy = block.get("policy")
+            if policy != slot_spec["policy"]:
                 raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' defines an empty thresholds.primary.split"
+                    f"thresholds.{slot}.policy={policy!r} != {slot_spec['policy']!r}"
                 )
-            expected_split = "sun_full/val"
-            if self.strict and split_text != expected_split:
+            require_fields = list(slot_spec.get("require", ()))
+            missing = [field for field in require_fields if field not in block]
+            if missing:
                 raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' uses unexpected thresholds.primary.split '{split_text}'"
-                    f" (expected '{expected_split}')."
+                    f"thresholds.{slot} missing fields: {missing}"
                 )
-        sensitivity_policy_expected = self.expected_sensitivity_policy
-        sensitivity_record = thresholds.get("sensitivity") if isinstance(thresholds, Mapping) else None
-        if self.require_sensitivity or sensitivity_policy_expected:
-            if not isinstance(sensitivity_record, Mapping):
+            if "tau" in block:
+                tau = _as_float(block.get("tau"))
+                if tau is None or not (0.0 <= tau <= 1.0):
+                    raise GuardrailViolation(
+                        f"thresholds.{slot}.tau out of [0,1]: {block.get('tau')}"
+                    )
+            if "epoch" in block and _as_int(block.get("epoch")) is None:
                 raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' is missing thresholds.sensitivity record"
+                    f"thresholds.{slot}.epoch must be an integer"
                 )
-            record_policy = _canonical_policy(sensitivity_record.get("policy"))
-            if sensitivity_policy_expected and record_policy != sensitivity_policy_expected:
-                raise GuardrailViolation(
-                    "Sensitivity threshold policy mismatch for "
-                    f"'{metrics_path}'. Expected '{sensitivity_policy_expected}', found '{record_policy or 'none'}'."
-                )
-        elif isinstance(sensitivity_record, Mapping) and self.strict:
-            # Experiments without sensitivity policy should not emit it.
-            if self.expected_sensitivity_policy is None:
-                raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' unexpectedly defines thresholds.sensitivity"
-                )
+            if "split" in slot_spec:
+                expected = slot_spec["split"].replace("${val_path}", val_path)
+                actual = block.get("split")
+                if actual != expected:
+                    raise GuardrailViolation(
+                        f"thresholds.{slot}.split != data.val.path ({actual!r} vs {expected!r})"
+                    )
+            if block.get("policy") == "sun_val_frozen":
+                source_split_expected = slot_spec.get("source_split")
+                if block.get("source_split") != source_split_expected:
+                    raise GuardrailViolation(
+                        f"thresholds.{slot}.source_split must be {source_split_expected!r}"
+                    )
+                if not block.get("source_checkpoint"):
+                    raise GuardrailViolation(
+                        f"thresholds.{slot}.source_checkpoint missing"
+                    )
+
+        _check_slot("primary", spec["primary"])
+        if "sensitivity" in spec:
+            _check_slot("sensitivity", spec["sensitivity"])
+        elif "sensitivity" in thresholds:
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' unexpectedly defines thresholds.sensitivity"
+            )
 
     def _validate_confusion(
         self,
@@ -275,30 +334,30 @@ class ResultLoader:
             )
 
     def _validate_csv_hashes(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
-        provenance = payload.get("provenance")
-        if not isinstance(provenance, Mapping):
-            if self.strict:
-                raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' is missing provenance section"
-                )
-            return
         digests: Dict[str, str] = {}
-        for key, value in provenance.items():
-            if isinstance(value, Mapping):
-                nested_sha = value.get("csv_sha256")
-                if isinstance(nested_sha, str) and nested_sha.strip():
-                    digest = nested_sha.strip().lower()
-                    digests[f"{key}.csv_sha256"] = digest
-            elif isinstance(value, str) and key.endswith("_csv_sha256"):
-                text = value.strip().lower()
-                if text:
-                    digests[key] = text
+        data_block = payload.get("data")
+        if isinstance(data_block, Mapping):
+            for split in ("train", "val", "test"):
+                entry = data_block.get(split)
+                if isinstance(entry, Mapping):
+                    sha_value = entry.get("sha256")
+                    if isinstance(sha_value, str) and sha_value.strip():
+                        digests[f"data.{split}.sha256"] = sha_value.strip().lower()
+        provenance = payload.get("provenance")
+        if isinstance(provenance, Mapping):
+            for key, value in provenance.items():
+                if isinstance(value, Mapping):
+                    nested_sha = value.get("csv_sha256")
+                    if isinstance(nested_sha, str) and nested_sha.strip():
+                        digests[f"{key}.csv_sha256"] = nested_sha.strip().lower()
+                elif isinstance(value, str) and key.endswith("_csv_sha256"):
+                    text = value.strip().lower()
+                    if text:
+                        digests[key] = text
         if not digests:
-            if self.strict:
-                raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' does not declare any *_csv_sha256 provenance hashes"
-                )
-            return
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' does not declare any dataset sha256 digests"
+            )
         for key, digest in digests.items():
             previous = self._csv_digest_registry.get(key)
             if previous is None:

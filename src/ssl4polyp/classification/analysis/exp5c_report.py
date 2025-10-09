@@ -43,12 +43,7 @@ EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 
 
 def _get_loader(*, strict: bool = True) -> ResultLoader:
-    return get_default_loader(
-        strict=strict,
-        primary_policy="sun_val_frozen",
-        sensitivity_policy="val_opt_youden",
-        require_sensitivity=True,
-    )
+    return get_default_loader(exp_id="exp5c", strict=strict)
 
 
 @dataclass(frozen=True)
