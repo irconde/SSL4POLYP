@@ -37,6 +37,7 @@ PRIMARY_METRICS: Tuple[str, ...] = (
     "f1",
     "balanced_accuracy",
     "mcc",
+    "loss",
 )
 PAIRWISE_BASELINES: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 CI_LEVEL = 0.95
@@ -641,7 +642,7 @@ def summarize_runs(
         )
     summary: Dict[str, Any] = {
         "metadata": {
-            "metrics": list(PRIMARY_METRICS) + ["loss"],
+            "metrics": list(PRIMARY_METRICS),
             "delta_metrics": ["recall", "f1", "auprc", "auroc"],
             "bootstrap": int(max(0, bootstrap)),
             "ci_level": CI_LEVEL,
@@ -737,9 +738,6 @@ def summarize_runs(
                 value = _coerce_float(run.metrics.get(metric))
                 if value is not None:
                     metric_accumulators[metric].append(value)
-            loss_value = _coerce_float(run.metrics.get("loss"))
-            if loss_value is not None:
-                metric_accumulators["loss"].append(loss_value)
             for metric in ("recall", "f1", "auprc", "auroc"):
                 value = _coerce_float(run.delta.get(metric))
                 if value is not None:

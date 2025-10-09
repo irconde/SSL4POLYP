@@ -34,6 +34,7 @@ _DEFAULT_BINARY_METRICS: Tuple[str, ...] = (
     "f1",
     "balanced_accuracy",
     "mcc",
+    "loss",
 )
 
 
@@ -141,6 +142,14 @@ def compute_binary_metrics(
         mcc_val = float(matthews_corrcoef(labels, preds))
     except ValueError:
         mcc_val = float("nan")
+    eps = 1e-12
+    clipped = np.clip(probs.astype(float), eps, 1.0 - eps)
+    loss_val = float(
+        np.mean(
+            -(labels.astype(float) * np.log(clipped)
+            + (1 - labels.astype(float)) * np.log(1 - clipped))
+        )
+    )
     full_metrics: Dict[str, float] = {
         "count": float(total),
         "n_pos": float(n_pos),
@@ -157,6 +166,7 @@ def compute_binary_metrics(
         "f1": f1_val,
         "balanced_accuracy": balanced_acc,
         "mcc": mcc_val,
+        "loss": loss_val,
     }
     return {
         key: full_metrics[key]

@@ -45,7 +45,7 @@ def test_clean_and_coerce_helpers_handle_nan_inputs() -> None:
 def test_compute_binary_metrics_empty_and_subset() -> None:
     empty = compute_binary_metrics(np.array([], dtype=float), np.array([], dtype=int), tau=0.5)
     assert empty["count"] == pytest.approx(0.0)
-    for key in ("auprc", "f1"):
+    for key in ("auprc", "f1", "loss"):
         assert np.isnan(empty[key])
 
     probs = np.array([0.9, 0.2, 0.85, 0.1], dtype=float)
@@ -54,8 +54,12 @@ def test_compute_binary_metrics_empty_and_subset() -> None:
     assert metrics["count"] == pytest.approx(4.0)
     assert metrics["tp"] == pytest.approx(2.0)
     assert "precision" not in metrics
+    assert "loss" not in metrics
     assert metrics["auprc"] == pytest.approx(1.0)
     assert metrics["f1"] == pytest.approx(1.0)
+
+    full_metrics = compute_binary_metrics(probs, labels, tau=0.5)
+    assert full_metrics["loss"] == pytest.approx(0.14909587803190932)
 
 
 def test_build_cluster_set_uses_custom_keys() -> None:

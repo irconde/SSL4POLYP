@@ -4133,6 +4133,30 @@ def test(
         results["loss"] = mean_loss
     else:
         mean_loss = float("nan")
+    if (
+        (not math.isfinite(mean_loss))
+        and logits is not None
+        and targets is not None
+        and probs is not None
+    ):
+        try:
+            positive_scores = _extract_positive_probabilities(probs)
+        except Exception:
+            positive_scores = None
+        if positive_scores is not None and positive_scores.numel() == targets.numel():
+            scores_np = positive_scores.detach().cpu().numpy().astype(float, copy=False)
+            labels_np = targets.detach().cpu().numpy().astype(int, copy=False)
+            if labels_np.size > 0:
+                eps = 1e-12
+                clipped = np.clip(scores_np, eps, 1.0 - eps)
+                computed_loss = float(
+                    np.mean(
+                        -(labels_np * np.log(clipped) + (1 - labels_np) * np.log(1 - clipped))
+                    )
+                )
+                if math.isfinite(computed_loss):
+                    results["loss"] = computed_loss
+                    mean_loss = computed_loss
     sample_losses_tensor: Optional[torch.Tensor] = None
     if loss_fn is not None and logits is not None and targets is not None:
         try:
@@ -4253,7 +4277,7 @@ def test(
         metric_line_parts.append(f"AUROC: {auroc_value:.6f}")
     else:
         metric_line_parts.append("AUROC: —")
-    if loss_fn is not None and not math.isnan(mean_loss):
+    if not math.isnan(mean_loss):
         metric_line_parts.append(f"Loss: {mean_loss:.6f}")
     metric_body = " | ".join(metric_line_parts)
     if eval_context is not None:

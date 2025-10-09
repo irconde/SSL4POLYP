@@ -43,8 +43,9 @@ PRIMARY_METRICS: Tuple[str, ...] = (
     "f1",
     "balanced_accuracy",
     "mcc",
+    "loss",
 )
-ALL_METRICS: Tuple[str, ...] = PRIMARY_METRICS + ("loss",)
+ALL_METRICS: Tuple[str, ...] = PRIMARY_METRICS
 EXPECTED_MODELS: Tuple[str, ...] = ("ssl_imnet", "ssl_colon")
 DEFAULT_PAIRED_MODELS: Tuple[str, str] = ("ssl_colon", "ssl_imnet")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
@@ -288,13 +289,7 @@ def _metrics_from_frames(frames: Sequence[EvalFrame], tau: float) -> Dict[str, f
         return {metric: float("nan") for metric in ALL_METRICS}
     probs = np.array([frame.prob for frame in frames], dtype=float)
     labels = np.array([frame.label for frame in frames], dtype=int)
-    base = compute_binary_metrics(probs, labels, tau, metric_keys=PRIMARY_METRICS)
-    eps = 1e-12
-    clipped = np.clip(probs, eps, 1.0 - eps)
-    loss = float(np.mean(-(labels * np.log(clipped) + (1 - labels) * np.log(1 - clipped))))
-    metrics = dict(base)
-    metrics["loss"] = loss
-    return metrics
+    return compute_binary_metrics(probs, labels, tau, metric_keys=ALL_METRICS)
 
 
 def _ensure_loss(metrics: MutableMapping[str, float], frames: Sequence[EvalFrame], tau: float) -> None:

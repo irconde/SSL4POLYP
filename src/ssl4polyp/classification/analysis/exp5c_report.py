@@ -11,6 +11,8 @@ from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Se
 
 import numpy as np
 
+from reporting.metrics import bce_loss_from_csv
+
 from .common_loader import CommonFrame, CommonRun, get_default_loader, load_common_run, load_outputs_csv
 from .result_loader import GuardrailViolation, ResultLoader
 from .common_metrics import (
@@ -289,6 +291,17 @@ def _load_zero_shot(base_run: CommonRun, payload: Mapping[str, Any]) -> Optional
             resolved_path = None
         else:
             frames = _frames_to_eval(zero_frames)
+    if resolved_path is not None:
+        try:
+            loss_value = bce_loss_from_csv(resolved_path)
+        except (OSError, FileNotFoundError):
+            loss_value = None
+        else:
+            existing_loss = _coerce_float(metrics.get("loss")) if metrics else None
+            if loss_value is not None and math.isfinite(loss_value) and (
+                existing_loss is None or not math.isfinite(existing_loss)
+            ):
+                metrics.setdefault("loss", float(loss_value))
     if not metrics and not counts and not frames:
         return None
     return ZeroShotResult(
