@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Mapping, Optional, Sequence, Tuple
 
+import warnings
+
 import numpy as np
+from sklearn.exceptions import UndefinedMetricWarning
 from .common_loader import get_default_loader, load_common_run
 from .result_loader import ResultLoader
 from .common_metrics import compute_binary_metrics
@@ -51,6 +54,17 @@ _METRIC_LABELS = {
     "mcc": "MCC",
 }
 
+_POLICY_LABELS = {
+    "f1_opt_on_val": "τ_F1(val-morph)",
+    "youden_on_val": "τ_Youden(val-morph)",
+    "sun_val_frozen": "τ_SUN(val-frozen)",
+}
+
+_APPENDIX_TITLES = {
+    "youden_on_val": "Sensitivity operating point",
+    "sun_val_frozen": "SUN-frozen operating point",
+}
+
 __all__ = [
     "FrameRecord",
     "RunDataset",
@@ -75,9 +89,25 @@ class FrameRecord:
 class RunDataset:
     model: str
     seed: int
-    tau: float
+    primary_policy: str
+    thresholds: Dict[str, float]
     frames: List[FrameRecord]
     cases: Dict[str, List[FrameRecord]]
+
+    def available_policies(self) -> Sequence[str]:
+        return tuple(self.thresholds.keys())
+
+    @property
+    def primary_tau(self) -> float:
+        return self.tau_for_policy(self.primary_policy)
+
+    def tau_for_policy(self, policy: str) -> float:
+        key = _canonical_policy(policy)
+        if key is None:
+            raise KeyError("Policy name cannot be empty")
+        if key not in self.thresholds:
+            raise KeyError(f"Policy '{key}' not available for run {self.model!r} seed {self.seed}")
+        return float(self.thresholds[key])
 
 
 def _normalise_morphology(raw: Optional[object]) -> str:
@@ -87,8 +117,41 @@ def _normalise_morphology(raw: Optional[object]) -> str:
     return text.lower() if text else "unknown"
 
 
+def _canonical_policy(value: Optional[object]) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    return text or None
+
+
+def _coerce_float(value: Optional[object]) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        numeric = float(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            numeric = float(text)
+        except ValueError:
+            return None
+    else:
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return numeric
+
+
 def _binary_metrics(probabilities: np.ndarray, labels: np.ndarray, tau: float) -> Dict[str, float]:
-    base = compute_binary_metrics(probabilities, labels, tau, metric_keys=_PRIMARY_METRICS)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        warnings.simplefilter("ignore", category=UndefinedMetricWarning)
+        base = compute_binary_metrics(
+            probabilities, labels, tau, metric_keys=_PRIMARY_METRICS
+        )
     metrics = dict(base)
     total = int(labels.size)
     if total == 0:
@@ -135,7 +198,7 @@ def _get_loader(*, strict: bool = True) -> ResultLoader:
     return get_default_loader(
         strict=strict,
         primary_policy="f1_opt_on_val",
-        sensitivity_policy="sun_val_frozen",
+        sensitivity_policy="youden_on_val",
         require_sensitivity=True,
     )
 
@@ -159,10 +222,55 @@ def load_run(
         )
         frames.append(record)
         cases[frame.case_id].append(record)
+    payload = base_run.payload
+    thresholds_payload = payload.get("thresholds") if isinstance(payload.get("thresholds"), Mapping) else {}
+    primary_record = (
+        thresholds_payload.get("primary")
+        if isinstance(thresholds_payload, Mapping) and isinstance(thresholds_payload.get("primary"), Mapping)
+        else None
+    )
+    primary_policy = _canonical_policy(primary_record.get("policy")) if isinstance(primary_record, Mapping) else None
+    if not primary_policy:
+        primary_policy = "primary"
+    thresholds: Dict[str, float] = {primary_policy: float(base_run.tau)}
+
+    def _register_policy(policy: Optional[str], tau_value: Optional[float]) -> None:
+        canonical = _canonical_policy(policy)
+        numeric = _coerce_float(tau_value)
+        if canonical and numeric is not None:
+            thresholds[canonical] = float(numeric)
+
+    sensitivity_record = (
+        thresholds_payload.get("sensitivity")
+        if isinstance(thresholds_payload, Mapping) and isinstance(thresholds_payload.get("sensitivity"), Mapping)
+        else None
+    )
+    sensitivity_policy = None
+    sensitivity_tau = None
+    if isinstance(sensitivity_record, Mapping):
+        sensitivity_policy = _canonical_policy(sensitivity_record.get("policy"))
+        sensitivity_tau = _coerce_float(sensitivity_record.get("tau"))
+    if sensitivity_tau is None:
+        sensitivity_block = payload.get("test_sensitivity")
+        if isinstance(sensitivity_block, Mapping):
+            sensitivity_tau = _coerce_float(sensitivity_block.get("tau"))
+    _register_policy(sensitivity_policy, sensitivity_tau)
+
+    if isinstance(thresholds_payload, Mapping):
+        for key, value in thresholds_payload.items():
+            if key in {"primary", "sensitivity"}:
+                continue
+            if not isinstance(value, Mapping):
+                continue
+            policy_name = _canonical_policy(value.get("policy")) or _canonical_policy(key)
+            tau_candidate = _coerce_float(value.get("tau"))
+            _register_policy(policy_name, tau_candidate)
+
     return RunDataset(
         model=base_run.model,
         seed=base_run.seed,
-        tau=base_run.tau,
+        primary_policy=primary_policy,
+        thresholds=thresholds,
         frames=frames,
         cases=dict(cases),
     )
@@ -194,6 +302,7 @@ def bootstrap_deltas(
     colon_runs: Mapping[int, RunDataset],
     baseline_runs: Mapping[int, RunDataset],
     *,
+    policy: str,
     bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
@@ -209,8 +318,10 @@ def bootstrap_deltas(
     for stratum in _STRATA:
         deltas = []
         for seed in seeds:
-            colon_metrics = compute_strata_metrics(colon_runs[seed].frames, colon_runs[seed].tau)
-            baseline_metrics = compute_strata_metrics(baseline_runs[seed].frames, baseline_runs[seed].tau)
+            colon_tau = colon_runs[seed].tau_for_policy(policy)
+            baseline_tau = baseline_runs[seed].tau_for_policy(policy)
+            colon_metrics = compute_strata_metrics(colon_runs[seed].frames, colon_tau)
+            baseline_metrics = compute_strata_metrics(baseline_runs[seed].frames, baseline_tau)
             if stratum not in colon_metrics or stratum not in baseline_metrics:
                 continue
             deltas.append(colon_metrics[stratum]["auprc"] - baseline_metrics[stratum]["auprc"])
@@ -235,8 +346,10 @@ def bootstrap_deltas(
                 for cid in sampled_ids:
                     colon_sample.extend(colon_run.cases[cid])
                     baseline_sample.extend(baseline_run.cases[cid])
-                colon_metrics = compute_strata_metrics(colon_sample, colon_run.tau)
-                baseline_metrics = compute_strata_metrics(baseline_sample, baseline_run.tau)
+                colon_tau = colon_run.tau_for_policy(policy)
+                baseline_tau = baseline_run.tau_for_policy(policy)
+                colon_metrics = compute_strata_metrics(colon_sample, colon_tau)
+                baseline_metrics = compute_strata_metrics(baseline_sample, baseline_tau)
                 if all(
                     stratum in colon_metrics
                     and stratum in baseline_metrics
@@ -307,16 +420,19 @@ def _ordered_models(metrics_by_model: Mapping[str, Mapping[str, Mapping[str, Lis
 
 
 def _collect_metrics(
-    runs_by_model: Mapping[str, Mapping[int, RunDataset]]
-) -> Tuple[Dict[str, Dict[str, Dict[str, List[float]]]], Optional[Dict[str, Dict[str, float]]]]:
+    runs_by_model: Mapping[str, Mapping[int, RunDataset]],
+    *,
+    policy: str,
+) -> Dict[str, Dict[str, Dict[str, List[float]]]]:
     metrics_by_model: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
-    composition_reference: Optional[Dict[str, Dict[str, float]]] = None
     for model, runs in runs_by_model.items():
         per_stratum: Dict[str, Dict[str, List[float]]] = {}
         for run in runs.values():
-            stratum_metrics = compute_strata_metrics(run.frames, run.tau)
-            if model == "ssl_colon" and composition_reference is None:
-                composition_reference = summarise_composition(stratum_metrics)
+            try:
+                tau = run.tau_for_policy(policy)
+            except KeyError:
+                continue
+            stratum_metrics = compute_strata_metrics(run.frames, tau)
             for stratum, stats in stratum_metrics.items():
                 container = per_stratum.setdefault(
                     stratum, {metric: [] for metric in _PRIMARY_METRICS}
@@ -334,7 +450,62 @@ def _collect_metrics(
                     container[metric_key].append(numeric)
         if per_stratum:
             metrics_by_model[model] = per_stratum
-    return metrics_by_model, composition_reference
+    return metrics_by_model
+
+
+def _resolve_composition_reference(
+    runs_by_model: Mapping[str, Mapping[int, RunDataset]]
+) -> Optional[Dict[str, Dict[str, float]]]:
+    for runs in runs_by_model.values():
+        for run in runs.values():
+            try:
+                metrics = compute_strata_metrics(run.frames, run.primary_tau)
+            except KeyError:
+                continue
+            if metrics:
+                return summarise_composition(metrics)
+    return None
+
+
+def _runs_have_policy(
+    runs_by_model: Mapping[str, Mapping[int, RunDataset]], policy: str
+) -> bool:
+    canonical = _canonical_policy(policy)
+    if canonical is None:
+        return False
+    for runs in runs_by_model.values():
+        for run in runs.values():
+            if canonical not in run.thresholds:
+                return False
+    return True
+
+
+def _collect_deltas(
+    runs_by_model: Mapping[str, Mapping[int, RunDataset]],
+    *,
+    policy: str,
+    bootstrap: int,
+    rng_seed: int,
+) -> Tuple[Dict[str, Tuple[Dict[str, float], Dict[str, List[float]]]], List[str]]:
+    colon_runs = runs_by_model.get("ssl_colon")
+    delta_results: Dict[str, Tuple[Dict[str, float], Dict[str, List[float]]]] = {}
+    baseline_order: List[str] = []
+    if not colon_runs:
+        return delta_results, baseline_order
+    for baseline in ("sup_imnet", "ssl_imnet"):
+        baseline_runs = runs_by_model.get(baseline)
+        if not baseline_runs:
+            continue
+        point, samples = bootstrap_deltas(
+            colon_runs,
+            baseline_runs,
+            policy=policy,
+            bootstrap=bootstrap,
+            rng_seed=rng_seed,
+        )
+        delta_results[baseline] = (point, samples)
+        baseline_order.append(baseline)
+    return delta_results, baseline_order
 
 
 def _render_metric_table(
@@ -359,6 +530,96 @@ def _render_metric_table(
     return lines
 
 
+def _render_metrics_block(
+    lines: List[str],
+    *,
+    policy: str,
+    metrics_by_model: Mapping[str, Mapping[str, Mapping[str, Sequence[float]]]],
+    model_order: Sequence[str],
+    heading_level: int,
+) -> None:
+    label = _POLICY_LABELS.get(policy, policy)
+    heading = "#" * heading_level
+    for stratum in _STRATA:
+        if not any(stratum in metrics for metrics in metrics_by_model.values()):
+            continue
+        lines.append(
+            f"{heading} Metrics at {label} — {_STRATUM_LABELS.get(stratum, stratum)}"
+        )
+        lines.append("")
+        lines.extend(_render_metric_table(stratum, metrics_by_model, model_order))
+        lines.append("")
+
+
+def _render_deltas_block(
+    lines: List[str],
+    *,
+    policy: str,
+    delta_results: Mapping[str, Tuple[Dict[str, float], Dict[str, List[float]]]],
+    baseline_order: Sequence[str],
+    heading_level: int,
+) -> None:
+    if not delta_results or not baseline_order:
+        return
+    label = _POLICY_LABELS.get(policy, policy)
+    heading = "#" * heading_level
+    lines.append(
+        f"{heading} Representation deltas at {label} (Δ = {model_label('ssl_colon')} − Baseline)"
+    )
+    lines.append("")
+    header = ["Stratum"] + [
+        f"{model_label('ssl_colon')} − {model_label(baseline)}" for baseline in baseline_order
+    ]
+    lines.append("| " + " | ".join(header) + " |")
+    lines.append("| --- | " + " | ".join(["---:"] * len(baseline_order)) + " |")
+    for stratum in _STRATA:
+        row = [_STRATUM_LABELS.get(stratum, stratum)]
+        any_values = False
+        for baseline in baseline_order:
+            point, samples = delta_results[baseline]
+            value = format_ci(point.get(stratum, float("nan")), samples.get(stratum, []))
+            if value != "—":
+                any_values = True
+            row.append(value)
+        if any_values:
+            lines.append("| " + " | ".join(row) + " |")
+    lines.append("")
+
+
+def _render_interaction_block(
+    lines: List[str],
+    *,
+    policy: str,
+    delta_results: Mapping[str, Tuple[Dict[str, float], Dict[str, List[float]]]],
+    baseline_order: Sequence[str],
+    heading_level: int,
+) -> None:
+    if not delta_results or not baseline_order:
+        return
+    label = _POLICY_LABELS.get(policy, policy)
+    heading = "#" * heading_level
+    lines.append(
+        f"{heading} Interaction effect at {label} $I = Δ_{{\\text{{flat}}}} - Δ_{{\\text{{polypoid}}}}$"
+    )
+    lines.append("")
+    lines.append("| Comparison | I |")
+    lines.append("| --- | ---: |")
+    for baseline in baseline_order:
+        point, samples = delta_results[baseline]
+        flat_point = point.get("flat_plus_negs", float("nan"))
+        polyp_point = point.get("polypoid_plus_negs", float("nan"))
+        interaction_point = flat_point - polyp_point
+        flat_samples = samples.get("flat_plus_negs", [])
+        polyp_samples = samples.get("polypoid_plus_negs", [])
+        count = min(len(flat_samples), len(polyp_samples))
+        interaction_samples = [flat_samples[i] - polyp_samples[i] for i in range(count)]
+        label_text = f"{model_label('ssl_colon')} − {model_label(baseline)}"
+        lines.append(
+            f"| {label_text} | {format_ci(interaction_point, interaction_samples)} |"
+        )
+    lines.append("")
+
+
 def generate_report(
     runs_root: Path,
     *,
@@ -374,16 +635,51 @@ def generate_report(
         expected_seeds=EXPECTED_SEEDS,
         context="Experiment 3",
     )
-    metrics_by_model, composition_reference = _collect_metrics(runs_by_model)
+    primary_policy: Optional[str] = None
+    for runs in runs_by_model.values():
+        if runs:
+            primary_policy = next(iter(runs.values())).primary_policy
+            break
+    if not primary_policy:
+        raise RuntimeError("Unable to determine primary threshold policy")
+    if not _runs_have_policy(runs_by_model, primary_policy):
+        raise RuntimeError(
+            f"Missing primary threshold policy '{primary_policy}' across runs"
+        )
+
+    metrics_by_model = _collect_metrics(runs_by_model, policy=primary_policy)
     if not metrics_by_model:
         raise RuntimeError("Unable to collect metrics for any model")
     model_order = _ordered_models(metrics_by_model)
+    composition_reference = _resolve_composition_reference(runs_by_model)
     if composition_reference is None:
         sample_model = model_order[0]
         sample_run = next(iter(runs_by_model[sample_model].values()))
         composition_reference = summarise_composition(
-            compute_strata_metrics(sample_run.frames, sample_run.tau)
+            compute_strata_metrics(
+                sample_run.frames, sample_run.tau_for_policy(primary_policy)
+            )
         )
+
+    available_policies = {
+        policy for runs in runs_by_model.values() for run in runs.values() for policy in run.thresholds
+    }
+    appendix_policies: List[str] = []
+    sensitivity_policy = "youden_on_val"
+    if _canonical_policy(primary_policy) != _canonical_policy(sensitivity_policy):
+        if _runs_have_policy(runs_by_model, sensitivity_policy):
+            appendix_policies.append(sensitivity_policy)
+        else:
+            raise RuntimeError(
+                "Sensitivity policy 'youden_on_val' is required but missing across runs"
+            )
+    for candidate in sorted(available_policies):
+        if candidate in {primary_policy, sensitivity_policy}:
+            continue
+        if candidate in appendix_policies:
+            continue
+        if _runs_have_policy(runs_by_model, candidate):
+            appendix_policies.append(candidate)
 
     lines: List[str] = []
     lines.append("# Experiment 3 morphology-balanced report")
@@ -407,67 +703,63 @@ def generate_report(
             )
         lines.append("")
 
-    for stratum in _STRATA:
-        if not any(stratum in metrics for metrics in metrics_by_model.values()):
+    _render_metrics_block(
+        lines,
+        policy=primary_policy,
+        metrics_by_model=metrics_by_model,
+        model_order=model_order,
+        heading_level=2,
+    )
+    delta_results, baseline_order = _collect_deltas(
+        runs_by_model, policy=primary_policy, bootstrap=bootstrap, rng_seed=rng_seed
+    )
+    _render_deltas_block(
+        lines,
+        policy=primary_policy,
+        delta_results=delta_results,
+        baseline_order=baseline_order,
+        heading_level=2,
+    )
+    _render_interaction_block(
+        lines,
+        policy=primary_policy,
+        delta_results=delta_results,
+        baseline_order=baseline_order,
+        heading_level=2,
+    )
+
+    for policy in appendix_policies:
+        appendix_metrics = _collect_metrics(runs_by_model, policy=policy)
+        if not appendix_metrics:
             continue
-        lines.append(f"## Metrics at τ_F1(val-morph) — {_STRATUM_LABELS.get(stratum, stratum)}")
+        appendix_label = _POLICY_LABELS.get(policy, policy)
+        appendix_title = _APPENDIX_TITLES.get(policy, f"Results at {appendix_label}")
+        lines.append(f"## Appendix: {appendix_title} ({appendix_label})")
         lines.append("")
-        lines.extend(_render_metric_table(stratum, metrics_by_model, model_order))
-        lines.append("")
-
-    colon_runs = runs_by_model.get("ssl_colon")
-    delta_results: Dict[str, Tuple[Dict[str, float], Dict[str, List[float]]]] = {}
-    baseline_order: List[str] = []
-    if colon_runs:
-        for baseline in ("sup_imnet", "ssl_imnet"):
-            baseline_runs = runs_by_model.get(baseline)
-            if not baseline_runs:
-                continue
-            point, samples = bootstrap_deltas(
-                colon_runs,
-                baseline_runs,
-                bootstrap=bootstrap,
-                rng_seed=rng_seed,
-            )
-            delta_results[baseline] = (point, samples)
-            baseline_order.append(baseline)
-    if delta_results:
-        lines.append("## Representation deltas (Δ = SSL-Colon − Baseline)")
-        lines.append("")
-        header = ["Stratum"] + [
-            f"{model_label('ssl_colon')} − {model_label(baseline)}" for baseline in baseline_order
-        ]
-        lines.append("| " + " | ".join(header) + " |")
-        lines.append("| --- | " + " | ".join(["---:"] * len(baseline_order)) + " |")
-        for stratum in _STRATA:
-            row = [_STRATUM_LABELS.get(stratum, stratum)]
-            any_values = False
-            for baseline in baseline_order:
-                point, samples = delta_results[baseline]
-                value = format_ci(point.get(stratum, float("nan")), samples.get(stratum, []))
-                if value != "—":
-                    any_values = True
-                row.append(value)
-            if any_values:
-                lines.append("| " + " | ".join(row) + " |")
-        lines.append("")
-
-        lines.append("## Interaction effect $I = Δ_{\\text{flat}} - Δ_{\\text{polypoid}}$")
-        lines.append("")
-        lines.append("| Comparison | I |")
-        lines.append("| --- | ---: |")
-        for baseline in baseline_order:
-            point, samples = delta_results[baseline]
-            flat_point = point.get("flat_plus_negs", float("nan"))
-            polyp_point = point.get("polypoid_plus_negs", float("nan"))
-            interaction_point = flat_point - polyp_point
-            flat_samples = samples.get("flat_plus_negs", [])
-            polyp_samples = samples.get("polypoid_plus_negs", [])
-            count = min(len(flat_samples), len(polyp_samples))
-            interaction_samples = [flat_samples[i] - polyp_samples[i] for i in range(count)]
-            label = f"{model_label('ssl_colon')} − {model_label(baseline)}"
-            lines.append(f"| {label} | {format_ci(interaction_point, interaction_samples)} |")
-        lines.append("")
+        _render_metrics_block(
+            lines,
+            policy=policy,
+            metrics_by_model=appendix_metrics,
+            model_order=model_order,
+            heading_level=3,
+        )
+        appendix_deltas, appendix_baselines = _collect_deltas(
+            runs_by_model, policy=policy, bootstrap=bootstrap, rng_seed=rng_seed
+        )
+        _render_deltas_block(
+            lines,
+            policy=policy,
+            delta_results=appendix_deltas,
+            baseline_order=appendix_baselines,
+            heading_level=3,
+        )
+        _render_interaction_block(
+            lines,
+            policy=policy,
+            delta_results=appendix_deltas,
+            baseline_order=appendix_baselines,
+            heading_level=3,
+        )
 
     return "\n".join(lines)
 
