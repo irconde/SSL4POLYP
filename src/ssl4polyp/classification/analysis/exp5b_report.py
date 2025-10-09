@@ -312,9 +312,14 @@ def _parse_case_metrics_block(
                     continue
                 case_id = entry.get("case_id") or entry.get("case") or entry.get("id")
                 metrics_source = entry.get("metrics")
+                extra_fields: Dict[str, Any] = {}
                 if not isinstance(metrics_source, Mapping):
                     metrics_source = entry
+                else:
+                    extra_fields = {str(key): value for key, value in entry.items() if key != "metrics"}
                 sanitized = _sanitize_metric_mapping(metrics_source)
+                if extra_fields:
+                    sanitized.update(extra_fields)
                 if case_id and sanitized:
                     cases[str(case_id)] = sanitized
         if cases:
