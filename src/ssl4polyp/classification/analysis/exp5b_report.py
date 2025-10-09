@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 from collections import defaultdict
@@ -20,6 +21,9 @@ from typing import (
 )
 
 import numpy as np
+
+# Local bootstrap utilities for paired deltas.
+from .bootstrapper import BootstrapDeltaResult, Bootstrapper
 
 # Metrics used for retention/drop calculations and AUSC summaries.
 RETENTION_METRICS: Tuple[str, ...] = (
@@ -73,8 +77,21 @@ class RunPerturbationResult:
     tau: Optional[float]
     metrics: Dict[str, float]
     perturbations: Dict[str, Dict[str, float]]
+    case_metrics: Dict[str, Dict[str, Dict[str, float]]]
     provenance: Dict[str, object]
     path: Path
+
+
+@dataclass
+class FamilyBootstrapSeedData:
+    """Prepared per-seed case data for corruption family bootstrapping."""
+
+    seed: int
+    case_ids: Tuple[str, ...]
+    severity_tags: Tuple[str, ...]
+    severity_levels: Tuple[float, ...]
+    target_arrays: Dict[str, np.ndarray]
+    baseline_arrays: Dict[str, np.ndarray]
 
 
 def _coerce_float(value: object) -> Optional[float]:
@@ -208,6 +225,77 @@ def _convert_per_seed_map(
     return output
 
 
+def _convert_case_per_seed_map(
+    data: Mapping[str, Mapping[str, Mapping[int, Mapping[str, float]]]]
+) -> Dict[str, Dict[str, Dict[int, Dict[str, float]]]]:
+    output: Dict[str, Dict[str, Dict[int, Dict[str, float]]]] = {}
+    for tag, metric_map in data.items():
+        if not isinstance(metric_map, Mapping):
+            continue
+        metric_output: Dict[str, Dict[int, Dict[str, float]]] = {}
+        for metric, per_seed in metric_map.items():
+            if not isinstance(per_seed, Mapping):
+                continue
+            seed_output: Dict[int, Dict[str, float]] = {}
+            for seed, case_map in per_seed.items():
+                if not isinstance(case_map, Mapping):
+                    continue
+                sanitized: Dict[str, float] = {}
+                for case_id, value in case_map.items():
+                    numeric = _coerce_float(value)
+                    if numeric is None or not math.isfinite(numeric):
+                        continue
+                    sanitized[str(case_id)] = float(numeric)
+                if sanitized:
+                    seed_output[int(seed)] = sanitized
+            if seed_output:
+                metric_output[str(metric)] = seed_output
+        if metric_output:
+            output[str(tag)] = metric_output
+    return output
+
+
+def _sanitize_metric_mapping(metrics: Mapping[str, Any]) -> Dict[str, float]:
+    sanitized: Dict[str, float] = {}
+    for key, value in metrics.items():
+        numeric = _coerce_float(value)
+        if numeric is None or not math.isfinite(numeric):
+            continue
+        sanitized[str(key)] = float(numeric)
+    return sanitized
+
+
+def _parse_case_metrics_block(
+    block: Optional[object],
+) -> Dict[str, Dict[str, Dict[str, float]]]:
+    if not isinstance(block, Mapping):
+        return {}
+    output: Dict[str, Dict[str, Dict[str, float]]] = {}
+    for tag, tag_block in block.items():
+        cases: Dict[str, Dict[str, float]] = {}
+        if isinstance(tag_block, Mapping):
+            for case_id, metrics in tag_block.items():
+                if not isinstance(metrics, Mapping):
+                    continue
+                sanitized = _sanitize_metric_mapping(metrics)
+                if sanitized:
+                    cases[str(case_id)] = sanitized
+        elif isinstance(tag_block, Sequence) and not isinstance(tag_block, (str, bytes)):
+            for entry in tag_block:
+                if not isinstance(entry, Mapping):
+                    continue
+                case_id = entry.get("case_id") or entry.get("case") or entry.get("id")
+                metrics_source = entry.get("metrics")
+                if not isinstance(metrics_source, Mapping):
+                    metrics_source = entry
+                sanitized = _sanitize_metric_mapping(metrics_source)
+                if case_id and sanitized:
+                    cases[str(case_id)] = sanitized
+        if cases:
+            output[str(tag)] = cases
+    return output
+
+
 def _build_tag_catalog(runs: Mapping[str, Mapping[int, RunPerturbationResult]]) -> Dict[str, TagInfo]:
     catalog: Dict[str, TagInfo] = {}
     families: DefaultDict[str, List[float]] = defaultdict(list)
@@ -267,6 +355,9 @@ def load_run(metrics_path: Path) -> RunPerturbationResult:
     if not isinstance(per_tag_raw, Mapping) or not per_tag_raw:
         raise ValueError(f"Metrics file '{metrics_path}' does not contain test_perturbations.per_tag")
     perturbations: Dict[str, Dict[str, float]] = {}
+    case_metrics = _parse_case_metrics_block(pert_block.get("per_case"))
+    if not case_metrics:
+        case_metrics = _parse_case_metrics_block(pert_block.get("per_case_metrics"))
     for tag, stats in per_tag_raw.items():
         if not isinstance(stats, Mapping):
             continue
@@ -286,6 +377,7 @@ def load_run(metrics_path: Path) -> RunPerturbationResult:
         tau=tau_value,
         metrics=metrics,
         perturbations=perturbations,
+        case_metrics=case_metrics,
         provenance=provenance,
         path=metrics_path,
     )
@@ -367,36 +459,6 @@ def _flatten_stats(row: MutableMapping[str, object], prefix: str, stats_map: Map
         row[f"{prefix}{metric}_n"] = int(count) if count is not None else None
 
 
-def _compute_t_ci(mean: Optional[float], std: Optional[float], n: Optional[int]) -> Tuple[Optional[float], Optional[float]]:
-    if mean is None or std is None or n is None:
-        return (None, None)
-    if n < 2:
-        return (None, None)
-    df = n - 1
-    t_lookup = {
-        1: 12.706,
-        2: 4.303,
-        3: 3.182,
-        4: 2.776,
-        5: 2.571,
-        6: 2.447,
-        7: 2.365,
-        8: 2.306,
-        9: 2.262,
-        10: 2.228,
-    }
-    if df in t_lookup:
-        t_multiplier = t_lookup[df]
-    elif df > 30:
-        t_multiplier = 1.96
-    else:
-        t_multiplier = 2.0
-    half_width = t_multiplier * (std / math.sqrt(n)) if std is not None else None
-    if half_width is None:
-        return (None, None)
-    return (mean - half_width, mean + half_width)
-
-
 def _get_retention_per_seed_map(
     model_entry: Mapping[str, Any], family: str, metric: str
 ) -> Dict[int, float]:
@@ -435,6 +497,284 @@ def _get_retention_per_seed_for_tag(
     if not isinstance(metric_block, Mapping):
         return {}
     return {int(seed): float(value) for seed, value in metric_block.items()}
+
+
+def _get_case_retention_per_seed(
+    model_entry: Mapping[str, Any], tag: str, metric: str
+) -> Dict[int, Dict[str, float]]:
+    per_case = model_entry.get("per_case_retention_per_seed")
+    if not isinstance(per_case, Mapping):
+        return {}
+    tag_block = per_case.get(tag)
+    if not isinstance(tag_block, Mapping):
+        return {}
+    metric_block = tag_block.get(metric)
+    if not isinstance(metric_block, Mapping):
+        return {}
+    output: Dict[int, Dict[str, float]] = {}
+    for seed, case_map in metric_block.items():
+        if not isinstance(case_map, Mapping):
+            continue
+        sanitized: Dict[str, float] = {}
+        for case_id, value in case_map.items():
+            numeric = _coerce_float(value)
+            if numeric is None or not math.isfinite(numeric):
+                continue
+            sanitized[str(case_id)] = float(numeric)
+        if sanitized:
+            output[int(seed)] = sanitized
+    return output
+
+
+def _derive_rng(rng_seed: int, *components: object) -> np.random.Generator:
+    hasher = hashlib.sha1()
+    hasher.update(str(int(rng_seed)).encode("utf-8", errors="ignore"))
+    for component in components:
+        hasher.update(str(component).encode("utf-8", errors="ignore"))
+        hasher.update(b"\0")
+    seed_bytes = hasher.digest()[:8]
+    seed_int = int.from_bytes(seed_bytes, "little", signed=False)
+    if seed_int == 0:
+        seed_int = 1
+    return np.random.default_rng(seed_int)
+
+
+def _bootstrap_tag_delta(
+    target_entry: Mapping[str, Any],
+    baseline_entry: Mapping[str, Any],
+    tag: str,
+    metric: str,
+    *,
+    bootstrap: int,
+    rng_seed: int,
+    cluster_key: str,
+) -> Optional[BootstrapDeltaResult]:
+    if bootstrap <= 0:
+        return None
+    target_cases = _get_case_retention_per_seed(target_entry, tag, metric)
+    baseline_cases = _get_case_retention_per_seed(baseline_entry, tag, metric)
+    if not target_cases or not baseline_cases:
+        return None
+    seeds = sorted(set(target_cases.keys()) & set(baseline_cases.keys()))
+    if not seeds:
+        return None
+    metrics_payload: Dict[str, Dict[int, Sequence[float]]] = {"target": {}, "baseline": {}}
+    clusters_payload: Dict[str, Dict[int, Sequence[str]]] = {"target": {}, "baseline": {}}
+    for seed in seeds:
+        target_map = target_cases.get(seed)
+        baseline_map = baseline_cases.get(seed)
+        if not target_map or not baseline_map:
+            continue
+        shared_cases = [case for case in target_map.keys() if case in baseline_map]
+        if not shared_cases:
+            continue
+        target_values = [float(target_map[case]) for case in shared_cases]
+        baseline_values = [float(baseline_map[case]) for case in shared_cases]
+        if not target_values or not baseline_values:
+            continue
+        metrics_payload["target"][seed] = tuple(target_values)
+        metrics_payload["baseline"][seed] = tuple(baseline_values)
+        if cluster_key:
+            clusters_payload["target"][seed] = tuple(shared_cases)
+            clusters_payload["baseline"][seed] = tuple(shared_cases)
+    if not metrics_payload["target"] or not metrics_payload["baseline"]:
+        return None
+    rng = _derive_rng(rng_seed, "tag", tag, metric)
+    bootstrapper = Bootstrapper(metrics_payload, clusters=clusters_payload, rng=rng)
+    return bootstrapper.paired_delta(bootstrap=bootstrap, ci=0.95)
+
+
+def _collect_family_seed_data(
+    target_entry: Mapping[str, Any],
+    baseline_entry: Mapping[str, Any],
+    family: str,
+    metric: str,
+    tag_catalog: Mapping[str, TagInfo],
+) -> List[FamilyBootstrapSeedData]:
+    tag_data: Dict[str, Tuple[Dict[int, Dict[str, float]], Dict[int, Dict[str, float]], float]] = {}
+    for tag, info in tag_catalog.items():
+        if info.family != family or tag == "clean":
+            continue
+        severity = info.normalized_severity
+        if severity is None or not math.isfinite(severity):
+            continue
+        target_cases = _get_case_retention_per_seed(target_entry, tag, metric)
+        baseline_cases = _get_case_retention_per_seed(baseline_entry, tag, metric)
+        if not target_cases or not baseline_cases:
+            continue
+        shared_seeds = set(target_cases.keys()) & set(baseline_cases.keys())
+        if not shared_seeds:
+            continue
+        tag_data[tag] = (target_cases, baseline_cases, float(severity))
+    if not tag_data:
+        return []
+    shared_seed_ids: Optional[set[int]] = None
+    for target_cases, baseline_cases, _ in tag_data.values():
+        available = set(target_cases.keys()) & set(baseline_cases.keys())
+        if shared_seed_ids is None:
+            shared_seed_ids = set(int(seed) for seed in available)
+        else:
+            shared_seed_ids &= {int(seed) for seed in available}
+    if not shared_seed_ids:
+        return []
+    ordered_tags = sorted(tag_data.items(), key=lambda item: item[1][2])
+    seed_data: List[FamilyBootstrapSeedData] = []
+    for seed in sorted(shared_seed_ids):
+        case_candidates: Optional[set[str]] = None
+        for tag, (target_cases, baseline_cases, _) in ordered_tags:
+            target_map = target_cases.get(seed)
+            baseline_map = baseline_cases.get(seed)
+            if not target_map or not baseline_map:
+                case_candidates = set()
+                break
+            available = {str(case) for case in target_map.keys() if case in baseline_map}
+            if not available:
+                case_candidates = set()
+                break
+            if case_candidates is None:
+                case_candidates = available
+            else:
+                case_candidates &= available
+        if not case_candidates:
+            continue
+        case_ids = tuple(sorted(case_candidates))
+        if not case_ids:
+            continue
+        target_arrays: Dict[str, np.ndarray] = {}
+        baseline_arrays: Dict[str, np.ndarray] = {}
+        severity_tags: List[str] = []
+        severity_levels: List[float] = []
+        skip_seed = False
+        for tag, (target_cases, baseline_cases, severity) in ordered_tags:
+            target_map = target_cases.get(seed)
+            baseline_map = baseline_cases.get(seed)
+            if not target_map or not baseline_map:
+                skip_seed = True
+                break
+            target_values = np.array([float(target_map[cid]) for cid in case_ids], dtype=float)
+            baseline_values = np.array([float(baseline_map[cid]) for cid in case_ids], dtype=float)
+            if target_values.size == 0 or baseline_values.size == 0:
+                skip_seed = True
+                break
+            target_arrays[tag] = target_values
+            baseline_arrays[tag] = baseline_values
+            severity_tags.append(tag)
+            severity_levels.append(float(severity))
+        if skip_seed or not severity_tags:
+            continue
+        seed_data.append(
+            FamilyBootstrapSeedData(
+                seed=int(seed),
+                case_ids=case_ids,
+                severity_tags=tuple(severity_tags),
+                severity_levels=tuple(severity_levels),
+                target_arrays=target_arrays,
+                baseline_arrays=baseline_arrays,
+            )
+        )
+    return seed_data
+
+
+def _bootstrap_family_delta(
+    target_entry: Mapping[str, Any],
+    baseline_entry: Mapping[str, Any],
+    family: str,
+    metric: str,
+    *,
+    tag_catalog: Mapping[str, TagInfo],
+    bootstrap: int,
+    rng_seed: int,
+    severity_lockstep: bool,
+) -> Optional[BootstrapDeltaResult]:
+    seed_data = _collect_family_seed_data(target_entry, baseline_entry, family, metric, tag_catalog)
+    if not seed_data:
+        return None
+    per_seed_delta: Dict[int, float] = {}
+    for record in seed_data:
+        aggregated_target: List[Tuple[float, float]] = []
+        aggregated_baseline: List[Tuple[float, float]] = []
+        for tag, severity in zip(record.severity_tags, record.severity_levels):
+            if not math.isfinite(severity):
+                continue
+            target_mean = float(np.mean(record.target_arrays[tag]))
+            baseline_mean = float(np.mean(record.baseline_arrays[tag]))
+            aggregated_target.append((severity, target_mean))
+            aggregated_baseline.append((severity, baseline_mean))
+        if not aggregated_target or not aggregated_baseline:
+            continue
+        aggregated_target.sort(key=lambda item: item[0])
+        aggregated_baseline.sort(key=lambda item: item[0])
+        target_series = _deduplicate_points([(0.0, 1.0)] + aggregated_target)
+        baseline_series = _deduplicate_points([(0.0, 1.0)] + aggregated_baseline)
+        target_ausc = _normalised_trapz(target_series)
+        baseline_ausc = _normalised_trapz(baseline_series)
+        if (
+            target_ausc is None
+            or baseline_ausc is None
+            or not math.isfinite(target_ausc)
+            or not math.isfinite(baseline_ausc)
+        ):
+            continue
+        per_seed_delta[int(record.seed)] = float(target_ausc - baseline_ausc)
+    if not per_seed_delta:
+        return None
+    mean_delta = float(np.mean(list(per_seed_delta.values())))
+    samples: List[float] = []
+    if bootstrap > 0:
+        rng = _derive_rng(rng_seed, "family", family, metric)
+        for _ in range(bootstrap):
+            seed_deltas: List[float] = []
+            for record in seed_data:
+                n_cases = len(record.case_ids)
+                if n_cases == 0:
+                    continue
+                indices = rng.choice(n_cases, size=n_cases, replace=True)
+                aggregated_target: List[Tuple[float, float]] = []
+                aggregated_baseline: List[Tuple[float, float]] = []
+                for tag, severity in zip(record.severity_tags, record.severity_levels):
+                    if not math.isfinite(severity):
+                        continue
+                    if severity_lockstep:
+                        sample_indices = indices
+                    else:
+                        sample_indices = rng.choice(n_cases, size=n_cases, replace=True)
+                    target_values = record.target_arrays[tag][sample_indices]
+                    baseline_values = record.baseline_arrays[tag][sample_indices]
+                    aggregated_target.append((severity, float(np.mean(target_values))))
+                    aggregated_baseline.append((severity, float(np.mean(baseline_values))))
+                if not aggregated_target or not aggregated_baseline:
+                    continue
+                aggregated_target.sort(key=lambda item: item[0])
+                aggregated_baseline.sort(key=lambda item: item[0])
+                target_series = _deduplicate_points([(0.0, 1.0)] + aggregated_target)
+                baseline_series = _deduplicate_points([(0.0, 1.0)] + aggregated_baseline)
+                target_ausc = _normalised_trapz(target_series)
+                baseline_ausc = _normalised_trapz(baseline_series)
+                if (
+                    target_ausc is None
+                    or baseline_ausc is None
+                    or not math.isfinite(target_ausc)
+                    or not math.isfinite(baseline_ausc)
+                ):
+                    continue
+                seed_deltas.append(float(target_ausc - baseline_ausc))
+            if seed_deltas:
+                samples.append(float(np.mean(seed_deltas)))
+    if samples:
+        lower_pct = 2.5
+        upper_pct = 97.5
+        ci_lower = float(np.percentile(samples, lower_pct))
+        ci_upper = float(np.percentile(samples, upper_pct))
+    else:
+        ci_lower = None
+        ci_upper = None
+    return BootstrapDeltaResult(
+        mean=mean_delta,
+        per_seed=per_seed_delta,
+        samples=tuple(samples),
+        ci_lower=ci_lower,
+        ci_upper=ci_upper,
+    )
 
 
 def _build_t1_table(models_summary: Mapping[str, Mapping[str, Any]]) -> List[Dict[str, object]]:
@@ -498,7 +838,13 @@ def _build_t3_table(models_summary: Mapping[str, Mapping[str, Any]]) -> List[Dic
 
 
 def _build_t4_table(
-    models_summary: Mapping[str, Mapping[str, Any]], families: Sequence[str]
+    models_summary: Mapping[str, Mapping[str, Any]],
+    families: Sequence[str],
+    tag_catalog: Mapping[str, TagInfo],
+    *,
+    bootstrap: int,
+    rng_seed: int,
+    severity_lockstep: bool,
 ) -> List[Dict[str, object]]:
     target_key = "ssl_colon"
     baselines = ("ssl_imnet", "sup_imnet")
@@ -519,14 +865,37 @@ def _build_t4_table(
                 seeds = sorted(set(target_map.keys()) & set(baseline_map.keys()))
                 if not seeds:
                     continue
-                deltas = [target_map[seed] - baseline_map[seed] for seed in seeds]
-                stats = _compute_stats(deltas)
+                per_seed_delta: Dict[int, float] = {
+                    int(seed): float(target_map[seed] - baseline_map[seed]) for seed in seeds
+                }
+                stats = _compute_stats(list(per_seed_delta.values()))
                 if not stats:
                     continue
-                delta_mean = stats.get("mean")
-                delta_std = stats.get("std")
-                delta_n = stats.get("n")
-                ci_lower, ci_upper = _compute_t_ci(delta_mean, delta_std, delta_n)
+                bootstrap_result = _bootstrap_family_delta(
+                    target_entry,
+                    baseline_entry,
+                    family,
+                    metric,
+                    tag_catalog=tag_catalog,
+                    bootstrap=bootstrap,
+                    rng_seed=rng_seed,
+                    severity_lockstep=severity_lockstep,
+                )
+                if bootstrap_result:
+                    per_seed_delta = {
+                        int(seed): float(value)
+                        for seed, value in bootstrap_result.per_seed.items()
+                    }
+                    stats = _compute_stats(list(per_seed_delta.values())) or {}
+                    delta_mean = bootstrap_result.mean
+                    ci_lower = bootstrap_result.ci_lower
+                    ci_upper = bootstrap_result.ci_upper
+                else:
+                    delta_mean = stats.get("mean")
+                    ci_lower = None
+                    ci_upper = None
+                delta_std = stats.get("std") if stats else None
+                delta_n = stats.get("n") if stats else None
                 row: Dict[str, object] = {
                     "comparison": f"ssl_colon - {baseline}",
                     "baseline": baseline,
@@ -538,8 +907,8 @@ def _build_t4_table(
                     "ci_lower": ci_lower,
                     "ci_upper": ci_upper,
                 }
-                for seed in seeds:
-                    row[f"seed_{seed}"] = target_map[seed] - baseline_map[seed]
+                for seed, value in sorted(per_seed_delta.items()):
+                    row[f"seed_{seed}"] = value
                 rows.append(row)
     rows.sort(
         key=lambda entry: (
@@ -554,6 +923,10 @@ def _build_t4_table(
 def _build_t5_table(
     models_summary: Mapping[str, Mapping[str, Any]],
     tag_catalog: Mapping[str, TagInfo],
+    *,
+    bootstrap: int,
+    rng_seed: int,
+    cluster_key: str,
 ) -> List[Dict[str, object]]:
     target_key = "ssl_colon"
     baselines = ("ssl_imnet", "sup_imnet")
@@ -578,14 +951,36 @@ def _build_t5_table(
                 seeds = sorted(set(target_map.keys()) & set(baseline_map.keys()))
                 if not seeds:
                     continue
-                deltas = [target_map[seed] - baseline_map[seed] for seed in seeds]
-                stats = _compute_stats(deltas)
+                per_seed_delta: Dict[int, float] = {
+                    int(seed): float(target_map[seed] - baseline_map[seed]) for seed in seeds
+                }
+                stats = _compute_stats(list(per_seed_delta.values()))
                 if not stats:
                     continue
-                delta_mean = stats.get("mean")
-                delta_std = stats.get("std")
-                delta_n = stats.get("n")
-                ci_lower, ci_upper = _compute_t_ci(delta_mean, delta_std, delta_n)
+                bootstrap_result = _bootstrap_tag_delta(
+                    target_entry,
+                    baseline_entry,
+                    tag,
+                    metric,
+                    bootstrap=bootstrap,
+                    rng_seed=rng_seed,
+                    cluster_key=cluster_key,
+                )
+                if bootstrap_result:
+                    per_seed_delta = {
+                        int(seed): float(value)
+                        for seed, value in bootstrap_result.per_seed.items()
+                    }
+                    stats = _compute_stats(list(per_seed_delta.values())) or {}
+                    delta_mean = bootstrap_result.mean
+                    ci_lower = bootstrap_result.ci_lower
+                    ci_upper = bootstrap_result.ci_upper
+                else:
+                    delta_mean = stats.get("mean")
+                    ci_lower = None
+                    ci_upper = None
+                delta_std = stats.get("std") if stats else None
+                delta_n = stats.get("n") if stats else None
                 row: Dict[str, object] = {
                     "comparison": f"ssl_colon - {baseline}",
                     "baseline": baseline,
@@ -600,8 +995,8 @@ def _build_t5_table(
                     "ci_lower": ci_lower,
                     "ci_upper": ci_upper,
                 }
-                for seed in seeds:
-                    row[f"seed_{seed}"] = target_map[seed] - baseline_map[seed]
+                for seed, value in sorted(per_seed_delta.items()):
+                    row[f"seed_{seed}"] = value
                 rows.append(row)
     rows.sort(
         key=lambda entry: (
@@ -618,6 +1013,11 @@ def _build_tables(
     models_summary: Mapping[str, Mapping[str, Any]],
     tag_catalog: Mapping[str, TagInfo],
     severity_rows: Sequence[Mapping[str, object]],
+    *,
+    bootstrap: int,
+    rng_seed: int,
+    severity_lockstep: bool,
+    cluster_key: str,
 ) -> Dict[str, object]:
     families = sorted(
         {
@@ -630,13 +1030,32 @@ def _build_tables(
         "t1_clean": _build_t1_table(models_summary),
         "t2": _build_t2_tables(severity_rows),
         "t3_ausc": _build_t3_table(models_summary),
-        "t4_delta_ausc": _build_t4_table(models_summary, families),
-        "t5_delta_retention_by_severity": _build_t5_table(models_summary, tag_catalog),
+        "t4_delta_ausc": _build_t4_table(
+            models_summary,
+            families,
+            tag_catalog,
+            bootstrap=bootstrap,
+            rng_seed=rng_seed,
+            severity_lockstep=severity_lockstep,
+        ),
+        "t5_delta_retention_by_severity": _build_t5_table(
+            models_summary,
+            tag_catalog,
+            bootstrap=bootstrap,
+            rng_seed=rng_seed,
+            cluster_key=cluster_key,
+        ),
     }
 
 
 def _build_provenance(
-    runs: Mapping[str, Mapping[int, RunPerturbationResult]]
+    runs: Mapping[str, Mapping[int, RunPerturbationResult]],
+    *,
+    bootstrap: int,
+    rng_seed: int,
+    cluster_key: str,
+    frozen_tau: bool,
+    severity_lockstep: bool,
 ) -> Dict[str, object]:
     provenance: Dict[str, object] = {
         "models": {},
@@ -656,6 +1075,14 @@ def _build_provenance(
             "runs": seed_entries,
         }
     provenance["models"] = models_block
+    provenance["bootstrap"] = {
+        "replicates": int(bootstrap),
+        "rng_seed": int(rng_seed),
+        "cluster_key": str(cluster_key),
+        "cluster_key_description": f"{cluster_key} (SUN perturbations)",
+        "severity_lockstep": bool(severity_lockstep),
+        "frozen_tau": bool(frozen_tau),
+    }
     return provenance
 
 
@@ -678,6 +1105,12 @@ def _summarize_model(
     per_seed_delta: DefaultDict[str, DefaultDict[str, Dict[int, float]]] = defaultdict(lambda: defaultdict(dict))
     ausc_per_seed: DefaultDict[str, DefaultDict[str, Dict[int, float]]] = defaultdict(lambda: defaultdict(dict))
     ausc_retention_per_seed: DefaultDict[str, DefaultDict[str, Dict[int, float]]] = defaultdict(lambda: defaultdict(dict))
+    per_case_retention: DefaultDict[
+        str, DefaultDict[str, DefaultDict[int, Dict[str, float]]]
+    ] = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    per_case_delta: DefaultDict[
+        str, DefaultDict[str, DefaultDict[int, Dict[str, float]]]
+    ] = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
 
     for run in runs.values():
         clean_metrics = run.perturbations.get("clean", {})
@@ -713,6 +1146,25 @@ def _summarize_model(
                         f"'{model}' seed {run.seed} (tag '{tag}')"
                     )
         retention_seed_tracker: Dict[str, bool] = {metric: False for metric in metrics}
+        case_metrics_map = run.case_metrics if isinstance(run.case_metrics, Mapping) else {}
+        clean_case_metrics = case_metrics_map.get("clean") if isinstance(case_metrics_map, Mapping) else None
+        baseline_case_metrics: Dict[str, Dict[str, float]] = {}
+        if isinstance(clean_case_metrics, Mapping):
+            for case_id, case_stats in clean_case_metrics.items():
+                if not isinstance(case_stats, Mapping):
+                    continue
+                sanitized: Dict[str, float] = {}
+                for metric in metrics:
+                    numeric = _coerce_float(case_stats.get(metric))
+                    if numeric is None or not math.isfinite(numeric):
+                        continue
+                    sanitized[str(metric)] = float(numeric)
+                if sanitized:
+                    canonical_id = str(case_id)
+                    baseline_case_metrics[canonical_id] = sanitized
+                    for metric_key, value in sanitized.items():
+                        per_case_retention["clean"][metric_key][run.seed][canonical_id] = 1.0
+                        per_case_delta["clean"][metric_key][run.seed][canonical_id] = 0.0
         for metric in metrics:
             baseline_value = _coerce_float(clean_metrics.get(metric))
             if baseline_value is None:
@@ -740,6 +1192,38 @@ def _summarize_model(
                 per_seed_retention[tag][metric][run.seed] = retention_value
                 per_seed_drop[tag][metric][run.seed] = 1.0 - retention_value
                 per_seed_delta[tag][metric][run.seed] = metric_value - baseline_value
+        if isinstance(case_metrics_map, Mapping):
+            for tag, case_block in case_metrics_map.items():
+                if not isinstance(case_block, Mapping):
+                    continue
+                canonical_tag = str(tag)
+                if canonical_tag == "clean":
+                    continue
+                for case_id, case_stats in case_block.items():
+                    if not isinstance(case_stats, Mapping):
+                        continue
+                    canonical_case = str(case_id)
+                    baseline_stats = baseline_case_metrics.get(canonical_case)
+                    if not baseline_stats:
+                        continue
+                    for metric in metrics:
+                        metric_value = _coerce_float(case_stats.get(metric))
+                        if metric_value is None or not math.isfinite(metric_value):
+                            continue
+                        baseline_value = baseline_stats.get(str(metric))
+                        if baseline_value is None or not math.isfinite(baseline_value):
+                            continue
+                        if baseline_value != 0.0:
+                            retention_value = metric_value / baseline_value
+                            if math.isfinite(retention_value):
+                                per_case_retention[canonical_tag][str(metric)][run.seed][
+                                    canonical_case
+                                ] = float(retention_value)
+                        delta_value = metric_value - baseline_value
+                        if math.isfinite(delta_value):
+                            per_case_delta[canonical_tag][str(metric)][run.seed][
+                                canonical_case
+                            ] = float(delta_value)
         # Compute AUSC per family for this run.
         family_points: DefaultDict[str, DefaultDict[str, List[Tuple[float, float]]]] = defaultdict(lambda: defaultdict(list))
         for tag, stats in run.perturbations.items():
@@ -895,6 +1379,8 @@ def _summarize_model(
         "ausc_retention_per_seed": {
             family: _convert_per_seed_map(metrics) for family, metrics in ausc_retention_per_seed.items()
         },
+        "per_case_retention_per_seed": _convert_case_per_seed_map(per_case_retention),
+        "per_case_delta_per_seed": _convert_case_per_seed_map(per_case_delta),
     }
 
 
@@ -902,6 +1388,11 @@ def summarize_runs(
     runs: Mapping[str, Mapping[int, RunPerturbationResult]],
     *,
     metrics: Sequence[str] = RETENTION_METRICS,
+    bootstrap: int = 2000,
+    rng_seed: int = 12345,
+    cluster_key: str = "case_id",
+    frozen_tau: bool = True,
+    severity_lockstep: bool = True,
 ) -> Dict[str, object]:
     tag_catalog = _build_tag_catalog(runs)
     models_summary: Dict[str, Dict[str, object]] = {}
@@ -919,6 +1410,8 @@ def summarize_runs(
             "ausc": summary["ausc"],
             "ausc_per_seed": summary.get("ausc_per_seed", {}),
             "ausc_retention_per_seed": summary.get("ausc_retention_per_seed", {}),
+            "per_case_retention_per_seed": summary.get("per_case_retention_per_seed", {}),
+            "per_case_delta_per_seed": summary.get("per_case_delta_per_seed", {}),
         }
         models_summary[model] = model_entry
         summary_rows = summary.get("severity_rows", [])
@@ -968,8 +1461,23 @@ def summarize_runs(
             model_entry["ausc_macro_retention"] = macro_retention_stats
             model_entry["ausc_macro_retention_per_seed"] = macro_retention_per_seed
 
-    tables = _build_tables(models_summary, tag_catalog, severity_rows)
-    provenance = _build_provenance(runs)
+    tables = _build_tables(
+        models_summary,
+        tag_catalog,
+        severity_rows,
+        bootstrap=max(0, int(bootstrap)),
+        rng_seed=int(rng_seed),
+        severity_lockstep=bool(severity_lockstep),
+        cluster_key=str(cluster_key),
+    )
+    provenance = _build_provenance(
+        runs,
+        bootstrap=int(bootstrap),
+        rng_seed=int(rng_seed),
+        cluster_key=str(cluster_key),
+        frozen_tau=bool(frozen_tau),
+        severity_lockstep=bool(severity_lockstep),
+    )
 
     catalog_serialized = {
         tag: {
