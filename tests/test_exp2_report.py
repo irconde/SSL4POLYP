@@ -187,6 +187,40 @@ def test_summarize_runs_and_deltas(tmp_path: Path) -> None:
     assert appendix_delta.mean == pytest.approx(delta.mean)
 
 
+def test_summarize_runs_missing_paired_model_raises(tmp_path: Path) -> None:
+    seeds = EXPECTED_SEEDS
+    for seed in seeds:
+        colon_rows = [
+            {"frame_id": f"colon_{seed}_f1", "case_id": f"case{seed}", "prob": 0.9, "label": 1},
+            {"frame_id": f"colon_{seed}_f2", "case_id": f"case{seed}", "prob": 0.1, "label": 0},
+        ]
+        imnet_rows = [
+            {"frame_id": f"imnet_{seed}_f1", "case_id": f"case{seed}", "prob": 0.6, "label": 1},
+            {"frame_id": f"imnet_{seed}_f2", "case_id": f"case{seed}", "prob": 0.5, "label": 0},
+        ]
+        _write_run(
+            tmp_path,
+            model="ssl_colon",
+            seed=seed,
+            tau_primary=0.5,
+            tau_sensitivity=0.4,
+            rows=colon_rows,
+        )
+        _write_run(
+            tmp_path,
+            model="ssl_imnet",
+            seed=seed,
+            tau_primary=0.5,
+            tau_sensitivity=0.4,
+            rows=imnet_rows,
+        )
+
+    runs = discover_runs(tmp_path)
+    with pytest.raises(ValueError) as excinfo:
+        summarize_runs(runs, paired_models=("ssl_colon", "ssl_imnet_missing"))
+    assert "ssl_imnet_missing" in str(excinfo.value)
+
+
 def test_collect_summary_and_outputs(tmp_path: Path) -> None:
     rows = [
         {"frame_id": "f1", "case_id": "caseA", "prob": 0.8, "label": 1},

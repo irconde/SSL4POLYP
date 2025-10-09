@@ -636,21 +636,37 @@ def summarize_runs(
 ) -> Exp2Summary:
     if not runs_by_model:
         raise ValueError("No runs discovered for Experiment 2")
-    target_groups = {
-        model: runs_by_model.get(model, {}) for model in EXPECTED_MODELS if model in runs_by_model
-    }
+    target_groups = {model: runs_by_model.get(model, {}) for model in EXPECTED_MODELS}
     seed_validation = ensure_expected_seeds(
         target_groups,
         expected_seeds=EXPECTED_SEEDS,
         context="Experiment 2",
     )
+    treatment_label, baseline_label = paired_models
+    treatment_runs = runs_by_model.get(
+        treatment_label, target_groups.get(treatment_label, {})
+    )
+    baseline_runs = runs_by_model.get(
+        baseline_label, target_groups.get(baseline_label, {})
+    )
+    missing_labels = [
+        label
+        for label, runs in (
+            (treatment_label, treatment_runs),
+            (baseline_label, baseline_runs),
+        )
+        if not runs
+    ]
+    if missing_labels:
+        formatted = ", ".join(sorted(missing_labels))
+        raise ValueError(
+            "Experiment 2 paired comparison requires runs for each model; "
+            f"missing runs for: {formatted}"
+        )
     composition = _validate_composition(target_groups)
     primary_metrics = _collect_model_metrics(target_groups, block="primary", metrics=metrics)
     sensitivity_metrics = _collect_model_metrics(target_groups, block="sensitivity", metrics=metrics)
 
-    treatment_label, baseline_label = paired_models
-    treatment_runs = target_groups.get(treatment_label, {})
-    baseline_runs = target_groups.get(baseline_label, {})
     primary_deltas = (
         _compute_delta_summaries(
             treatment_runs,
