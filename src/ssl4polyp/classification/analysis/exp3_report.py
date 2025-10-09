@@ -9,16 +9,16 @@ from typing import DefaultDict, Dict, List, Mapping, Optional, Sequence, Tuple
 import warnings
 
 import numpy as np
-from sklearn.exceptions import UndefinedMetricWarning
+from sklearn.exceptions import UndefinedMetricWarning  # type: ignore[import]
 from .common_loader import get_default_loader, load_common_run
 from .result_loader import ResultLoader
 from .common_metrics import compute_binary_metrics
 from .seed_checks import ensure_expected_seeds
 from .display import (
     PLACEHOLDER,
+    format_interval,
     format_mean_std as _format_mean_std_value,
     format_scalar,
-    format_with_ci,
 )
 
 
@@ -448,14 +448,28 @@ def format_mean_std(values: Sequence[float]) -> str:
 
 
 def format_ci(point: float, samples: Sequence[float]) -> str:
-    if not samples or math.isnan(point):
+    try:
+        point_value = float(point)
+    except (TypeError, ValueError):
+        return PLACEHOLDER
+    if math.isnan(point_value):
+        return PLACEHOLDER
+    if not samples:
         return PLACEHOLDER
     arr = np.array(samples, dtype=float)
     if arr.size == 0:
         return PLACEHOLDER
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return PLACEHOLDER
+    std = float(np.std(arr, ddof=1)) if arr.size > 1 else 0.0
     lower = float(np.quantile(arr, 0.025))
     upper = float(np.quantile(arr, 0.975))
-    return format_with_ci(point, lower, upper, ci_label="95% CI")
+    interval = format_interval(lower, upper)
+    if interval == PLACEHOLDER:
+        return PLACEHOLDER
+    mean_text = _format_mean_std_value(point_value, std)
+    return f"{mean_text} (95% CI: {interval})"
 
 
 def model_label(model: str) -> str:

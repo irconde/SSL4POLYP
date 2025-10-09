@@ -11,13 +11,16 @@ from typing import (
     Any,
     DefaultDict,
     Dict,
+    Hashable,
     Iterable,
     List,
     Mapping,
     MutableMapping,
     Optional,
     Sequence,
+    Set,
     Tuple,
+    cast,
 )
 
 import numpy as np
@@ -372,9 +375,6 @@ def _resolve_outputs_path(metrics_path: Path) -> Path:
 
 def load_run(metrics_path: Path) -> RunPerturbationResult:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-    outputs_path = _resolve_outputs_path(metrics_path)
-    if not outputs_path.exists():
-        raise FileNotFoundError(f"Missing test outputs CSV: {outputs_path}")
     provenance_raw = payload.get("provenance") or {}
     provenance: Dict[str, object] = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
     model_name = str(provenance.get("model") or metrics_path.stem.split("__", 1)[0])
@@ -411,6 +411,9 @@ def load_run(metrics_path: Path) -> RunPerturbationResult:
             perturbations[str(tag)] = sanitized
     if not perturbations:
         raise ValueError(f"Metrics file '{metrics_path}' does not provide numeric perturbation metrics")
+    outputs_path = _resolve_outputs_path(metrics_path)
+    if not outputs_path.exists():
+        raise FileNotFoundError(f"Missing test outputs CSV: {outputs_path}")
     return RunPerturbationResult(
         model=model_name,
         seed=int(seed_value),
@@ -430,7 +433,11 @@ def discover_runs(
 ) -> Dict[str, Dict[int, RunPerturbationResult]]:
     model_filter = {str(m) for m in models} if models else None
     runs: DefaultDict[str, Dict[int, RunPerturbationResult]] = defaultdict(dict)
+    skip_tokens = {"_best", "_intermediate", "_ema"}
     for metrics_path in sorted(root.rglob("*.metrics.json")):
+        stem = metrics_path.stem
+        if any(token in stem for token in skip_tokens):
+            continue
         try:
             run = load_run(metrics_path)
         except FileNotFoundError as exc:
@@ -663,8 +670,8 @@ def _bootstrap_tag_delta(
     seeds = sorted(set(target_cases.keys()) & set(baseline_cases.keys()))
     if not seeds:
         return None
-    metrics_payload: Dict[str, Dict[int, Sequence[float]]] = {"target": {}, "baseline": {}}
-    clusters_payload: Dict[str, Dict[int, Sequence[str]]] = {"target": {}, "baseline": {}}
+    metrics_payload: Dict[str, Dict[int, Tuple[float, ...]]] = {"target": {}, "baseline": {}}
+    clusters_payload: Dict[str, Dict[int, Tuple[str, ...]]] = {"target": {}, "baseline": {}}
     for seed in seeds:
         target_map = target_cases.get(seed)
         baseline_map = baseline_cases.get(seed)
@@ -702,8 +709,16 @@ def _bootstrap_tag_delta(
     if not metrics_payload["target"] or not metrics_payload["baseline"]:
         return None
     rng = _derive_rng(rng_seed, "tag", tag, metric)
-    bootstrapper = Bootstrapper(metrics_payload, clusters=clusters_payload, rng=rng)
-    return bootstrapper.paired_delta(bootstrap=bootstrap, ci=0.95)
+    metrics_mapping = cast(
+        Mapping[Hashable, Mapping[int, Sequence[float]]],
+        metrics_payload,
+    )
+    clusters_mapping = cast(
+        Mapping[Hashable, Mapping[int, Sequence[Hashable]]],
+        clusters_payload,
+    )
+    bootstrapper = Bootstrapper(metrics_mapping, clusters=clusters_mapping, rng=rng)
+    return bootstrapper.paired_delta("target", "baseline", bootstrap=bootstrap, ci=0.95)
 
 
 def _collect_family_seed_data(
@@ -730,7 +745,7 @@ def _collect_family_seed_data(
         tag_data[tag] = (target_cases, baseline_cases, float(severity))
     if not tag_data:
         return []
-    shared_seed_ids: Optional[set[int]] = None
+    shared_seed_ids: Optional[Set[int]] = None
     for target_cases, baseline_cases, _ in tag_data.values():
         available = set(target_cases.keys()) & set(baseline_cases.keys())
         if shared_seed_ids is None:
@@ -742,21 +757,23 @@ def _collect_family_seed_data(
     ordered_tags = sorted(tag_data.items(), key=lambda item: item[1][2])
     seed_data: List[FamilyBootstrapSeedData] = []
     for seed in sorted(shared_seed_ids):
-        case_candidates: Optional[set[str]] = None
+        case_candidates: Optional[Set[str]] = None
         for tag, (target_cases, baseline_cases, _) in ordered_tags:
-            target_map = target_cases.get(seed)
-            baseline_map = baseline_cases.get(seed)
-            if not target_map or not baseline_map:
+            target_map_raw = target_cases.get(seed)
+            baseline_map_raw = baseline_cases.get(seed)
+            if not target_map_raw or not baseline_map_raw:
                 case_candidates = set()
                 break
-            available = {str(case) for case in target_map.keys() if case in baseline_map}
-            if not available:
+            target_map = cast(Dict[str, float], target_map_raw)
+            baseline_map = cast(Dict[str, float], baseline_map_raw)
+            shared_case_ids: Set[str] = set(target_map.keys()) & set(baseline_map.keys())
+            if not shared_case_ids:
                 case_candidates = set()
                 break
             if case_candidates is None:
-                case_candidates = available
+                case_candidates = set(shared_case_ids)
             else:
-                case_candidates &= available
+                case_candidates &= shared_case_ids
         if not case_candidates:
             continue
         case_ids = tuple(sorted(case_candidates))
@@ -851,8 +868,8 @@ def _bootstrap_family_delta(
                 if n_cases == 0:
                     continue
                 indices = rng.choice(n_cases, size=n_cases, replace=True)
-                aggregated_target: List[Tuple[float, float]] = []
-                aggregated_baseline: List[Tuple[float, float]] = []
+                resampled_target: List[Tuple[float, float]] = []
+                resampled_baseline: List[Tuple[float, float]] = []
                 for tag, severity in zip(record.severity_tags, record.severity_levels):
                     if not math.isfinite(severity):
                         continue
@@ -862,14 +879,14 @@ def _bootstrap_family_delta(
                         sample_indices = rng.choice(n_cases, size=n_cases, replace=True)
                     target_values = record.target_arrays[tag][sample_indices]
                     baseline_values = record.baseline_arrays[tag][sample_indices]
-                    aggregated_target.append((severity, float(np.mean(target_values))))
-                    aggregated_baseline.append((severity, float(np.mean(baseline_values))))
-                if not aggregated_target or not aggregated_baseline:
+                    resampled_target.append((severity, float(np.mean(target_values))))
+                    resampled_baseline.append((severity, float(np.mean(baseline_values))))
+                if not resampled_target or not resampled_baseline:
                     continue
-                aggregated_target.sort(key=lambda item: item[0])
-                aggregated_baseline.sort(key=lambda item: item[0])
-                target_series = _deduplicate_points([(0.0, 1.0)] + aggregated_target)
-                baseline_series = _deduplicate_points([(0.0, 1.0)] + aggregated_baseline)
+                resampled_target.sort(key=lambda item: item[0])
+                resampled_baseline.sort(key=lambda item: item[0])
+                target_series = _deduplicate_points([(0.0, 1.0)] + resampled_target)
+                baseline_series = _deduplicate_points([(0.0, 1.0)] + resampled_baseline)
                 target_ausc = _normalised_trapz(target_series)
                 baseline_ausc = _normalised_trapz(baseline_series)
                 if (
@@ -945,16 +962,18 @@ def _build_t3_table(models_summary: Mapping[str, Mapping[str, Any]]) -> List[Dic
             if not isinstance(payload, Mapping):
                 continue
             row: Dict[str, object] = {"model": model, "family": family}
-            metrics_block = payload.get("metrics") if isinstance(payload.get("metrics"), Mapping) else {}
-            retention_block = payload.get("retention") if isinstance(payload.get("retention"), Mapping) else {}
-            _flatten_stats(row, "ausc_", metrics_block)
-            _flatten_stats(row, "retention_", retention_block)
+            metrics_block = payload.get("metrics")
+            if isinstance(metrics_block, Mapping):
+                _flatten_stats(row, "ausc_", metrics_block)
+            retention_block = payload.get("retention")
+            if isinstance(retention_block, Mapping):
+                _flatten_stats(row, "retention_", retention_block)
             rows.append(row)
         macro_block = entry.get("ausc_macro_retention") if isinstance(entry, Mapping) else None
         if isinstance(macro_block, Mapping) and macro_block:
-            row: Dict[str, object] = {"model": model, "family": "macro"}
-            _flatten_stats(row, "retention_", macro_block)
-            rows.append(row)
+            macro_row: Dict[str, object] = {"model": model, "family": "macro"}
+            _flatten_stats(macro_row, "retention_", macro_block)
+            rows.append(macro_row)
     rows.sort(key=lambda entry: (str(entry.get("model")), str(entry.get("family"))))
     return rows
 
@@ -1009,15 +1028,18 @@ def _build_t4_table(
                         for seed, value in bootstrap_result.per_seed.items()
                     }
                     stats = _compute_stats(list(per_seed_delta.values())) or {}
-                    delta_mean = bootstrap_result.mean
+                    delta_mean = float(bootstrap_result.mean)
                     ci_lower = bootstrap_result.ci_lower
                     ci_upper = bootstrap_result.ci_upper
                 else:
-                    delta_mean = stats.get("mean")
+                    mean_value = stats.get("mean") if stats else None
+                    delta_mean = float(mean_value) if mean_value is not None else None
                     ci_lower = None
                     ci_upper = None
-                delta_std = stats.get("std") if stats else None
-                delta_n = stats.get("n") if stats else None
+                std_value = stats.get("std") if stats else None
+                delta_std = float(std_value) if std_value is not None else None
+                count_value = stats.get("n") if stats else None
+                delta_n = int(count_value) if count_value is not None else None
                 row: Dict[str, object] = {
                     "comparison": f"ssl_colon - {baseline}",
                     "baseline": baseline,
@@ -1094,15 +1116,18 @@ def _build_t5_table(
                         for seed, value in bootstrap_result.per_seed.items()
                     }
                     stats = _compute_stats(list(per_seed_delta.values())) or {}
-                    delta_mean = bootstrap_result.mean
+                    delta_mean = float(bootstrap_result.mean)
                     ci_lower = bootstrap_result.ci_lower
                     ci_upper = bootstrap_result.ci_upper
                 else:
-                    delta_mean = stats.get("mean")
+                    mean_value = stats.get("mean") if stats else None
+                    delta_mean = float(mean_value) if mean_value is not None else None
                     ci_lower = None
                     ci_upper = None
-                delta_std = stats.get("std") if stats else None
-                delta_n = stats.get("n") if stats else None
+                std_value = stats.get("std") if stats else None
+                delta_std = float(std_value) if std_value is not None else None
+                count_value = stats.get("n") if stats else None
+                delta_n = int(count_value) if count_value is not None else None
                 row: Dict[str, object] = {
                     "comparison": f"ssl_colon - {baseline}",
                     "baseline": baseline,

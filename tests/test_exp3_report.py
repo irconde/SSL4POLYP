@@ -47,8 +47,8 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
     tp = fp = tn = fn = 0
     n_pos = n_neg = 0
     for row in rows:
-        label = int(row.get("label", 0))
-        pred = int(row.get("pred", 0))
+        label = int(row.get("label", 0))  # type: ignore[call-overload]
+        pred = int(row.get("pred", 0))  # type: ignore[call-overload]
         if label == 1:
             n_pos += 1
             if pred == 1:
@@ -138,3 +138,10 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
     assert "SSL-Colon − SUP-ImNet" in report
     assert "Interaction effect" in report
     assert "Appendix: Sensitivity operating point (τ_Youden(val-morph))" in report
+    delta_rows = [
+        line
+        for line in report.splitlines()
+        if "SSL-Colon − SUP-ImNet" in line and "95% CI:" in line
+    ]
+    assert delta_rows, "Expected delta table rows with 95% CI information"
+    assert all("±" in line for line in delta_rows)
