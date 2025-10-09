@@ -279,7 +279,11 @@ def discover_runs(
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
         try:
             run = load_run(metrics_path, loader=loader)
-        except (ValueError, FileNotFoundError, GuardrailViolation) as exc:
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
+            ) from exc
+        except (ValueError, GuardrailViolation) as exc:
             raise RuntimeError(f"Failed to load metrics from {metrics_path}") from exc
         runs[run.model][run.percent][run.seed] = run
     result = {

@@ -413,7 +413,11 @@ def discover_runs(
     for metrics_path in sorted(metrics_paths):
         try:
             run = load_run(metrics_path, loader=active_loader)
-        except (ValueError, FileNotFoundError, GuardrailViolation) as exc:
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
+            ) from exc
+        except (ValueError, GuardrailViolation) as exc:
             raise RuntimeError(f"Failed to load metrics from {metrics_path}") from exc
         if model_filter and run.model.lower() not in model_filter:
             continue
