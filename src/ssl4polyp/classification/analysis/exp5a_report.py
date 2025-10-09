@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import math
 from collections import defaultdict
 from dataclasses import dataclass
@@ -47,9 +48,32 @@ class EvalFrame:
     frame_id: str
     prob: float
     label: int
+    case_id: Optional[str]
     center_id: Optional[str]
     sequence_id: Optional[str]
     origin: Optional[str]
+
+
+@dataclass(frozen=True)
+class CompositionStats:
+    n_pos: int
+    n_neg: int
+    total: int
+    prevalence: float
+    per_center: Mapping[str, Mapping[str, float]]
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "n_pos": self.n_pos,
+            "n_neg": self.n_neg,
+            "total": self.total,
+            "prevalence": self.prevalence,
+        }
+        if self.per_center:
+            payload["per_center"] = {
+                key: dict(value) for key, value in self.per_center.items()
+            }
+        return payload
 
 
 @dataclass
@@ -65,6 +89,9 @@ class Exp5ARun:
     sun_frames: Optional[Dict[str, EvalFrame]]
     provenance: Dict[str, Any]
     metrics_path: Path
+    composition: CompositionStats
+    outputs_sha256: str
+    experiment: Optional[str]
 
 
 def _get_loader(*, strict: bool = True) -> ResultLoader:
@@ -79,6 +106,11 @@ def _get_loader(*, strict: bool = True) -> ResultLoader:
 def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
     mapping: Dict[str, EvalFrame] = {}
     for frame in frames:
+        case_id = _clean_text(frame.row.get("case_id"))
+        if case_id is None:
+            case_id = _clean_text(frame.row.get("sequence_id"))
+        if case_id is None:
+            case_id = _clean_text(frame.case_id)
         center_id = _clean_text(frame.row.get("center_id")) or _clean_text(frame.row.get("origin"))
         sequence_id = _clean_text(frame.row.get("sequence_id"))
         origin = _clean_text(frame.row.get("origin"))
@@ -86,6 +118,7 @@ def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
             frame_id=frame.frame_id,
             prob=frame.prob,
             label=frame.label,
+            case_id=case_id,
             center_id=center_id,
             sequence_id=sequence_id,
             origin=origin,
@@ -109,23 +142,26 @@ def _as_frames_metrics(frames: Mapping[str, EvalFrame], frame_ids: Sequence[str]
     return compute_binary_metrics(probs, labels, tau)
 
 
-def _build_cluster_set(frames: Mapping[str, EvalFrame]) -> ClusterSet:
+def _build_cluster_set(frames: Mapping[str, EvalFrame], *, domain: str) -> ClusterSet:
+    domain_key = domain.lower()
+
     def positive_key(record: EvalFrame) -> Optional[str]:
-        if record.center_id and record.sequence_id:
-            return f"pos_center_seq::{record.center_id}::{record.sequence_id}"
-        if record.center_id:
-            return f"pos_center::{record.center_id}"
-        if record.sequence_id:
-            return f"pos_sequence::{record.sequence_id}"
         return None
 
     def negative_key(record: EvalFrame) -> Optional[str]:
-        if record.sequence_id and record.center_id:
-            return f"neg_center_seq::{record.center_id}::{record.sequence_id}"
+        if domain_key == "sun":
+            if record.case_id:
+                return f"neg_case::{record.case_id}"
+            if record.sequence_id:
+                return f"neg_sequence::{record.sequence_id}"
+            return None
+        center = record.center_id or record.origin
+        if center:
+            return f"neg_center::{center}"
         if record.sequence_id:
             return f"neg_sequence::{record.sequence_id}"
-        if record.center_id:
-            return f"neg_center::{record.center_id}"
+        if record.case_id:
+            return f"neg_case::{record.case_id}"
         return None
 
     return build_cluster_set(
@@ -134,6 +170,71 @@ def _build_cluster_set(frames: Mapping[str, EvalFrame]) -> ClusterSet:
         record_id=lambda record: record.frame_id,
         positive_key=positive_key,
         negative_key=negative_key,
+    )
+
+
+def _compute_composition(
+    metrics: Mapping[str, float],
+    frames: Mapping[str, EvalFrame],
+) -> CompositionStats:
+    def _require_int(value: Optional[float], name: str) -> int:
+        numeric = _coerce_float(value)
+        if numeric is None:
+            raise ValueError(f"Missing {name} in test_primary metrics")
+        return int(round(float(numeric)))
+
+    n_pos = _require_int(metrics.get("n_pos"), "n_pos")
+    n_neg = _require_int(metrics.get("n_neg"), "n_neg")
+    total = n_pos + n_neg
+    if total <= 0:
+        raise ValueError("Invalid composition: zero total examples")
+    if len(frames) != total:
+        raise ValueError(
+            "Frame count does not match n_pos + n_neg"
+        )
+    prevalence = float(n_pos) / float(total)
+    stored_prevalence = _coerce_float(metrics.get("prevalence"))
+    if stored_prevalence is not None and not math.isclose(
+        stored_prevalence, prevalence, rel_tol=1e-6, abs_tol=1e-6
+    ):
+        raise ValueError("Prevalence mismatch between frames and metrics")
+
+    tp = _coerce_float(metrics.get("tp"))
+    fp = _coerce_float(metrics.get("fp"))
+    tn = _coerce_float(metrics.get("tn"))
+    fn = _coerce_float(metrics.get("fn"))
+    if all(value is not None for value in (tp, fp, tn, fn)):
+        confusion_total = int(round(float(tp) + float(fp) + float(tn) + float(fn)))
+        if confusion_total != total:
+            raise ValueError("Confusion matrix counts do not sum to n_pos + n_neg")
+
+    per_center_counts: DefaultDict[str, Dict[str, int]] = defaultdict(lambda: {"n_pos": 0, "n_neg": 0})
+    for record in frames.values():
+        center_key = record.center_id or record.origin or record.sequence_id or record.case_id
+        if not center_key:
+            continue
+        label_key = "n_pos" if record.label == 1 else "n_neg"
+        per_center_counts[center_key][label_key] += 1
+    per_center: Dict[str, Mapping[str, float]] = {}
+    for center, counts in per_center_counts.items():
+        center_total = counts["n_pos"] + counts["n_neg"]
+        if center_total <= 0:
+            continue
+        per_center[center] = MappingProxyType(
+            {
+                "n_pos": counts["n_pos"],
+                "n_neg": counts["n_neg"],
+                "total": center_total,
+                "prevalence": float(counts["n_pos"]) / float(center_total),
+            }
+        )
+
+    return CompositionStats(
+        n_pos=n_pos,
+        n_neg=n_neg,
+        total=total,
+        prevalence=prevalence,
+        per_center=MappingProxyType(dict(per_center)),
     )
 
 
@@ -206,6 +307,16 @@ def load_run(
     base_run = load_common_run(metrics_path, loader=active_loader)
     payload = base_run.payload
     provenance = dict(base_run.provenance)
+    run_block = payload.get("run") if isinstance(payload, Mapping) else None
+    experiment_name = (
+        _clean_text(run_block.get("exp")) if isinstance(run_block, Mapping) else None
+    )
+    if experiment_name is None:
+        raise ValueError("Metrics payload must include run.exp for Experiment 5A")
+    if experiment_name.lower() != "exp5a":
+        raise ValueError(
+            f"Metrics payload at {metrics_path} reports run.exp='{experiment_name}', expected 'exp5a'"
+        )
     test_metrics = dict(base_run.primary_metrics)
     delta_block = (
         payload.get("domain_shift_delta")
@@ -218,7 +329,11 @@ def load_run(
     sun_metrics = _extract_metrics(
         parent_payload.get("test_primary") if isinstance(parent_payload, Mapping) else None
     )
-    sun_tau = _coerce_float(sun_metrics.get("tau")) if sun_metrics else None
+    if not sun_metrics:
+        raise ValueError(
+            f"Missing SUN baseline metrics for Experiment 5A run at {metrics_path}"
+        )
+    sun_tau = _coerce_float(sun_metrics.get("tau"))
     sun_frames: Optional[Dict[str, EvalFrame]] = None
     if parent_metrics_path and parent_metrics_path.exists():
         try:
@@ -227,7 +342,7 @@ def load_run(
             parent_run = None
         else:
             sun_metrics = dict(parent_run.primary_metrics)
-            sun_tau = parent_run.tau
+            sun_tau = _coerce_float(parent_run.tau)
             sun_frames = _frames_to_eval(parent_run.frames)
     if sun_frames is None and parent_outputs_path and parent_outputs_path.exists():
         if sun_tau is not None:
@@ -237,6 +352,14 @@ def load_run(
                 sun_frames = None
             else:
                 sun_frames = _frames_to_eval(parent_frames)
+    if sun_tau is None:
+        raise ValueError(
+            f"SUN baseline tau missing for Experiment 5A run at {metrics_path}"
+        )
+    if sun_frames is None:
+        raise ValueError(
+            f"SUN baseline outputs missing for Experiment 5A run at {metrics_path}"
+        )
     if not delta_block:
         delta_metrics = _derive_delta(test_metrics, sun_metrics)
     else:
@@ -252,6 +375,12 @@ def load_run(
             and math.isfinite(float(value))
         }
     frames = _frames_to_eval(base_run.frames)
+    composition = _compute_composition(test_metrics, frames)
+    outputs_sha = _clean_text(provenance.get("test_outputs_csv_sha256"))
+    if outputs_sha is None:
+        raise ValueError(
+            f"Missing provenance.test_outputs_csv_sha256 for run at {metrics_path}"
+        )
     return Exp5ARun(
         model=base_run.model,
         seed=base_run.seed,
@@ -260,10 +389,13 @@ def load_run(
         delta=delta_metrics,
         sun_metrics=sun_metrics,
         frames=frames,
-        sun_tau=float(sun_tau) if isinstance(sun_tau, float) else None,
+        sun_tau=float(sun_tau),
         sun_frames=sun_frames,
         provenance=provenance,
         metrics_path=metrics_path,
+        composition=composition,
+        outputs_sha256=outputs_sha,
+        experiment=experiment_name,
     )
 
 
@@ -303,7 +435,7 @@ def _bootstrap_metrics(
     results: Dict[str, List[float]] = {metric: [] for metric in metrics}
     if bootstrap <= 0:
         return results
-    clusters = _build_cluster_set(run.frames)
+    clusters = _build_cluster_set(run.frames, domain="polypgen")
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
         sample_ids = sample_cluster_ids(clusters, rng)
@@ -365,8 +497,8 @@ def _bootstrap_domain_shift(
         return results
     if run.sun_frames is None or run.sun_tau is None:
         return results
-    polyp_clusters = _build_cluster_set(run.frames)
-    sun_clusters = _build_cluster_set(run.sun_frames)
+    polyp_clusters = _build_cluster_set(run.frames, domain="polypgen")
+    sun_clusters = _build_cluster_set(run.sun_frames, domain="sun")
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
         polyp_ids, sun_ids = _joint_sample_cluster_ids(polyp_clusters, sun_clusters, rng)
@@ -385,6 +517,48 @@ def _bootstrap_domain_shift(
     return results
 
 
+def _bootstrap_domain_shift_summary(
+    runs: Mapping[int, Exp5ARun],
+    *,
+    metrics: Sequence[str],
+    bootstrap: int,
+    rng_seed: int,
+) -> Dict[str, List[float]]:
+    summary_replicates: Dict[str, List[float]] = {metric: [] for metric in metrics}
+    if bootstrap <= 0 or not runs:
+        return summary_replicates
+    prepared: Dict[int, Tuple[Exp5ARun, ClusterSet, ClusterSet]] = {}
+    for seed, run in runs.items():
+        if run.sun_frames is None or run.sun_tau is None:
+            continue
+        prepared[seed] = (
+            run,
+            _build_cluster_set(run.frames, domain="polypgen"),
+            _build_cluster_set(run.sun_frames, domain="sun"),
+        )
+    if not prepared:
+        return summary_replicates
+    rng = np.random.default_rng(rng_seed)
+    for _ in range(bootstrap):
+        draw_totals: DefaultDict[str, List[float]] = defaultdict(list)
+        for run, polyp_clusters, sun_clusters in prepared.values():
+            polyp_ids, sun_ids = _joint_sample_cluster_ids(polyp_clusters, sun_clusters, rng)
+            if not polyp_ids or not sun_ids:
+                continue
+            polyp_values = _as_frames_metrics(run.frames, polyp_ids, run.tau)
+            sun_values = _as_frames_metrics(run.sun_frames, sun_ids, run.sun_tau)
+            for metric in metrics:
+                polyp_metric = _coerce_float(polyp_values.get(metric))
+                sun_metric = _coerce_float(sun_values.get(metric))
+                if polyp_metric is None or sun_metric is None:
+                    continue
+                draw_totals[metric].append(float(polyp_metric - sun_metric))
+        for metric, values in draw_totals.items():
+            if values:
+                summary_replicates[metric].append(float(np.mean(values)))
+    return summary_replicates
+
+
 def _bootstrap_pairwise(
     colon_run: Exp5ARun,
     baseline_run: Exp5ARun,
@@ -395,7 +569,7 @@ def _bootstrap_pairwise(
 ) -> List[float]:
     if bootstrap <= 0:
         return []
-    clusters = _build_cluster_set(colon_run.frames)
+    clusters = _build_cluster_set(colon_run.frames, domain="polypgen")
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
     for _ in range(bootstrap):
@@ -411,6 +585,48 @@ def _bootstrap_pairwise(
         if not (math.isfinite(float(colon_value)) and math.isfinite(float(baseline_value))):
             continue
         replicates.append(float(colon_value) - float(baseline_value))
+    return replicates
+
+
+def _bootstrap_pairwise_summary(
+    colon_runs: Mapping[int, Exp5ARun],
+    baseline_runs: Mapping[int, Exp5ARun],
+    *,
+    metric: str,
+    bootstrap: int,
+    rng_seed: int,
+) -> List[float]:
+    if bootstrap <= 0:
+        return []
+    prepared: Dict[int, Tuple[Exp5ARun, Exp5ARun, ClusterSet]] = {}
+    for seed, colon_run in colon_runs.items():
+        baseline_run = baseline_runs.get(seed)
+        if colon_run is None or baseline_run is None:
+            continue
+        prepared[seed] = (
+            colon_run,
+            baseline_run,
+            _build_cluster_set(colon_run.frames, domain="polypgen"),
+        )
+    if not prepared:
+        return []
+    rng = np.random.default_rng(rng_seed)
+    replicates: List[float] = []
+    for _ in range(bootstrap):
+        draw_values: List[float] = []
+        for colon_run, baseline_run, clusters in prepared.values():
+            sample_ids = sample_cluster_ids(clusters, rng)
+            if not sample_ids:
+                continue
+            colon_metrics = _as_frames_metrics(colon_run.frames, sample_ids, colon_run.tau)
+            baseline_metrics = _as_frames_metrics(baseline_run.frames, sample_ids, baseline_run.tau)
+            colon_value = _coerce_float(colon_metrics.get(metric))
+            baseline_value = _coerce_float(baseline_metrics.get(metric))
+            if colon_value is None or baseline_value is None:
+                continue
+            draw_values.append(float(colon_value - baseline_value))
+        if draw_values:
+            replicates.append(float(np.mean(draw_values)))
     return replicates
 
 
@@ -430,7 +646,7 @@ def summarize_runs(
         )
     summary: Dict[str, Any] = {
         "metadata": {
-            "metrics": list(PRIMARY_METRICS),
+            "metrics": list(PRIMARY_METRICS) + ["loss"],
             "delta_metrics": ["recall", "f1", "auprc", "auroc"],
             "bootstrap": int(max(0, bootstrap)),
             "ci_level": CI_LEVEL,
@@ -441,7 +657,51 @@ def summarize_runs(
         "seed_groups": {
             key: list(values) for key, values in seed_validation.observed_seeds.items()
         },
+        "composition": {},
     }
+    all_runs: List[Exp5ARun] = [run for runs in runs_by_model.values() for run in runs.values()]
+    if all_runs:
+        reference = all_runs[0]
+        reference_comp = reference.composition
+        reference_sha = reference.outputs_sha256
+        for run in all_runs[1:]:
+            if run.outputs_sha256 != reference_sha:
+                raise ValueError(
+                    "Mismatched test_outputs_csv_sha256 across Experiment 5A runs"
+                )
+            comp = run.composition
+            if comp.n_pos != reference_comp.n_pos or comp.n_neg != reference_comp.n_neg:
+                raise ValueError("PolypGen composition mismatch across runs")
+            if comp.total != reference_comp.total:
+                raise ValueError("PolypGen total count mismatch across runs")
+            if not math.isclose(
+                comp.prevalence,
+                reference_comp.prevalence,
+                rel_tol=1e-9,
+                abs_tol=1e-9,
+            ):
+                raise ValueError("PolypGen prevalence mismatch across runs")
+            ref_centers = {key: dict(value) for key, value in reference_comp.per_center.items()}
+            comp_centers = {key: dict(value) for key, value in comp.per_center.items()}
+            if set(ref_centers) != set(comp_centers):
+                raise ValueError("Per-center composition mismatch across runs")
+            for center, ref_counts in ref_centers.items():
+                comp_counts = comp_centers.get(center)
+                if comp_counts is None:
+                    raise ValueError("Missing per-center counts in one of the runs")
+                for key in ("n_pos", "n_neg", "total"):
+                    if int(ref_counts[key]) != int(comp_counts.get(key, -1)):
+                        raise ValueError("Per-center counts mismatch across runs")
+                if not math.isclose(
+                    float(ref_counts.get("prevalence", 0.0)),
+                    float(comp_counts.get("prevalence", 0.0)),
+                    rel_tol=1e-9,
+                    abs_tol=1e-9,
+                ):
+                    raise ValueError("Per-center prevalence mismatch across runs")
+        composition_payload = reference_comp.to_dict()
+        composition_payload["sha256"] = reference_sha
+        summary["composition"] = composition_payload
     model_entries: Dict[str, Any] = {}
     for model, runs in sorted(runs_by_model.items()):
         seeds_entry: Dict[int, Any] = {}
@@ -482,10 +742,19 @@ def summarize_runs(
                 value = _coerce_float(run.metrics.get(metric))
                 if value is not None:
                     metric_accumulators[metric].append(value)
+            loss_value = _coerce_float(run.metrics.get("loss"))
+            if loss_value is not None:
+                metric_accumulators["loss"].append(loss_value)
             for metric in ("recall", "f1", "auprc", "auroc"):
                 value = _coerce_float(run.delta.get(metric))
                 if value is not None:
                     delta_accumulators[metric].append(value)
+        delta_summary_ci_replicates = _bootstrap_domain_shift_summary(
+            runs,
+            metrics=("recall", "f1", "auprc", "auroc"),
+            bootstrap=bootstrap,
+            rng_seed=rng_seed + len(model) * 17,
+        )
         performance_summary: Dict[str, Dict[str, float]] = {}
         for metric, values in metric_accumulators.items():
             stats = _compute_stats(values)
@@ -496,10 +765,16 @@ def summarize_runs(
             stats = _compute_stats(values)
             if stats:
                 delta_summary[metric] = stats
+        delta_summary_ci = {
+            metric: _ci_bounds(values)
+            for metric, values in delta_summary_ci_replicates.items()
+            if values
+        }
         model_entries[model] = {
             "seeds": seeds_entry,
             "performance": performance_summary,
             "domain_shift": delta_summary,
+            "domain_shift_ci": delta_summary_ci,
         }
     summary["models"] = model_entries
 
@@ -522,7 +797,6 @@ def summarize_runs(
                 )
                 rows: List[Dict[str, Any]] = []
                 deltas: List[float] = []
-                aggregate_replicates: List[float] = []
                 for seed in seed_validation.expected_seeds:
                     colon_run = colon_runs.get(seed)
                     baseline_run = baseline_runs.get(seed)
@@ -548,9 +822,15 @@ def summarize_runs(
                             "ci": _ci_bounds(replicates),
                         }
                     )
-                    aggregate_replicates.extend(replicates)
                 metric_stats = _compute_stats(deltas) if deltas else None
-                summary_ci = _ci_bounds(aggregate_replicates)
+                summary_replicates = _bootstrap_pairwise_summary(
+                    colon_runs,
+                    baseline_runs,
+                    metric=metric,
+                    bootstrap=bootstrap,
+                    rng_seed=rng_seed + len(metric) * 29 + PAIRWISE_BASELINES.index(baseline) * 31,
+                )
+                summary_ci = _ci_bounds(summary_replicates)
                 payload: Dict[str, Any] = {"seeds": rows}
                 if metric_stats:
                     payload["summary"] = metric_stats
@@ -602,14 +882,57 @@ def write_domain_shift_csv(summary: Mapping[str, Any], output_path: Path) -> Non
         domain_shift = payload.get("domain_shift")
         if not isinstance(domain_shift, Mapping):
             continue
+        domain_shift_ci = payload.get("domain_shift_ci") if isinstance(payload.get("domain_shift_ci"), Mapping) else {}
         for metric, stats in domain_shift.items():
             if not isinstance(stats, Mapping):
                 continue
             row = {"model": model, "metric": metric}
             row.update({key: stats.get(key) for key in ("mean", "std", "n")})
+            if isinstance(domain_shift_ci, Mapping):
+                ci_block = domain_shift_ci.get(metric)
+                if isinstance(ci_block, Mapping):
+                    row["ci_lower"] = ci_block.get("lower")
+                    row["ci_upper"] = ci_block.get("upper")
             rows.append(row)
     if not rows:
         raise ValueError("Summary payload does not include domain shift data")
+    fieldnames = sorted({key for row in rows for key in row.keys()})
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_composition_csv(summary: Mapping[str, Any], output_path: Path) -> None:
+    composition = summary.get("composition")
+    if not isinstance(composition, Mapping) or not composition:
+        raise ValueError("Summary payload does not include composition data")
+    rows: List[Dict[str, Any]] = []
+    overall_row: Dict[str, Any] = {
+        "scope": "overall",
+        "n_pos": composition.get("n_pos"),
+        "n_neg": composition.get("n_neg"),
+        "total": composition.get("total"),
+        "prevalence": composition.get("prevalence"),
+    }
+    if "sha256" in composition:
+        overall_row["sha256"] = composition.get("sha256")
+    rows.append(overall_row)
+    per_center = composition.get("per_center")
+    if isinstance(per_center, Mapping):
+        for center, payload in per_center.items():
+            if not isinstance(payload, Mapping):
+                continue
+            row = {
+                "scope": "center",
+                "center_id": center,
+                "n_pos": payload.get("n_pos"),
+                "n_neg": payload.get("n_neg"),
+                "total": payload.get("total"),
+                "prevalence": payload.get("prevalence"),
+            }
+            rows.append(row)
     fieldnames = sorted({key for row in rows for key in row.keys()})
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -739,6 +1062,7 @@ __all__ = [
     "summarize_runs",
     "write_performance_csv",
     "write_domain_shift_csv",
+    "write_composition_csv",
     "write_seed_metrics_csv",
     "write_pairwise_csv",
     "EXPECTED_SEEDS",
