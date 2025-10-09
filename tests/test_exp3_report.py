@@ -113,11 +113,13 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         {"case_id": "a", "prob": 0.7, "label": 1, "pred": 1, "morphology": "polypoid"},
         {"case_id": "b", "prob": 0.4, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "c", "prob": 0.3, "label": 0, "pred": 0, "morphology": "other"},
+        {"case_id": "d", "prob": 0.6, "label": 1, "pred": 1, "morphology": "flat"},
     ]
     alt_sup_rows = [
         {"case_id": "a", "prob": 0.65, "label": 1, "pred": 1, "morphology": "polypoid"},
         {"case_id": "b", "prob": 0.45, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "c", "prob": 0.25, "label": 0, "pred": 0, "morphology": "other"},
+        {"case_id": "d", "prob": 0.58, "label": 1, "pred": 1, "morphology": "flat"},
     ]
     alt_colon_rows = [
         {"case_id": "a", "prob": 0.88, "label": 1, "pred": 1, "morphology": "polypoid"},
@@ -129,9 +131,10 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         sup_payload = sup_rows if seed != 47 else alt_sup_rows
         _write_run(tmp_path, "sup_imnet", seed=seed, rows=sup_payload, tau=0.5)
 
-    report = generate_report(tmp_path, bootstrap=10, rng_seed=7)
+    report = generate_report(tmp_path, bootstrap=2, rng_seed=7)
 
     assert "## Metrics at τ_F1(val-morph) — Overall" in report
     assert "Flat + Negs" in report
     assert "SSL-Colon − SUP-ImNet" in report
     assert "Interaction effect" in report
+    assert "Appendix: Sensitivity operating point (τ_Youden(val-morph))" in report
