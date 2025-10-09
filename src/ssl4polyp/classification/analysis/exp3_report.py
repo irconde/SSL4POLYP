@@ -43,6 +43,7 @@ _PRIMARY_METRICS = (
     "f1",
     "balanced_accuracy",
     "mcc",
+    "loss",
 )
 _METRIC_LABELS = {
     "auprc": "AUPRC",
@@ -52,6 +53,7 @@ _METRIC_LABELS = {
     "f1": "F1",
     "balanced_accuracy": "Balanced Acc",
     "mcc": "MCC",
+    "loss": "Loss",
 }
 
 _POLICY_LABELS = {
@@ -149,10 +151,9 @@ def _binary_metrics(probabilities: np.ndarray, labels: np.ndarray, tau: float) -
         warnings.simplefilter("ignore", category=UserWarning)
         warnings.simplefilter("ignore", category=RuntimeWarning)
         warnings.simplefilter("ignore", category=UndefinedMetricWarning)
-        base = compute_binary_metrics(
+        metrics = compute_binary_metrics(
             probabilities, labels, tau, metric_keys=_PRIMARY_METRICS
         )
-    metrics = dict(base)
     total = int(labels.size)
     if total == 0:
         metrics.setdefault("count", 0.0)
@@ -163,13 +164,6 @@ def _binary_metrics(probabilities: np.ndarray, labels: np.ndarray, tau: float) -
         metrics.setdefault("fp", 0.0)
         metrics.setdefault("tn", 0.0)
         metrics.setdefault("fn", 0.0)
-        metrics["loss"] = float("nan")
-        return metrics
-    eps = 1e-12
-    clipped = np.clip(probabilities, eps, 1.0 - eps)
-    metrics["loss"] = float(
-        np.mean(-(labels * np.log(clipped) + (1 - labels) * np.log(1 - clipped)))
-    )
     return metrics
 
 

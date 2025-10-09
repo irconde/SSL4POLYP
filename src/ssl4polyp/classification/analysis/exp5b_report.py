@@ -29,6 +29,7 @@ RETENTION_METRICS: Tuple[str, ...] = (
     "precision",
     "f1",
     "balanced_accuracy",
+    "loss",
 )
 
 

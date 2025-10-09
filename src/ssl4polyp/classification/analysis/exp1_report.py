@@ -44,6 +44,7 @@ PRIMARY_METRICS: Tuple[str, ...] = (
     "f1",
     "balanced_accuracy",
     "mcc",
+    "loss",
 )
 EXPECTED_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
@@ -59,6 +60,7 @@ METRIC_LABELS: Dict[str, str] = {
     "f1": "F1",
     "balanced_accuracy": "Balanced Acc",
     "mcc": "MCC",
+    "loss": "Loss",
 }
 CI_LEVEL = 0.95
 DEFAULT_BOOTSTRAP = 2000
@@ -202,8 +204,16 @@ def _metrics_from_frames(frames: Sequence[EvalFrame], tau: float) -> Dict[str, f
         return {metric: float("nan") for metric in PRIMARY_METRICS}
     probs = np.array([frame.prob for frame in frames], dtype=float)
     labels = np.array([frame.label for frame in frames], dtype=int)
-    metrics = compute_binary_metrics(probs, labels, tau)
-    return metrics
+    return compute_binary_metrics(probs, labels, tau, metric_keys=PRIMARY_METRICS)
+
+
+def _merge_metric_block(
+    target: MutableMapping[str, float], computed: Mapping[str, float]
+) -> None:
+    for key, value in computed.items():
+        existing = _coerce_float(target.get(key))
+        if existing is None or not math.isfinite(existing):
+            target[key] = float(value)
 
 
 def _aggregate(values: Iterable[float]) -> Optional[MetricAggregate]:
@@ -290,12 +300,19 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ex
         raise ValueError(f"Metrics file '{metrics_path}' does not specify a seed")
     primary_metrics = dict(loaded.primary_metrics)
     sensitivity_metrics = dict(loaded.sensitivity_metrics)
-    tau_primary = primary_metrics.get("tau")
+    tau_primary_raw = primary_metrics.get("tau")
+    tau_primary = _coerce_float(tau_primary_raw)
     if tau_primary is None:
         raise ValueError(f"Metrics file '{metrics_path}' is missing test_primary.tau")
-    tau_sensitivity = sensitivity_metrics.get("tau") if sensitivity_metrics else None
+    tau_sensitivity_raw = sensitivity_metrics.get("tau") if sensitivity_metrics else None
+    tau_sensitivity = _coerce_float(tau_sensitivity_raw) if tau_sensitivity_raw is not None else None
     outputs_path = _resolve_outputs_path(metrics_path)
     frames, cases = _read_outputs(outputs_path)
+    computed_primary = _metrics_from_frames(frames, float(tau_primary))
+    _merge_metric_block(primary_metrics, computed_primary)
+    if tau_sensitivity is not None:
+        computed_sensitivity = _metrics_from_frames(frames, float(tau_sensitivity))
+        _merge_metric_block(sensitivity_metrics, computed_sensitivity)
     curves = dict(loaded.curves)
     return Exp1Run(
         model=model,
@@ -303,7 +320,7 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ex
         primary_metrics=primary_metrics,
         sensitivity_metrics=sensitivity_metrics,
         tau_primary=float(tau_primary),
-        tau_sensitivity=float(tau_sensitivity) if isinstance(tau_sensitivity, (int, float)) else None,
+        tau_sensitivity=float(tau_sensitivity) if tau_sensitivity is not None else None,
         frames=frames,
         cases=cases,
         metrics_path=metrics_path,
