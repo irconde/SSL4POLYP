@@ -195,6 +195,24 @@ class ResultLoader:
                 "Primary threshold policy mismatch for "
                 f"'{metrics_path}'. Expected '{self.expected_primary_policy}', found '{policy or 'none'}'."
             )
+        split_value = primary.get("split")
+        if split_value is None:
+            if self.strict:
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' is missing thresholds.primary.split"
+                )
+        else:
+            split_text = str(split_value).strip()
+            if not split_text and self.strict:
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' defines an empty thresholds.primary.split"
+                )
+            expected_split = "sun_full/val"
+            if self.strict and split_text != expected_split:
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' uses unexpected thresholds.primary.split '{split_text}'"
+                    f" (expected '{expected_split}')."
+                )
         sensitivity_policy_expected = self.expected_sensitivity_policy
         sensitivity_record = thresholds.get("sensitivity") if isinstance(thresholds, Mapping) else None
         if self.require_sensitivity or sensitivity_policy_expected:
@@ -343,6 +361,20 @@ class ResultLoader:
                 if field in provenance:
                     record[field] = provenance[field]
         record.setdefault("seed", payload.get("seed"))
+        primary = payload.get("test_primary")
+        if isinstance(primary, Mapping) and "tau" in primary:
+            record["primary_tau"] = primary["tau"]
+        sensitivity = payload.get("test_sensitivity")
+        if isinstance(sensitivity, Mapping) and "tau" in sensitivity:
+            record["sensitivity_tau"] = sensitivity["tau"]
+        thresholds = payload.get("thresholds")
+        if isinstance(thresholds, Mapping):
+            primary_thresh = thresholds.get("primary")
+            if isinstance(primary_thresh, Mapping) and "policy" in primary_thresh:
+                record["primary_threshold_policy"] = primary_thresh["policy"]
+            sensitivity_thresh = thresholds.get("sensitivity")
+            if isinstance(sensitivity_thresh, Mapping) and "policy" in sensitivity_thresh:
+                record["sensitivity_threshold_policy"] = sensitivity_thresh["policy"]
         self._loaded_runs.append(record)
 
     def _normalise_curves(

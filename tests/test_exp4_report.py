@@ -141,33 +141,47 @@ def test_exp4_summary_pipeline(tmp_path: Path, bootstrap: int) -> None:
 
     summary = exp4_report.summarize_runs(runs, bootstrap=bootstrap, rng_seed=7)
 
-    curves = summary["curves"]
+    composition = summary["test_composition"]
+    assert composition["n_pos"] == pytest.approx(2)
+    assert composition["n_neg"] == pytest.approx(2)
+    assert composition["prevalence"] == pytest.approx(0.5)
+
+    primary = summary["primary"]
+    primary_table = primary["learning_table"]
+    colon_entry = next(
+        entry
+        for entry in primary_table
+        if entry["model"] == "ssl_colon" and entry["percent"] == 50.0 and entry["metric"] == "auprc"
+    )
+    assert colon_entry["mean"] == pytest.approx(0.70)
+
+    curves = primary["curves"]
     colon_50 = curves["auprc"]["ssl_colon"][50.0]["mean"]
     assert colon_50 == pytest.approx(0.70)
 
-    slopes = summary["slopes"]["auprc"]["ssl_colon"]
+    slopes = primary["slopes"]["auprc"]["ssl_colon"]
     assert slopes["50→100"] == pytest.approx((0.82 - 0.70) / 50.0)
 
-    targets = summary["targets"]
+    targets = primary["targets"]
     assert targets["auprc"] == pytest.approx(0.62)
     assert targets["f1"] == pytest.approx(0.58)
 
-    s_at_target = summary["s_at_target"]
+    s_at_target = primary["s_at_target"]
     assert s_at_target["auprc"]["ssl_colon"] == pytest.approx(50.0)
     assert s_at_target["auprc"]["ssl_imnet"] == pytest.approx(100.0)
 
     assert summary["validated_seeds"] == list(EXPECTED_SEEDS)
-    pairwise_sup = summary["pairwise"]["auprc"]["sup_imnet"][50.0]
+    pairwise_sup = primary["pairwise"]["auprc"]["sup_imnet"][50.0]
     assert pairwise_sup["delta"] == pytest.approx(0.70 - 0.55)
     assert pairwise_sup["replicates"] == []
 
-    aulc_delta = summary["aulc_delta"]["auprc"]["sup_imnet"]
+    aulc_delta = primary["aulc_delta"]["auprc"]["sup_imnet"]
     assert aulc_delta["delta"] == pytest.approx(0.76 - 0.565, rel=1e-6)
 
     report = exp4_report.generate_report(runs_root, bootstrap=bootstrap, rng_seed=11)
-    assert "Experiment 4 learning curve summary" in report
-    assert "SSL-Colon" in report
-    assert "ΔAULC" in report
+    assert "Experiment 4 — Label-efficiency on SUN" in report
+    assert "## T1 — SUN-test composition" in report
+    assert "### ΔAULC vs baselines" in report
 
 
 def test_exp4_csv_digest_guardrail(tmp_path: Path) -> None:
