@@ -45,6 +45,8 @@ _PRIMARY_METRICS = (
     "mcc",
     "loss",
 )
+
+_DELTA_METRICS = ("auprc", "f1", "auroc")
 _METRIC_LABELS = {
     "auprc": "AUPRC",
     "auroc": "AUROC",
@@ -292,20 +294,33 @@ def bootstrap_deltas(
     baseline_runs: Mapping[int, RunDataset],
     *,
     policy: str,
+    metrics: Sequence[str] = ("auprc", "f1", "auroc"),
     bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
-) -> Tuple[Dict[str, float], Dict[str, List[float]]]:
+) -> Tuple[
+    Dict[str, Dict[str, float]],
+    Dict[str, Dict[str, List[float]]],
+]:
     ensure_expected_seeds(
         {"treatment": colon_runs, "baseline": baseline_runs},
         expected_seeds=expected_seeds,
         context="Experiment 3 pairwise delta",
     )
     seeds = list(expected_seeds)
-    point_estimates: Dict[str, float] = {}
-    replicates: Dict[str, List[float]] = {key: [] for key in _STRATA}
+    metric_keys = tuple(dict.fromkeys(metrics))
+    if not metric_keys:
+        raise ValueError("metrics must not be empty")
+    point_estimates: Dict[str, Dict[str, float]] = {
+        stratum: {metric: float("nan") for metric in metric_keys} for stratum in _STRATA
+    }
+    replicates: Dict[str, Dict[str, List[float]]] = {
+        stratum: {metric: [] for metric in metric_keys} for stratum in _STRATA
+    }
     for stratum in _STRATA:
-        deltas = []
+        metric_deltas: Dict[str, List[float]] = {
+            metric: [] for metric in metric_keys
+        }
         for seed in seeds:
             colon_tau = colon_runs[seed].tau_for_policy(policy)
             baseline_tau = baseline_runs[seed].tau_for_policy(policy)
@@ -313,12 +328,30 @@ def bootstrap_deltas(
             baseline_metrics = compute_strata_metrics(baseline_runs[seed].frames, baseline_tau)
             if stratum not in colon_metrics or stratum not in baseline_metrics:
                 continue
-            deltas.append(colon_metrics[stratum]["auprc"] - baseline_metrics[stratum]["auprc"])
-        point_estimates[stratum] = float(np.mean(deltas)) if deltas else float("nan")
+            for metric in metric_keys:
+                colon_value = colon_metrics[stratum].get(metric)
+                baseline_value = baseline_metrics[stratum].get(metric)
+                if colon_value is None or baseline_value is None:
+                    continue
+                try:
+                    colon_float = float(colon_value)
+                    baseline_float = float(baseline_value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isnan(colon_float) or math.isnan(baseline_float):
+                    continue
+                metric_deltas[metric].append(colon_float - baseline_float)
+        for metric in metric_keys:
+            deltas = metric_deltas[metric]
+            point_estimates[stratum][metric] = (
+                float(np.mean(deltas)) if deltas else float("nan")
+            )
     rng = np.random.default_rng(rng_seed)
     max_attempts = 200
     for _ in range(max(0, bootstrap)):
-        stratum_values: Dict[str, List[float]] = {key: [] for key in _STRATA}
+        stratum_values: Dict[str, Dict[str, List[float]]] = {
+            stratum: {metric: [] for metric in metric_keys} for stratum in _STRATA
+        }
         valid = True
         for seed in seeds:
             colon_run = colon_runs[seed]
@@ -328,6 +361,7 @@ def bootstrap_deltas(
                 valid = False
                 break
             attempts = 0
+            seed_success = False
             while attempts < max_attempts:
                 sampled_ids = rng.choice(case_ids, size=len(case_ids), replace=True)
                 colon_sample: List[FrameRecord] = []
@@ -339,29 +373,54 @@ def bootstrap_deltas(
                 baseline_tau = baseline_run.tau_for_policy(policy)
                 colon_metrics = compute_strata_metrics(colon_sample, colon_tau)
                 baseline_metrics = compute_strata_metrics(baseline_sample, baseline_tau)
-                if all(
-                    stratum in colon_metrics
-                    and stratum in baseline_metrics
-                    and colon_metrics[stratum]["n_pos"] > 0
-                    and baseline_metrics[stratum]["n_pos"] > 0
-                    for stratum in _STRATA
-                ):
-                    for stratum in _STRATA:
-                        delta = (
-                            colon_metrics[stratum]["auprc"] - baseline_metrics[stratum]["auprc"]
-                        )
-                        stratum_values[stratum].append(delta)
+                attempt_valid = True
+                attempt_deltas: Dict[str, Dict[str, float]] = {}
+                for stratum in _STRATA:
+                    if (
+                        stratum not in colon_metrics
+                        or stratum not in baseline_metrics
+                        or colon_metrics[stratum].get("n_pos", 0) <= 0
+                        or baseline_metrics[stratum].get("n_pos", 0) <= 0
+                    ):
+                        attempt_valid = False
+                        break
+                    seed_deltas: Dict[str, float] = {}
+                    for metric in metric_keys:
+                        colon_value = colon_metrics[stratum].get(metric)
+                        baseline_value = baseline_metrics[stratum].get(metric)
+                        if colon_value is None or baseline_value is None:
+                            attempt_valid = False
+                            break
+                        try:
+                            colon_float = float(colon_value)
+                            baseline_float = float(baseline_value)
+                        except (TypeError, ValueError):
+                            attempt_valid = False
+                            break
+                        if math.isnan(colon_float) or math.isnan(baseline_float):
+                            attempt_valid = False
+                            break
+                        seed_deltas[metric] = colon_float - baseline_float
+                    if not attempt_valid:
+                        break
+                    attempt_deltas[stratum] = seed_deltas
+                if attempt_valid:
+                    for stratum, seed_deltas in attempt_deltas.items():
+                        for metric, delta in seed_deltas.items():
+                            stratum_values[stratum][metric].append(delta)
+                    seed_success = True
                     break
                 attempts += 1
-            else:
+            if not seed_success:
                 valid = False
                 break
         if not valid:
             continue
         for stratum in _STRATA:
-            values = stratum_values[stratum]
-            if values:
-                replicates[stratum].append(float(np.mean(values)))
+            for metric in metric_keys:
+                values = stratum_values[stratum][metric]
+                if values:
+                    replicates[stratum][metric].append(float(np.mean(values)))
     return point_estimates, replicates
 
 
@@ -473,11 +532,24 @@ def _collect_deltas(
     runs_by_model: Mapping[str, Mapping[int, RunDataset]],
     *,
     policy: str,
+    metrics: Sequence[str],
     bootstrap: int,
     rng_seed: int,
-) -> Tuple[Dict[str, Tuple[Dict[str, float], Dict[str, List[float]]]], List[str]]:
+) -> Tuple[
+    Dict[
+        str,
+        Tuple[
+            Dict[str, Dict[str, float]],
+            Dict[str, Dict[str, List[float]]],
+        ],
+    ],
+    List[str],
+]:
     colon_runs = runs_by_model.get("ssl_colon")
-    delta_results: Dict[str, Tuple[Dict[str, float], Dict[str, List[float]]]] = {}
+    delta_results: Dict[
+        str,
+        Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, List[float]]]],
+    ] = {}
     baseline_order: List[str] = []
     if not colon_runs:
         return delta_results, baseline_order
@@ -489,6 +561,7 @@ def _collect_deltas(
             colon_runs,
             baseline_runs,
             policy=policy,
+            metrics=metrics,
             bootstrap=bootstrap,
             rng_seed=rng_seed,
         )
@@ -544,69 +617,121 @@ def _render_deltas_block(
     lines: List[str],
     *,
     policy: str,
-    delta_results: Mapping[str, Tuple[Dict[str, float], Dict[str, List[float]]]],
+    delta_results: Mapping[
+        str,
+        Tuple[
+            Dict[str, Dict[str, float]],
+            Dict[str, Dict[str, List[float]]],
+        ],
+    ],
     baseline_order: Sequence[str],
+    metrics: Sequence[str],
     heading_level: int,
 ) -> None:
     if not delta_results or not baseline_order:
         return
     label = _POLICY_LABELS.get(policy, policy)
     heading = "#" * heading_level
+    metric_keys = tuple(dict.fromkeys(metrics))
+    if not metric_keys:
+        return
+    sections: List[str] = []
+    for metric in metric_keys:
+        metric_label = _METRIC_LABELS.get(metric, metric)
+        header = ["Stratum"] + [
+            f"{model_label('ssl_colon')} − {model_label(baseline)}"
+            for baseline in baseline_order
+        ]
+        rows: List[str] = []
+        for stratum in _STRATA:
+            row = [_STRATUM_LABELS.get(stratum, stratum)]
+            any_values = False
+            for baseline in baseline_order:
+                point, samples = delta_results[baseline]
+                stratum_points = point.get(stratum, {})
+                stratum_samples = samples.get(stratum, {})
+                value = format_ci(
+                    stratum_points.get(metric, float("nan")),
+                    stratum_samples.get(metric, []),
+                )
+                if value != PLACEHOLDER:
+                    any_values = True
+                row.append(value)
+            if any_values:
+                rows.append("| " + " | ".join(row) + " |")
+        if not rows:
+            continue
+        sections.append(f"**{metric_label}**")
+        sections.append("")
+        sections.append("| " + " | ".join(header) + " |")
+        sections.append("| --- | " + " | ".join(["---:"] * len(baseline_order)) + " |")
+        sections.extend(rows)
+        sections.append("")
+    if not sections:
+        return
     lines.append(
         f"{heading} Representation deltas at {label} (Δ = {model_label('ssl_colon')} − Baseline)"
     )
     lines.append("")
-    header = ["Stratum"] + [
-        f"{model_label('ssl_colon')} − {model_label(baseline)}" for baseline in baseline_order
-    ]
-    lines.append("| " + " | ".join(header) + " |")
-    lines.append("| --- | " + " | ".join(["---:"] * len(baseline_order)) + " |")
-    for stratum in _STRATA:
-        row = [_STRATUM_LABELS.get(stratum, stratum)]
-        any_values = False
-        for baseline in baseline_order:
-            point, samples = delta_results[baseline]
-            value = format_ci(point.get(stratum, float("nan")), samples.get(stratum, []))
-            if value != "—":
-                any_values = True
-            row.append(value)
-        if any_values:
-            lines.append("| " + " | ".join(row) + " |")
-    lines.append("")
+    lines.extend(sections)
 
 
 def _render_interaction_block(
     lines: List[str],
     *,
     policy: str,
-    delta_results: Mapping[str, Tuple[Dict[str, float], Dict[str, List[float]]]],
+    delta_results: Mapping[
+        str,
+        Tuple[
+            Dict[str, Dict[str, float]],
+            Dict[str, Dict[str, List[float]]],
+        ],
+    ],
     baseline_order: Sequence[str],
+    metrics: Sequence[str],
     heading_level: int,
 ) -> None:
     if not delta_results or not baseline_order:
         return
     label = _POLICY_LABELS.get(policy, policy)
     heading = "#" * heading_level
+    metric_keys = tuple(dict.fromkeys(metrics))
+    if not metric_keys:
+        return
+    sections: List[str] = []
+    for metric in metric_keys:
+        metric_label = _METRIC_LABELS.get(metric, metric)
+        rows: List[str] = []
+        for baseline in baseline_order:
+            point, samples = delta_results[baseline]
+            flat_point = point.get("flat_plus_negs", {}).get(metric, float("nan"))
+            polyp_point = point.get("polypoid_plus_negs", {}).get(metric, float("nan"))
+            interaction_point = flat_point - polyp_point
+            flat_samples = samples.get("flat_plus_negs", {}).get(metric, [])
+            polyp_samples = samples.get("polypoid_plus_negs", {}).get(metric, [])
+            count = min(len(flat_samples), len(polyp_samples))
+            interaction_samples = [
+                flat_samples[i] - polyp_samples[i] for i in range(count)
+            ]
+            label_text = f"{model_label('ssl_colon')} − {model_label(baseline)}"
+            rows.append(
+                f"| {label_text} | {format_ci(interaction_point, interaction_samples)} |"
+            )
+        if not rows:
+            continue
+        sections.append(f"**{metric_label}**")
+        sections.append("")
+        sections.append("| Comparison | I |")
+        sections.append("| --- | ---: |")
+        sections.extend(rows)
+        sections.append("")
+    if not sections:
+        return
     lines.append(
         f"{heading} Interaction effect at {label} $I = Δ_{{\\text{{flat}}}} - Δ_{{\\text{{polypoid}}}}$"
     )
     lines.append("")
-    lines.append("| Comparison | I |")
-    lines.append("| --- | ---: |")
-    for baseline in baseline_order:
-        point, samples = delta_results[baseline]
-        flat_point = point.get("flat_plus_negs", float("nan"))
-        polyp_point = point.get("polypoid_plus_negs", float("nan"))
-        interaction_point = flat_point - polyp_point
-        flat_samples = samples.get("flat_plus_negs", [])
-        polyp_samples = samples.get("polypoid_plus_negs", [])
-        count = min(len(flat_samples), len(polyp_samples))
-        interaction_samples = [flat_samples[i] - polyp_samples[i] for i in range(count)]
-        label_text = f"{model_label('ssl_colon')} − {model_label(baseline)}"
-        lines.append(
-            f"| {label_text} | {format_ci(interaction_point, interaction_samples)} |"
-        )
-    lines.append("")
+    lines.extend(sections)
 
 
 def generate_report(
@@ -700,13 +825,18 @@ def generate_report(
         heading_level=2,
     )
     delta_results, baseline_order = _collect_deltas(
-        runs_by_model, policy=primary_policy, bootstrap=bootstrap, rng_seed=rng_seed
+        runs_by_model,
+        policy=primary_policy,
+        metrics=_DELTA_METRICS,
+        bootstrap=bootstrap,
+        rng_seed=rng_seed,
     )
     _render_deltas_block(
         lines,
         policy=primary_policy,
         delta_results=delta_results,
         baseline_order=baseline_order,
+        metrics=_DELTA_METRICS,
         heading_level=2,
     )
     _render_interaction_block(
@@ -714,6 +844,7 @@ def generate_report(
         policy=primary_policy,
         delta_results=delta_results,
         baseline_order=baseline_order,
+        metrics=_DELTA_METRICS,
         heading_level=2,
     )
 
@@ -733,13 +864,18 @@ def generate_report(
             heading_level=3,
         )
         appendix_deltas, appendix_baselines = _collect_deltas(
-            runs_by_model, policy=policy, bootstrap=bootstrap, rng_seed=rng_seed
+            runs_by_model,
+            policy=policy,
+            metrics=_DELTA_METRICS,
+            bootstrap=bootstrap,
+            rng_seed=rng_seed,
         )
         _render_deltas_block(
             lines,
             policy=policy,
             delta_results=appendix_deltas,
             baseline_order=appendix_baselines,
+            metrics=_DELTA_METRICS,
             heading_level=3,
         )
         _render_interaction_block(
@@ -747,6 +883,7 @@ def generate_report(
             policy=policy,
             delta_results=appendix_deltas,
             baseline_order=appendix_baselines,
+            metrics=_DELTA_METRICS,
             heading_level=3,
         )
 
