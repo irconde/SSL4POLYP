@@ -3,149 +3,128 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Dict, Iterable, Optional, Sequence
 
 from ssl4polyp.classification.analysis.exp2_report import (  # type: ignore[import]
-    DEFAULT_PAIRED_MODELS,
-    PRIMARY_METRICS,
-    Exp2Summary,
-    discover_runs,
-    summarize_runs,
+    DEFAULT_BOOTSTRAP,
+    DEFAULT_RNG_SEED,
+    collect_summary,
+    render_markdown,
+    write_csv_tables,
+    build_manifest,
 )
-from ssl4polyp.classification.analysis.display import (  # type: ignore[import]
-    PLACEHOLDER,
-    format_ci,
-    format_mean_std,
-    format_signed,
-)
-
-_METRIC_LABELS = {
-    "auprc": "AUPRC",
-    "auroc": "AUROC",
-    "recall": "Recall",
-    "precision": "Precision",
-    "f1": "F1",
-    "balanced_accuracy": "Balanced Acc",
-    "mcc": "MCC",
-}
-
-
-def _format_model_block(model: str, summary: Exp2Summary) -> Iterable[str]:
-    metrics = summary.model_metrics.get(model)
-    if not metrics:
-        return []
-    lines = [f"Model: {model}"]
-    for metric in PRIMARY_METRICS:
-        aggregate = metrics.get(metric)
-        if not aggregate:
-            continue
-        label = _METRIC_LABELS.get(metric, metric)
-        mean_std = format_mean_std(aggregate.mean, aggregate.std)
-        lines.append(f"  {label}: {mean_std} (n={aggregate.n})")
-    return lines
-
-
-def _format_delta_block(
-    paired_models: Optional[Sequence[str]],
-    summary: Exp2Summary,
-) -> Iterable[str]:
-    if not paired_models or len(paired_models) != 2:
-        return []
-    header = f"Paired deltas ({paired_models[0]} − {paired_models[1]})"
-    lines = [header]
-    for metric in PRIMARY_METRICS:
-        delta = summary.paired_deltas.get(metric)
-        if delta is None:
-            continue
-        label = _METRIC_LABELS.get(metric, metric)
-        mean_text = format_signed(delta.mean)
-        ci_text = (
-            format_ci(delta.ci_lower, delta.ci_upper)
-            if delta.ci_lower is not None and delta.ci_upper is not None
-            else PLACEHOLDER
-        )
-        if ci_text != PLACEHOLDER:
-            lines.append(f"  {label}: {mean_text} (95% CI: {ci_text})")
-        else:
-            lines.append(f"  {label}: {mean_text}")
-        per_seed_parts = [
-            f"s{seed}={format_signed(value)}" for seed, value in sorted(delta.per_seed.items())
-        ]
-        if per_seed_parts:
-            lines.append("    per-seed: " + ", ".join(per_seed_parts))
-    return lines
 
 
 def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Summarise Experiment 2 results across seeds.")
-    parser.add_argument(
-        "root",
-        nargs="?",
-        default="checkpoints",
-        help="Root directory to search for metrics JSON files (default: checkpoints)",
+    parser = argparse.ArgumentParser(
+        description="Generate the Experiment 2 SUN report (SSL-ImNet vs SSL-Colon)."
     )
     parser.add_argument(
-        "--models",
-        nargs="+",
-        help="Optional list of model names to include (defaults to all discovered models).",
-    )
-    parser.add_argument(
-        "--paired-models",
-        nargs=2,
-        metavar=("TREATMENT", "BASELINE"),
-        help="Models to compare for paired deltas (default: ssl_colon vs ssl_imnet).",
+        "--runs-root",
+        type=Path,
+        default=Path("checkpoints"),
+        help="Root directory containing *_last.metrics.json files (default: checkpoints).",
     )
     parser.add_argument(
         "--bootstrap",
         type=int,
-        default=2000,
-        help="Number of bootstrap replicates for paired deltas (default: 2000).",
+        default=DEFAULT_BOOTSTRAP,
+        help=f"Number of bootstrap iterations for paired deltas (default: {DEFAULT_BOOTSTRAP}).",
     )
     parser.add_argument(
-        "--rng-seed",
+        "--seed",
         type=int,
-        default=20240521,
-        help="Seed for bootstrap resampling (default: 20240521).",
+        default=DEFAULT_RNG_SEED,
+        help=f"Random seed for bootstrap resampling (default: {DEFAULT_RNG_SEED}).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Optional path to write the markdown report. If omitted, the report is printed.",
+    )
+    parser.add_argument(
+        "--tables-dir",
+        type=Path,
+        help="Optional directory to write CSV tables (T1/T2/T3 and appendix).",
     )
     parser.add_argument(
         "--json",
         type=Path,
-        help="Optional path to write the summary as JSON.",
+        help="Optional path to dump the summary payload as JSON.",
     )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Optional path to write a report manifest capturing guardrail digests.",
+    )
+    parser.add_argument(
+        "--no-strict",
+        dest="strict",
+        action="store_false",
+        help="Disable strict guardrail enforcement (not recommended).",
+    )
+    parser.set_defaults(strict=True)
     return parser.parse_args(argv)
+
+
+def _collect_extra_outputs(*paths: Optional[Path]) -> Iterable[Path]:
+    for path in paths:
+        if path is None:
+            continue
+        if path.exists():
+            yield path
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parse_args(argv)
-    root = Path(args.root)
-    paired_models = tuple(args.paired_models) if args.paired_models else DEFAULT_PAIRED_MODELS
-    try:
-        runs = discover_runs(root, models=args.models)
-    except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    if not runs:
-        print("No runs discovered under", root)
-        return 1
-    summary = summarize_runs(
-        runs,
-        paired_models=paired_models,
-        bootstrap=args.bootstrap,
-        rng_seed=args.rng_seed,
+    runs, summary, loader = collect_summary(
+        args.runs_root,
+        bootstrap=max(0, args.bootstrap),
+        rng_seed=args.seed,
+        strict=args.strict,
     )
-    blocks: list[str] = []
-    for model in sorted(summary.model_metrics.keys()):
-        blocks.extend(_format_model_block(model, summary))
-    delta_lines = list(_format_delta_block(paired_models, summary))
-    if delta_lines:
-        blocks.append("")
-        blocks.extend(delta_lines)
-    print("\n".join(blocks))
+    if not runs:
+        print(f"No Experiment 2 runs found under {args.runs_root}")
+        return 0
+    if summary is None:
+        print("Unable to construct Experiment 2 summary.")
+        return 1
+
+    report_text = render_markdown(summary)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(report_text, encoding="utf-8")
+    else:
+        print(report_text)
+
+    tables: Dict[str, Path] = {}
+    if args.tables_dir:
+        tables = write_csv_tables(summary, args.tables_dir)
+
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(summary.as_dict(), indent=2), encoding="utf-8")
+
+    extra_outputs = list(
+        _collect_extra_outputs(
+            args.output,
+            args.json,
+            *(tables.values()),
+        )
+    )
+
+    if args.manifest:
+        build_manifest(
+            summary,
+            loader=loader,
+            manifest_path=args.manifest,
+            output_path=args.output,
+            extra_outputs=extra_outputs,
+            rng_seed=args.seed,
+            bootstrap=max(0, args.bootstrap),
+        )
+
     return 0
 
 
