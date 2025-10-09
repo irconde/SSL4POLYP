@@ -77,7 +77,7 @@ class RunPerturbationResult:
     tau: Optional[float]
     metrics: Dict[str, float]
     perturbations: Dict[str, Dict[str, float]]
-    case_metrics: Dict[str, Dict[str, Dict[str, float]]]
+    case_metrics: Dict[str, Dict[str, Dict[str, Any]]]
     provenance: Dict[str, object]
     path: Path
 
@@ -255,24 +255,50 @@ def _convert_case_per_seed_map(
     return output
 
 
-def _sanitize_metric_mapping(metrics: Mapping[str, Any]) -> Dict[str, float]:
-    sanitized: Dict[str, float] = {}
-    for key, value in metrics.items():
-        numeric = _coerce_float(value)
-        if numeric is None or not math.isfinite(numeric):
+def _convert_case_cluster_map(
+    data: Mapping[str, Mapping[int, Mapping[str, Any]]]
+) -> Dict[str, Dict[int, Dict[str, str]]]:
+    output: Dict[str, Dict[int, Dict[str, str]]] = {}
+    for tag, per_seed in data.items():
+        if not isinstance(per_seed, Mapping):
             continue
-        sanitized[str(key)] = float(numeric)
+        seed_output: Dict[int, Dict[str, str]] = {}
+        for seed, case_map in per_seed.items():
+            if not isinstance(case_map, Mapping):
+                continue
+            sanitized: Dict[str, str] = {}
+            for case_id, cluster in case_map.items():
+                if cluster is None:
+                    continue
+                sanitized[str(case_id)] = str(cluster)
+            if sanitized:
+                seed_output[int(seed)] = sanitized
+        if seed_output:
+            output[str(tag)] = seed_output
+    return output
+
+
+def _sanitize_metric_mapping(metrics: Mapping[str, Any]) -> Dict[str, Any]:
+    sanitized: Dict[str, Any] = {}
+    for key, value in metrics.items():
+        if value is None:
+            continue
+        numeric = _coerce_float(value)
+        if numeric is not None and math.isfinite(numeric):
+            sanitized[str(key)] = float(numeric)
+        else:
+            sanitized[str(key)] = value
     return sanitized
 
 
 def _parse_case_metrics_block(
     block: Optional[object],
-) -> Dict[str, Dict[str, Dict[str, float]]]:
+) -> Dict[str, Dict[str, Dict[str, Any]]]:
     if not isinstance(block, Mapping):
         return {}
-    output: Dict[str, Dict[str, Dict[str, float]]] = {}
+    output: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for tag, tag_block in block.items():
-        cases: Dict[str, Dict[str, float]] = {}
+        cases: Dict[str, Dict[str, Any]] = {}
         if isinstance(tag_block, Mapping):
             for case_id, metrics in tag_block.items():
                 if not isinstance(metrics, Mapping):
@@ -499,6 +525,42 @@ def _get_retention_per_seed_for_tag(
     return {int(seed): float(value) for seed, value in metric_block.items()}
 
 
+def _normalise_cluster_identifier(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, Mapping):
+        return None
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return None
+    numeric = _coerce_float(value)
+    if numeric is not None and math.isfinite(numeric):
+        if float(numeric).is_integer():
+            return str(int(round(float(numeric))))
+        return str(float(numeric))
+    return str(value)
+
+
+def _extract_cluster_value(case_stats: Mapping[str, Any], cluster_key: str) -> Optional[str]:
+    if not cluster_key:
+        return None
+    if not isinstance(case_stats, Mapping):
+        return None
+    direct_value = _normalise_cluster_identifier(case_stats.get(cluster_key))
+    if direct_value is not None:
+        return direct_value
+    metadata = case_stats.get("metadata")
+    if isinstance(metadata, Mapping):
+        meta_value = _normalise_cluster_identifier(metadata.get(cluster_key))
+        if meta_value is not None:
+            return meta_value
+    clusters = case_stats.get("clusters")
+    if isinstance(clusters, Mapping):
+        cluster_value = _normalise_cluster_identifier(clusters.get(cluster_key))
+        if cluster_value is not None:
+            return cluster_value
+    return None
+
+
 def _get_case_retention_per_seed(
     model_entry: Mapping[str, Any], tag: str, metric: str
 ) -> Dict[int, Dict[str, float]]:
@@ -521,6 +583,29 @@ def _get_case_retention_per_seed(
             if numeric is None or not math.isfinite(numeric):
                 continue
             sanitized[str(case_id)] = float(numeric)
+        if sanitized:
+            output[int(seed)] = sanitized
+    return output
+
+
+def _get_case_clusters_per_seed(
+    model_entry: Mapping[str, Any], tag: str
+) -> Dict[int, Dict[str, str]]:
+    per_case = model_entry.get("per_case_clusters_per_seed")
+    if not isinstance(per_case, Mapping):
+        return {}
+    tag_block = per_case.get(tag)
+    if not isinstance(tag_block, Mapping):
+        return {}
+    output: Dict[int, Dict[str, str]] = {}
+    for seed, case_map in tag_block.items():
+        if not isinstance(case_map, Mapping):
+            continue
+        sanitized: Dict[str, str] = {}
+        for case_id, cluster in case_map.items():
+            if cluster is None:
+                continue
+            sanitized[str(case_id)] = str(cluster)
         if sanitized:
             output[int(seed)] = sanitized
     return output
@@ -553,6 +638,8 @@ def _bootstrap_tag_delta(
         return None
     target_cases = _get_case_retention_per_seed(target_entry, tag, metric)
     baseline_cases = _get_case_retention_per_seed(baseline_entry, tag, metric)
+    target_clusters = _get_case_clusters_per_seed(target_entry, tag)
+    baseline_clusters = _get_case_clusters_per_seed(baseline_entry, tag)
     if not target_cases or not baseline_cases:
         return None
     seeds = sorted(set(target_cases.keys()) & set(baseline_cases.keys()))
@@ -575,8 +662,25 @@ def _bootstrap_tag_delta(
         metrics_payload["target"][seed] = tuple(target_values)
         metrics_payload["baseline"][seed] = tuple(baseline_values)
         if cluster_key:
-            clusters_payload["target"][seed] = tuple(shared_cases)
-            clusters_payload["baseline"][seed] = tuple(shared_cases)
+            target_seed_clusters = target_clusters.get(seed, {})
+            baseline_seed_clusters = baseline_clusters.get(seed, {})
+            if not isinstance(target_seed_clusters, Mapping):
+                target_seed_clusters = {}
+            if not isinstance(baseline_seed_clusters, Mapping):
+                baseline_seed_clusters = {}
+            cluster_sequence: List[str] = []
+            for case in shared_cases:
+                cluster_value: Optional[str] = None
+                if case in target_seed_clusters:
+                    cluster_value = target_seed_clusters[case]
+                elif case in baseline_seed_clusters:
+                    cluster_value = baseline_seed_clusters[case]
+                if cluster_value is None:
+                    cluster_value = case
+                cluster_sequence.append(str(cluster_value))
+            if cluster_sequence:
+                clusters_payload["target"][seed] = tuple(cluster_sequence)
+                clusters_payload["baseline"][seed] = tuple(cluster_sequence)
     if not metrics_payload["target"] or not metrics_payload["baseline"]:
         return None
     rng = _derive_rng(rng_seed, "tag", tag, metric)
@@ -1092,6 +1196,7 @@ def _summarize_model(
     tag_catalog: Mapping[str, TagInfo],
     *,
     metrics: Sequence[str],
+    cluster_key: str,
 ) -> Dict[str, object]:
     per_tag_values: DefaultDict[str, DefaultDict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
     per_tag_retention: DefaultDict[str, DefaultDict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
@@ -1111,6 +1216,9 @@ def _summarize_model(
     per_case_delta: DefaultDict[
         str, DefaultDict[str, DefaultDict[int, Dict[str, float]]]
     ] = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    per_case_clusters: DefaultDict[str, DefaultDict[int, Dict[str, str]]] = defaultdict(
+        lambda: defaultdict(dict)
+    )
 
     for run in runs.values():
         clean_metrics = run.perturbations.get("clean", {})
@@ -1153,6 +1261,10 @@ def _summarize_model(
             for case_id, case_stats in clean_case_metrics.items():
                 if not isinstance(case_stats, Mapping):
                     continue
+                canonical_id = str(case_id)
+                cluster_value = _extract_cluster_value(case_stats, cluster_key)
+                if cluster_value is None and cluster_key == "case_id":
+                    cluster_value = canonical_id
                 sanitized: Dict[str, float] = {}
                 for metric in metrics:
                     numeric = _coerce_float(case_stats.get(metric))
@@ -1160,8 +1272,9 @@ def _summarize_model(
                         continue
                     sanitized[str(metric)] = float(numeric)
                 if sanitized:
-                    canonical_id = str(case_id)
                     baseline_case_metrics[canonical_id] = sanitized
+                    if cluster_value is not None:
+                        per_case_clusters["clean"][run.seed][canonical_id] = str(cluster_value)
                     for metric_key, value in sanitized.items():
                         per_case_retention["clean"][metric_key][run.seed][canonical_id] = 1.0
                         per_case_delta["clean"][metric_key][run.seed][canonical_id] = 0.0
@@ -1206,6 +1319,17 @@ def _summarize_model(
                     baseline_stats = baseline_case_metrics.get(canonical_case)
                     if not baseline_stats:
                         continue
+                    cluster_value = _extract_cluster_value(case_stats, cluster_key)
+                    if cluster_value is None:
+                        cluster_value = per_case_clusters["clean"].get(run.seed, {}).get(
+                            canonical_case
+                        )
+                    if cluster_value is None and cluster_key == "case_id":
+                        cluster_value = canonical_case
+                    if cluster_value is not None:
+                        per_case_clusters[canonical_tag][run.seed][canonical_case] = str(
+                            cluster_value
+                        )
                     for metric in metrics:
                         metric_value = _coerce_float(case_stats.get(metric))
                         if metric_value is None or not math.isfinite(metric_value):
@@ -1381,6 +1505,7 @@ def _summarize_model(
         },
         "per_case_retention_per_seed": _convert_case_per_seed_map(per_case_retention),
         "per_case_delta_per_seed": _convert_case_per_seed_map(per_case_delta),
+        "per_case_clusters_per_seed": _convert_case_cluster_map(per_case_clusters),
     }
 
 
@@ -1403,7 +1528,13 @@ def summarize_runs(
             missing_str = ', '.join(str(seed) for seed in missing)
             raise ValueError(f"Model '{model}' is missing required seeds: {missing_str}")
     for model, model_runs in sorted(runs.items()):
-        summary = _summarize_model(model, model_runs, tag_catalog, metrics=metrics)
+        summary = _summarize_model(
+            model,
+            model_runs,
+            tag_catalog,
+            metrics=metrics,
+            cluster_key=cluster_key,
+        )
         model_entry: Dict[str, object] = {
             "per_tag": summary["per_tag"],
             "families": summary["families"],
@@ -1412,6 +1543,7 @@ def summarize_runs(
             "ausc_retention_per_seed": summary.get("ausc_retention_per_seed", {}),
             "per_case_retention_per_seed": summary.get("per_case_retention_per_seed", {}),
             "per_case_delta_per_seed": summary.get("per_case_delta_per_seed", {}),
+            "per_case_clusters_per_seed": summary.get("per_case_clusters_per_seed", {}),
         }
         models_summary[model] = model_entry
         summary_rows = summary.get("severity_rows", [])
