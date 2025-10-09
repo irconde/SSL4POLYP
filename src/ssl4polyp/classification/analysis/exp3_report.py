@@ -275,7 +275,12 @@ def discover_runs(
     runs: DefaultDict[str, Dict[int, RunDataset]] = defaultdict(dict)
     active_loader = loader or _get_loader()
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
-        run = load_run(metrics_path, loader=active_loader)
+        try:
+            run = load_run(metrics_path, loader=active_loader)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
+            ) from exc
         runs[run.model][run.seed] = run
     return runs
 

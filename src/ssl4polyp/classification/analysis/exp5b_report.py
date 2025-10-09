@@ -364,8 +364,17 @@ def _build_tag_catalog(runs: Mapping[str, Mapping[int, RunPerturbationResult]]) 
     return catalog
 
 
+def _resolve_outputs_path(metrics_path: Path) -> Path:
+    stem = metrics_path.stem
+    base = stem[:-5] if stem.endswith("_last") else stem
+    return metrics_path.with_name(f"{base}_test_outputs.csv")
+
+
 def load_run(metrics_path: Path) -> RunPerturbationResult:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    outputs_path = _resolve_outputs_path(metrics_path)
+    if not outputs_path.exists():
+        raise FileNotFoundError(f"Missing test outputs CSV: {outputs_path}")
     provenance_raw = payload.get("provenance") or {}
     provenance: Dict[str, object] = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
     model_name = str(provenance.get("model") or metrics_path.stem.split("__", 1)[0])
@@ -424,6 +433,10 @@ def discover_runs(
     for metrics_path in sorted(root.rglob("*.metrics.json")):
         try:
             run = load_run(metrics_path)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
+            ) from exc
         except (OSError, ValueError):
             continue
         if model_filter and run.model not in model_filter:

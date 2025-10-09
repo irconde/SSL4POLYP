@@ -325,6 +325,10 @@ def discover_runs(
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
         try:
             run = load_run(metrics_path, loader=active_loader)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
+            ) from exc
         except (OSError, ValueError, GuardrailViolation):
             continue
         if model_filter and run.model not in model_filter:
