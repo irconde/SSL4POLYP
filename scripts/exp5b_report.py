@@ -8,8 +8,10 @@ from typing import Sequence
 
 from ssl4polyp.classification.analysis.exp5b_report import (
     discover_runs,
+    PRIMARY_RETENTION_METRICS,
     summarize_runs,
     write_severity_csv,
+    write_tables,
 )
 from ssl4polyp.classification.analysis.display import format_mean_std  # type: ignore[import]
 
@@ -35,6 +37,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional path to write the per-severity table as CSV.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional directory to materialize standard Experiment 5B tables (T1–T5).",
     )
     parser.add_argument(
         "--models",
@@ -63,20 +71,36 @@ def _emit_summary(summary: dict[str, object], models: Sequence[str]) -> None:
         if not isinstance(ausc_block, dict):
             continue
         print(f"\nModel: {model}")
-        for family, metrics in sorted(ausc_block.items()):
-            if not isinstance(metrics, dict):
+        for family, payload in sorted(ausc_block.items()):
+            if not isinstance(payload, dict):
                 continue
-            metrics_display = []
-            for metric, stats in sorted(metrics.items()):
+            retention_display = []
+            retention_block = payload.get("retention") if isinstance(payload.get("retention"), dict) else {}
+            for metric in PRIMARY_RETENTION_METRICS:
+                stats = retention_block.get(metric)
                 if not isinstance(stats, dict):
                     continue
                 mean = stats.get("mean")
                 std = stats.get("std")
                 if not isinstance(mean, (int, float)):
                     continue
-                metrics_display.append(f"{metric}={format_mean_std(mean, std)}")
-            if metrics_display:
-                print(f"  {family}: " + "; ".join(metrics_display))
+                retention_display.append(f"ret_{metric}={format_mean_std(mean, std)}")
+            if retention_display:
+                print(f"  {family}: " + "; ".join(retention_display))
+        macro_block = entry.get("ausc_macro_retention")
+        if isinstance(macro_block, dict) and macro_block:
+            macro_display = []
+            for metric in PRIMARY_RETENTION_METRICS:
+                stats = macro_block.get(metric)
+                if not isinstance(stats, dict):
+                    continue
+                mean = stats.get("mean")
+                std = stats.get("std")
+                if not isinstance(mean, (int, float)):
+                    continue
+                macro_display.append(f"macro_ret_{metric}={format_mean_std(mean, std)}")
+            if macro_display:
+                print("  macro: " + "; ".join(macro_display))
 
 
 def main() -> None:
@@ -99,6 +123,10 @@ def main() -> None:
         output_csv = args.output_csv.expanduser()
         write_severity_csv(summary, output_csv)
         print(f"Wrote severity table CSV to {_stringify_path(output_csv)}")
+    if args.output_dir is not None:
+        created = write_tables(summary, args.output_dir)
+        for label, path in sorted(created.items()):
+            print(f"Wrote {label} table to {_stringify_path(path)}")
     if args.output_json is None:
         _emit_summary(summary, sorted(runs.keys()))
 
