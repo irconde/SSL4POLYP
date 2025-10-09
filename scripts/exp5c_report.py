@@ -27,11 +27,11 @@ WriteCsvFn = Callable[..., None]
 
 discover_runs = cast(DiscoverRunsFn, _exp5c_module.discover_runs)
 summarize_runs = cast(SummarizeRunsFn, _exp5c_module.summarize_runs)
+write_test_composition_csv = cast(WriteCsvFn, _exp5c_module.write_test_composition_csv)
 write_performance_csv = cast(WriteCsvFn, _exp5c_module.write_performance_csv)
-write_learning_curve_csv = cast(WriteCsvFn, _exp5c_module.write_learning_curve_csv)
+write_gain_csv = cast(WriteCsvFn, _exp5c_module.write_gain_csv)
 write_pairwise_csv = cast(WriteCsvFn, _exp5c_module.write_pairwise_csv)
 write_aulc_csv = cast(WriteCsvFn, _exp5c_module.write_aulc_csv)
-write_sample_efficiency_csv = cast(WriteCsvFn, _exp5c_module.write_sample_efficiency_csv)
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,34 +51,52 @@ def parse_args() -> argparse.Namespace:
         help="Optional path to write the full summary JSON.",
     )
     parser.add_argument(
-        "--performance-csv",
+        "--t1-csv",
         type=Path,
         default=None,
-        help="Optional path to export aggregated performance statistics as CSV.",
+        help="Optional path to export the T1 test composition table.",
     )
     parser.add_argument(
-        "--learning-curve-csv",
+        "--t2-primary-csv",
         type=Path,
         default=None,
-        help="Optional path to export learning-curve tables as CSV.",
+        help="Optional path to export the T2 primary-threshold performance table.",
     )
     parser.add_argument(
-        "--pairwise-csv",
+        "--t2-sensitivity-csv",
         type=Path,
         default=None,
-        help="Optional path to export pairwise delta summaries as CSV.",
+        help="Optional path to export the sensitivity-threshold performance table (T6).",
     )
     parser.add_argument(
-        "--aulc-csv",
+        "--t3-gain-csv",
         type=Path,
         default=None,
-        help="Optional path to export area-under-learning-curve summaries as CSV.",
+        help="Optional path to export the adaptation gain vs zero-shot table (T3).",
     )
     parser.add_argument(
-        "--sample-efficiency-csv",
+        "--t4-primary-csv",
         type=Path,
         default=None,
-        help="Optional path to export S@target sample-efficiency summaries as CSV.",
+        help="Optional path to export the primary post-adaptation delta table (T4).",
+    )
+    parser.add_argument(
+        "--t4-sensitivity-csv",
+        type=Path,
+        default=None,
+        help="Optional path to export the sensitivity post-adaptation delta table (T6).",
+    )
+    parser.add_argument(
+        "--t5-aulc-csv",
+        type=Path,
+        default=None,
+        help="Optional path to export the AULC and ΔAULC table (T5).",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional directory to emit all standard Experiment 5C tables (T1–T5/T6).",
     )
     parser.add_argument(
         "--models",
@@ -89,8 +107,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bootstrap",
         type=int,
-        default=1000,
-        help="Number of bootstrap iterations for paired comparisons (default: 1000).",
+        default=2000,
+        help="Number of bootstrap iterations for paired comparisons (default: 2000).",
     )
     parser.add_argument(
         "--rng-seed",
@@ -129,7 +147,9 @@ def _emit_summary(summary: Mapping[str, object], models: Sequence[str]) -> None:
     metadata = summary.get("metadata") if isinstance(summary.get("metadata"), Mapping) else {}
     budgets = metadata.get("budgets") if isinstance(metadata, Mapping) else None
     budgets_seq = list(budgets) if isinstance(budgets, Sequence) else None
-    performance = summary.get("performance") if isinstance(summary.get("performance"), Mapping) else {}
+    policies = summary.get("policies") if isinstance(summary.get("policies"), Mapping) else {}
+    primary = policies.get("primary") if isinstance(policies, Mapping) else None
+    performance = primary.get("performance") if isinstance(primary, Mapping) else {}
     print("Experiment 5C few-shot adaptation summary")
     if budgets_seq:
         print("Budgets (S): " + ", ".join(str(b) for b in budgets_seq))
@@ -153,7 +173,7 @@ def _emit_summary(summary: Mapping[str, object], models: Sequence[str]) -> None:
                 entries.append(f"S={budget}:{_format_mean_std(metric_stats)}")
             if entries:
                 print(f"  {model}: " + ", ".join(entries))
-    pairwise = summary.get("pairwise") if isinstance(summary.get("pairwise"), Mapping) else {}
+    pairwise = primary.get("pairwise") if isinstance(primary, Mapping) else {}
     pairwise_metric = pairwise.get("auprc") if isinstance(pairwise, Mapping) else None
     if isinstance(pairwise_metric, Mapping):
         print("\nΔAUPRC (SSL-Colon minus baseline) with 95% CI:")
@@ -181,19 +201,21 @@ def _emit_summary(summary: Mapping[str, object], models: Sequence[str]) -> None:
                     fragments.append(f"S={budget}:{delta_text}")
             if fragments:
                 print(f"  {baseline}: " + ", ".join(fragments))
-    sample_eff = summary.get("sample_efficiency") if isinstance(summary.get("sample_efficiency"), Mapping) else {}
-    target_block = sample_eff.get("auprc") if isinstance(sample_eff, Mapping) else None
-    if isinstance(target_block, Mapping):
-        target_model = metadata.get("target_model") if isinstance(metadata, Mapping) else None
-        target_budget = metadata.get("target_budget") if isinstance(metadata, Mapping) else None
-        print("\nS@target (AUPRC target from {model} at S={budget}):".format(model=target_model, budget=target_budget))
-        for model in models:
-            stats = target_block.get(model)
-            if not isinstance(stats, Mapping):
+    gains = summary.get("gains") if isinstance(summary.get("gains"), Mapping) else {}
+    if isinstance(gains, Mapping) and gains:
+        print("\nAdaptation gain vs zero-shot (AUPRC) mean±std:")
+        for model in sorted(gains.keys()):
+            per_budget = gains.get(model)
+            if not isinstance(per_budget, Mapping):
                 continue
-            budget = stats.get("budget")
-            display = str(budget) if isinstance(budget, int) else "—"
-            print(f"  {model}: {display}")
+            fragments = []
+            for budget, metrics in sorted(per_budget.items()):
+                metric_stats = metrics.get("auprc") if isinstance(metrics, Mapping) else None
+                if not isinstance(metric_stats, Mapping):
+                    continue
+                fragments.append(f"S={budget}:{_format_mean_std(metric_stats)}")
+            if fragments:
+                print(f"  {model}: " + ", ".join(fragments))
 
 
 def main() -> None:
@@ -218,26 +240,55 @@ def main() -> None:
         with output_json.open("w", encoding="utf-8") as handle:
             json.dump(summary, handle, indent=2)
         print(f"Wrote summary JSON to {_stringify_path(output_json)}")
-    if args.performance_csv is not None:
-        path = args.performance_csv.expanduser()
-        write_performance_csv(summary, path)
-        print(f"Wrote performance table to {_stringify_path(path)}")
-    if args.learning_curve_csv is not None:
-        path = args.learning_curve_csv.expanduser()
-        write_learning_curve_csv(summary, path)
-        print(f"Wrote learning-curve table to {_stringify_path(path)}")
-    if args.pairwise_csv is not None:
-        path = args.pairwise_csv.expanduser()
-        write_pairwise_csv(summary, path)
-        print(f"Wrote pairwise delta table to {_stringify_path(path)}")
-    if args.aulc_csv is not None:
-        path = args.aulc_csv.expanduser()
-        write_aulc_csv(summary, path)
-        print(f"Wrote AULC summary to {_stringify_path(path)}")
-    if args.sample_efficiency_csv is not None:
-        path = args.sample_efficiency_csv.expanduser()
-        write_sample_efficiency_csv(summary, path)
-        print(f"Wrote sample-efficiency table to {_stringify_path(path)}")
+    if args.t1_csv is not None:
+        path = args.t1_csv.expanduser()
+        write_test_composition_csv(summary, path)
+        print(f"Wrote T1 test composition table to {_stringify_path(path)}")
+    if args.t2_primary_csv is not None:
+        path = args.t2_primary_csv.expanduser()
+        write_performance_csv(summary, path, policy="primary")
+        print(f"Wrote T2 primary performance table to {_stringify_path(path)}")
+    if args.t2_sensitivity_csv is not None:
+        path = args.t2_sensitivity_csv.expanduser()
+        write_performance_csv(summary, path, policy="sensitivity")
+        print(f"Wrote sensitivity performance table to {_stringify_path(path)}")
+    if args.t3_gain_csv is not None:
+        path = args.t3_gain_csv.expanduser()
+        write_gain_csv(summary, path)
+        print(f"Wrote T3 adaptation gain table to {_stringify_path(path)}")
+    if args.t4_primary_csv is not None:
+        path = args.t4_primary_csv.expanduser()
+        write_pairwise_csv(summary, path, policy="primary")
+        print(f"Wrote T4 primary delta table to {_stringify_path(path)}")
+    if args.t4_sensitivity_csv is not None:
+        path = args.t4_sensitivity_csv.expanduser()
+        write_pairwise_csv(summary, path, policy="sensitivity")
+        print(f"Wrote sensitivity delta table to {_stringify_path(path)}")
+    if args.t5_aulc_csv is not None:
+        path = args.t5_aulc_csv.expanduser()
+        write_aulc_csv(summary, path, policy="primary")
+        print(f"Wrote T5 AULC table to {_stringify_path(path)}")
+    if args.output_dir is not None:
+        output_dir = args.output_dir.expanduser()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        artifacts = {
+            "T1 test composition": output_dir / "T1_test_comp.csv",
+            "T2 primary performance": output_dir / "T2_perf_primary.csv",
+            "T2 sensitivity performance": output_dir / "T2_perf_sensitivity.csv",
+            "T3 gain": output_dir / "T3_gain_vs_zeroshot.csv",
+            "T4 primary deltas": output_dir / "T4_postadapt_deltas.csv",
+            "T4 sensitivity deltas": output_dir / "T4_postadapt_sensitivity.csv",
+            "T5 AULC": output_dir / "T5_aulc_primary.csv",
+        }
+        write_test_composition_csv(summary, artifacts["T1 test composition"])
+        write_performance_csv(summary, artifacts["T2 primary performance"], policy="primary")
+        write_performance_csv(summary, artifacts["T2 sensitivity performance"], policy="sensitivity")
+        write_gain_csv(summary, artifacts["T3 gain"])
+        write_pairwise_csv(summary, artifacts["T4 primary deltas"], policy="primary")
+        write_pairwise_csv(summary, artifacts["T4 sensitivity deltas"], policy="sensitivity")
+        write_aulc_csv(summary, artifacts["T5 AULC"], policy="primary")
+        for label, path in artifacts.items():
+            print(f"Wrote {label} table to {_stringify_path(path)}")
     if args.output_json is None:
         _emit_summary(summary, sorted(runs.keys()))
 
