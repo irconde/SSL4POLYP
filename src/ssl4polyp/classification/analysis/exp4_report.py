@@ -28,12 +28,32 @@ from .display import (
 )
 
 PRIMARY_METRICS: Tuple[str, ...] = ("auprc", "f1")
+LEARNING_TABLE_METRICS: Tuple[str, ...] = (
+    "auprc",
+    "auroc",
+    "recall",
+    "precision",
+    "f1",
+    "balanced_accuracy",
+    "mcc",
+    "loss",
+)
+PAIRWISE_METRICS: Tuple[str, ...] = ("auprc", "f1", "auroc")
 MODEL_LABELS: Dict[str, str] = {
     "sup_imnet": "SUP-ImNet",
     "ssl_imnet": "SSL-ImNet",
     "ssl_colon": "SSL-Colon",
 }
-METRIC_LABELS: Dict[str, str] = {"auprc": "AUPRC", "f1": "F1"}
+METRIC_LABELS: Dict[str, str] = {
+    "auprc": "AUPRC",
+    "auroc": "AUROC",
+    "recall": "Recall",
+    "precision": "Precision",
+    "f1": "F1",
+    "balanced_accuracy": "Balanced Acc",
+    "mcc": "MCC",
+    "loss": "Loss",
+}
 TARGET_MODEL = "ssl_colon"
 BASELINE_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 PREFERRED_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet", "ssl_colon")
@@ -46,6 +66,7 @@ class RunResult:
     percent: float
     seed: int
     tau: float
+    sensitivity_tau: Optional[float]
     metrics: Dict[str, float]
     val_metrics: Dict[str, float]
     sensitivity: Dict[str, float]
@@ -98,6 +119,35 @@ def _infer_seed_from_name(metrics_path: Path) -> Optional[int]:
     if match is not None:
         return int(match.group(1))
     return None
+
+
+def _get_metric_container(run: RunResult, source: str) -> Mapping[str, float]:
+    if source == "metrics":
+        return run.metrics
+    if source == "sensitivity":
+        return run.sensitivity
+    raise ValueError(f"Unsupported metric source '{source}'")
+
+
+def _get_metric_value(run: RunResult, metric: str, source: str) -> Optional[float]:
+    container = _get_metric_container(run, source)
+    value = container.get(metric)
+    if value is None:
+        return None
+    numeric = float(value)
+    if math.isnan(numeric):
+        return None
+    return numeric
+
+
+def _resolve_tau(run: RunResult, source: str) -> float:
+    if source == "metrics":
+        return float(run.tau)
+    if source == "sensitivity":
+        if run.sensitivity_tau is None or math.isnan(float(run.sensitivity_tau)):
+            raise ValueError("Run is missing sensitivity tau value")
+        return float(run.sensitivity_tau)
+    raise ValueError(f"Unsupported metric source '{source}'")
 
 
 def _load_outputs(outputs_path: Path, tau: float) -> Tuple[List[FrameRecord], Dict[str, List[FrameRecord]]]:
@@ -186,15 +236,17 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ru
                 morphology[stratum] = filtered
     outputs_path = _resolve_outputs_path(metrics_path)
     frames, cases = _load_outputs(outputs_path, float(tau_value))
+    sensitivity_tau_value = sensitivity_metrics.get("tau")
     return RunResult(
         model=str(model_name),
         percent=float(percent_value),
         seed=int(seed_value),
         tau=float(tau_value),
+        sensitivity_tau=float(sensitivity_tau_value) if sensitivity_tau_value is not None else None,
         metrics=metrics,
         val_metrics=val_metrics,
-    sensitivity=sensitivity_metrics,
-    morphology=morphology,
+        sensitivity=sensitivity_metrics,
+        morphology=morphology,
         frames=frames,
         cases=cases,
         provenance=provenance,
@@ -249,6 +301,8 @@ def compute_learning_curves(
     runs_by_model: Mapping[str, Mapping[float, Mapping[int, RunResult]]],
     *,
     metrics: Sequence[str] = PRIMARY_METRICS,
+    source: str = "metrics",
+    expected_count: Optional[int] = None,
 ) -> Dict[str, Dict[str, Dict[float, Dict[str, float]]]]:
     curves: Dict[str, DefaultDict[str, Dict[float, Dict[str, float]]]] = {
         metric: defaultdict(dict) for metric in metrics
@@ -258,12 +312,16 @@ def compute_learning_curves(
             for metric in metrics:
                 values: List[float] = []
                 for run in seeds.values():
-                    value = run.metrics.get(metric)
-                    if value is None or math.isnan(float(value)):
+                    value = _get_metric_value(run, metric, source)
+                    if value is None:
                         continue
-                    values.append(float(value))
+                    values.append(value)
                 if not values:
                     continue
+                if expected_count is not None and len(values) != expected_count:
+                    raise ValueError(
+                        f"Missing seeds for {model}@p{percent:g} metric '{metric}' ({len(values)}/{expected_count})"
+                    )
                 mean = float(np.mean(values))
                 std = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
                 curves[metric][model][percent] = {
@@ -277,6 +335,48 @@ def compute_learning_curves(
             model: dict(sorted(percent_map.items())) for model, percent_map in model_map.items()
         }
     return result
+
+
+def compute_learning_table(
+    runs_by_model: Mapping[str, Mapping[float, Mapping[int, RunResult]]],
+    *,
+    metrics: Sequence[str] = LEARNING_TABLE_METRICS,
+    source: str = "metrics",
+    expected_count: Optional[int] = None,
+) -> List[Dict[str, object]]:
+    rows: List[Dict[str, object]] = []
+    for model, per_percent in runs_by_model.items():
+        for percent, seeds in per_percent.items():
+            for metric in metrics:
+                values: List[float] = []
+                for run in seeds.values():
+                    value = _get_metric_value(run, metric, source)
+                    if value is None:
+                        continue
+                    values.append(value)
+                if not values:
+                    continue
+                if expected_count is not None and len(values) != expected_count:
+                    raise ValueError(
+                        f"Missing seeds for {model}@p{percent:g} metric '{metric}' ({len(values)}/{expected_count})"
+                    )
+                mean = float(np.mean(values))
+                std = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
+                rows.append(
+                    {
+                        "model": str(model),
+                        "percent": float(percent),
+                        "metric": str(metric),
+                        "mean": mean,
+                        "std": std,
+                    }
+                )
+    rows.sort(key=lambda entry: (
+        PREFERRED_MODELS.index(entry["model"]) if entry["model"] in PREFERRED_MODELS else len(PREFERRED_MODELS),
+        float(entry["percent"]),
+        str(entry["metric"]),
+    ))
+    return rows
 
 
 def compute_slopes(
@@ -335,6 +435,7 @@ def compute_pairwise_deltas(
     bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
+    source: str = "metrics",
 ) -> Dict[str, Dict[float, Dict[str, object]]]:
     colon_runs = runs_by_model.get(TARGET_MODEL)
     if not colon_runs:
@@ -364,8 +465,8 @@ def compute_pairwise_deltas(
             seeds = list(expected_seeds)
             deltas: List[float] = []
             for seed in seeds:
-                colon_value = colon_by_seed[seed].metrics.get(metric)
-                baseline_value = baseline_by_seed[seed].metrics.get(metric)
+                colon_value = _get_metric_value(colon_by_seed[seed], metric, source)
+                baseline_value = _get_metric_value(baseline_by_seed[seed], metric, source)
                 if colon_value is None or baseline_value is None:
                     continue
                 deltas.append(float(colon_value) - float(baseline_value))
@@ -379,6 +480,7 @@ def compute_pairwise_deltas(
                 bootstrap=bootstrap,
                 rng_seed=rng_seed,
                 expected_seeds=expected_seeds,
+                source=source,
             )
             ci = compute_ci_bounds(replicates)
             per_percent[percent] = {
@@ -399,6 +501,7 @@ def compute_aulc_deltas(
     bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
+    source: str = "metrics",
 ) -> Dict[str, Dict[str, object]]:
     colon_runs = runs_by_model.get(TARGET_MODEL)
     if not colon_runs:
@@ -429,8 +532,12 @@ def compute_aulc_deltas(
         sorted_seeds = list(expected_seeds)
         deltas: List[float] = []
         for seed in sorted_seeds:
-            colon_values = [colon_runs[p][seed].metrics.get(metric) for p in shared_percents]
-            baseline_values = [baseline_runs[p][seed].metrics.get(metric) for p in shared_percents]
+            colon_values = [
+                _get_metric_value(colon_runs[p][seed], metric, source) for p in shared_percents
+            ]
+            baseline_values = [
+                _get_metric_value(baseline_runs[p][seed], metric, source) for p in shared_percents
+            ]
             if any(value is None for value in colon_values + baseline_values):
                 continue
             colon_series = [float(v) for v in colon_values if v is not None]
@@ -453,6 +560,7 @@ def compute_aulc_deltas(
             bootstrap=bootstrap,
             rng_seed=rng_seed,
             expected_seeds=expected_seeds,
+            source=source,
         )
         ci = compute_ci_bounds(replicates)
         results[baseline] = {
@@ -465,6 +573,57 @@ def compute_aulc_deltas(
     return results
 
 
+def compute_test_composition(
+    runs_by_model: Mapping[str, Mapping[float, Mapping[int, RunResult]]]
+) -> Dict[str, float]:
+    if not runs_by_model:
+        return {}
+
+    def _normalise_count(value: Optional[float]) -> Optional[int]:
+        if value is None:
+            return None
+        numeric = float(value)
+        if math.isnan(numeric):
+            return None
+        rounded = round(numeric)
+        if not math.isclose(numeric, rounded, rel_tol=0, abs_tol=1e-6):
+            raise ValueError(f"Non-integer class count encountered: {numeric}")
+        return int(rounded)
+
+    reference: Optional[Tuple[int, int, float]] = None
+    for per_percent in runs_by_model.values():
+        for seeds in per_percent.values():
+            for run in seeds.values():
+                metrics = run.metrics
+                n_pos = _normalise_count(metrics.get("n_pos"))
+                n_neg = _normalise_count(metrics.get("n_neg"))
+                prevalence_raw = metrics.get("prevalence")
+                prevalence = float(prevalence_raw) if prevalence_raw is not None else None
+                if n_pos is None or n_neg is None:
+                    continue
+                total = n_pos + n_neg
+                if total <= 0:
+                    continue
+                if prevalence is None or math.isnan(prevalence):
+                    prevalence = n_pos / total
+                candidate = (n_pos, n_neg, float(prevalence))
+                if reference is None:
+                    reference = candidate
+                else:
+                    if not (
+                        reference[0] == candidate[0]
+                        and reference[1] == candidate[1]
+                        and math.isclose(reference[2], candidate[2], rel_tol=0, abs_tol=1e-9)
+                    ):
+                        raise ValueError(
+                            "SUN-test composition mismatch across runs: "
+                            f"expected {reference}, observed {candidate}"
+                        )
+    if reference is None:
+        return {}
+    return {"n_pos": float(reference[0]), "n_neg": float(reference[1]), "prevalence": reference[2]}
+
+
 def bootstrap_metric_delta(
     colon_runs: Mapping[int, RunResult],
     baseline_runs: Mapping[int, RunResult],
@@ -472,6 +631,7 @@ def bootstrap_metric_delta(
     metric: str,
     bootstrap: int,
     rng_seed: int,
+    source: str = "metrics",
 ) -> List[float]:
     return bootstrap_metric_delta_with_expected(
         colon_runs,
@@ -480,6 +640,7 @@ def bootstrap_metric_delta(
         bootstrap=bootstrap,
         rng_seed=rng_seed,
         expected_seeds=EXPECTED_SEEDS,
+        source=source,
     )
 
 
@@ -491,6 +652,7 @@ def bootstrap_metric_delta_with_expected(
     bootstrap: int,
     rng_seed: int,
     expected_seeds: Sequence[int],
+    source: str = "metrics",
 ) -> List[float]:
     if bootstrap <= 0:
         return []
@@ -518,8 +680,10 @@ def bootstrap_metric_delta_with_expected(
             for cid in sampled_ids:
                 colon_frames.extend(colon_run.cases[cid])
                 baseline_frames.extend(baseline_run.cases[cid])
-            colon_metrics = compute_strata_metrics(colon_frames, colon_run.tau)
-            baseline_metrics = compute_strata_metrics(baseline_frames, baseline_run.tau)
+            colon_metrics = compute_strata_metrics(colon_frames, _resolve_tau(colon_run, source))
+            baseline_metrics = compute_strata_metrics(
+                baseline_frames, _resolve_tau(baseline_run, source)
+            )
             colon_value = colon_metrics.get("overall", {}).get(metric)
             baseline_value = baseline_metrics.get("overall", {}).get(metric)
             if colon_value is None or baseline_value is None:
@@ -545,6 +709,7 @@ def bootstrap_aulc_delta(
     metric: str,
     bootstrap: int,
     rng_seed: int,
+    source: str = "metrics",
 ) -> List[float]:
     return bootstrap_aulc_delta_with_expected(
         colon_runs,
@@ -554,6 +719,7 @@ def bootstrap_aulc_delta(
         bootstrap=bootstrap,
         rng_seed=rng_seed,
         expected_seeds=EXPECTED_SEEDS,
+        source=source,
     )
 
 
@@ -566,6 +732,7 @@ def bootstrap_aulc_delta_with_expected(
     bootstrap: int,
     rng_seed: int,
     expected_seeds: Sequence[int],
+    source: str = "metrics",
 ) -> List[float]:
     if bootstrap <= 0:
         return []
@@ -591,8 +758,10 @@ def bootstrap_aulc_delta_with_expected(
                 for cid in sampled_ids:
                     colon_frames.extend(colon_run.cases[cid])
                     baseline_frames.extend(baseline_run.cases[cid])
-                colon_metrics = compute_strata_metrics(colon_frames, colon_run.tau)
-                baseline_metrics = compute_strata_metrics(baseline_frames, baseline_run.tau)
+                colon_metrics = compute_strata_metrics(colon_frames, _resolve_tau(colon_run, source))
+                baseline_metrics = compute_strata_metrics(
+                    baseline_frames, _resolve_tau(baseline_run, source)
+                )
                 colon_value = colon_metrics.get("overall", {}).get(metric)
                 baseline_value = baseline_metrics.get("overall", {}).get(metric)
                 if colon_value is None or baseline_value is None:
@@ -695,38 +864,117 @@ def summarize_runs(
         )
     else:
         seed_validation = SeedValidationResult((), MappingProxyType({}))
-    curves = compute_learning_curves(runs_by_model)
-    slopes = compute_slopes(curves)
-    aulc = compute_aulc(curves)
-    pairwise = {
-        metric: compute_pairwise_deltas(
+    expected_count = len(seed_validation.expected_seeds) or None
+    test_composition = compute_test_composition(runs_by_model)
+
+    primary_curves = compute_learning_curves(
+        runs_by_model,
+        metrics=PRIMARY_METRICS,
+        source="metrics",
+        expected_count=expected_count,
+    )
+    primary_learning_table = compute_learning_table(
+        runs_by_model,
+        metrics=LEARNING_TABLE_METRICS,
+        source="metrics",
+        expected_count=expected_count,
+    )
+    primary_slopes = compute_slopes(primary_curves)
+    primary_aulc = compute_aulc(primary_curves)
+    primary_pairwise: Dict[str, Dict[float, Dict[str, object]]] = {}
+    for metric in PAIRWISE_METRICS:
+        deltas = compute_pairwise_deltas(
             runs_by_model,
             metric,
             bootstrap=max(0, bootstrap),
             rng_seed=rng_seed,
             expected_seeds=seed_validation.expected_seeds,
+            source="metrics",
         )
-        for metric in PRIMARY_METRICS
-    }
-    aulc_delta = {
-        metric: compute_aulc_deltas(
+        if deltas:
+            primary_pairwise[metric] = deltas
+    primary_aulc_delta: Dict[str, Dict[str, object]] = {}
+    for metric in PRIMARY_METRICS:
+        deltas = compute_aulc_deltas(
             runs_by_model,
             metric,
             bootstrap=max(0, bootstrap),
             rng_seed=rng_seed,
             expected_seeds=seed_validation.expected_seeds,
+            source="metrics",
         )
-        for metric in PRIMARY_METRICS
+        if deltas:
+            primary_aulc_delta[metric] = deltas
+    targets = determine_targets(primary_curves)
+    s_at_target = compute_s_at_target(primary_curves, targets)
+
+    sensitivity_curves = compute_learning_curves(
+        runs_by_model,
+        metrics=PRIMARY_METRICS,
+        source="sensitivity",
+        expected_count=expected_count,
+    )
+    sensitivity_learning_table = compute_learning_table(
+        runs_by_model,
+        metrics=LEARNING_TABLE_METRICS,
+        source="sensitivity",
+        expected_count=expected_count,
+    )
+    sensitivity_slopes = compute_slopes(sensitivity_curves)
+    sensitivity_aulc = compute_aulc(sensitivity_curves)
+    sensitivity_pairwise: Dict[str, Dict[float, Dict[str, object]]] = {}
+    for metric in PRIMARY_METRICS:
+        deltas = compute_pairwise_deltas(
+            runs_by_model,
+            metric,
+            bootstrap=max(0, bootstrap),
+            rng_seed=rng_seed,
+            expected_seeds=seed_validation.expected_seeds,
+            source="sensitivity",
+        )
+        if deltas:
+            sensitivity_pairwise[metric] = deltas
+    sensitivity_aulc_delta: Dict[str, Dict[str, object]] = {}
+    for metric in PRIMARY_METRICS:
+        deltas = compute_aulc_deltas(
+            runs_by_model,
+            metric,
+            bootstrap=max(0, bootstrap),
+            rng_seed=rng_seed,
+            expected_seeds=seed_validation.expected_seeds,
+            source="sensitivity",
+        )
+        if deltas:
+            sensitivity_aulc_delta[metric] = deltas
+
+    primary_block = {
+        "curves": primary_curves,
+        "learning_table": primary_learning_table,
+        "slopes": primary_slopes,
+        "aulc": primary_aulc,
+        "pairwise": primary_pairwise,
+        "aulc_delta": primary_aulc_delta,
+        "targets": targets,
+        "s_at_target": s_at_target,
     }
-    targets = determine_targets(curves)
-    s_at_target = compute_s_at_target(curves, targets)
+    sensitivity_block = {
+        "curves": sensitivity_curves,
+        "learning_table": sensitivity_learning_table,
+        "slopes": sensitivity_slopes,
+        "aulc": sensitivity_aulc,
+        "pairwise": sensitivity_pairwise,
+        "aulc_delta": sensitivity_aulc_delta,
+    }
     return {
         "runs": runs_by_model,
-        "curves": curves,
-        "slopes": slopes,
-        "aulc": aulc,
-        "pairwise": pairwise,
-        "aulc_delta": aulc_delta,
+        "test_composition": test_composition,
+        "primary": primary_block,
+        "sensitivity": sensitivity_block,
+        "curves": primary_curves,
+        "slopes": primary_slopes,
+        "aulc": primary_aulc,
+        "pairwise": primary_pairwise,
+        "aulc_delta": primary_aulc_delta,
         "targets": targets,
         "s_at_target": s_at_target,
         "validated_seeds": list(seed_validation.expected_seeds),
@@ -772,52 +1020,188 @@ def render_report(summary: Mapping[str, object]) -> str:
     runs = summary.get("runs")
     if not runs:
         return "No Experiment 4 runs found.\n"
-    lines: List[str] = ["# Experiment 4 learning curve summary", ""]
-    curves_obj = summary.get("curves")
-    curves = curves_obj if isinstance(curves_obj, Mapping) else {}
+    lines: List[str] = ["# Experiment 4 — Label-efficiency on SUN", ""]
+    composition = summary.get("test_composition")
+    composition_map = composition if isinstance(composition, Mapping) else {}
+    lines.append("## T1 — SUN-test composition")
+    lines.extend(_render_composition_table(composition_map))
+    lines.append("")
+
+    primary_obj = summary.get("primary")
+    primary = primary_obj if isinstance(primary_obj, Mapping) else {}
+    primary_learning_obj = primary.get("learning_table")
+    primary_learning = (
+        primary_learning_obj
+        if isinstance(primary_learning_obj, Sequence) and not isinstance(primary_learning_obj, (str, bytes))
+        else []
+    )
+    lines.append("## T2 — Learning-curve table (primary τ)")
+    lines.extend(_render_learning_long_table(primary_learning))
+    lines.append("")
+    primary_curves = primary.get("curves") if isinstance(primary.get("curves"), Mapping) else {}
+    lines.append("### Learning curves (primary τ)")
+    lines.extend(_render_learning_curve_sections(primary_curves))
+    lines.append("")
+    primary_slopes = primary.get("slopes") if isinstance(primary.get("slopes"), Mapping) else {}
+    lines.append("## T3 — Marginal gains (slopes) (primary τ)")
+    lines.extend(_render_slope_table(primary_slopes))
+    lines.append("")
+    primary_aulc = primary.get("aulc") if isinstance(primary.get("aulc"), Mapping) else {}
+    lines.append("## T4 — AULC over % (primary τ)")
+    lines.extend(_render_aulc_table(primary_aulc))
+    lines.append("")
+    primary_aulc_delta = primary.get("aulc_delta") if isinstance(primary.get("aulc_delta"), Mapping) else {}
+    lines.append("### ΔAULC vs baselines")
+    lines.extend(_render_aulc_delta_table(primary_aulc_delta))
+    lines.append("")
+    primary_pairwise = primary.get("pairwise") if isinstance(primary.get("pairwise"), Mapping) else {}
+    lines.append("## T5 — Paired Δ at each % (primary τ)")
+    lines.extend(_render_pairwise_sections(primary_pairwise, metrics=PAIRWISE_METRICS))
+    lines.append("")
+    primary_targets = primary.get("targets") if isinstance(primary.get("targets"), Mapping) else {}
+    primary_s_at_target = primary.get("s_at_target") if isinstance(primary.get("s_at_target"), Mapping) else {}
+    lines.append("## T6 — S@target")
+    lines.extend(_render_s_at_target_table(primary_targets, primary_s_at_target))
+    lines.append("")
+
+    sensitivity_obj = summary.get("sensitivity")
+    sensitivity = sensitivity_obj if isinstance(sensitivity_obj, Mapping) else {}
+    sensitivity_learning_obj = sensitivity.get("learning_table")
+    sensitivity_learning = (
+        sensitivity_learning_obj
+        if isinstance(sensitivity_learning_obj, Sequence)
+        and not isinstance(sensitivity_learning_obj, (str, bytes))
+        else []
+    )
+    lines.append("## Appendix — Sensitivity τ = Youden")
+    lines.append("")
+    lines.append("### T2 — Learning-curve table (Youden τ)")
+    lines.extend(_render_learning_long_table(sensitivity_learning))
+    lines.append("")
+    sensitivity_curves = sensitivity.get("curves") if isinstance(sensitivity.get("curves"), Mapping) else {}
+    lines.append("#### Learning curves (Youden τ)")
+    lines.extend(_render_learning_curve_sections(sensitivity_curves))
+    lines.append("")
+    sensitivity_slopes = sensitivity.get("slopes") if isinstance(sensitivity.get("slopes"), Mapping) else {}
+    lines.append("### T3 — Marginal gains (slopes) (Youden τ)")
+    lines.extend(_render_slope_table(sensitivity_slopes))
+    lines.append("")
+    sensitivity_aulc = sensitivity.get("aulc") if isinstance(sensitivity.get("aulc"), Mapping) else {}
+    lines.append("### T4 — AULC over % (Youden τ)")
+    lines.extend(_render_aulc_table(sensitivity_aulc))
+    lines.append("")
+    sensitivity_aulc_delta = sensitivity.get("aulc_delta") if isinstance(sensitivity.get("aulc_delta"), Mapping) else {}
+    lines.append("#### ΔAULC vs baselines (Youden τ)")
+    lines.extend(_render_aulc_delta_table(sensitivity_aulc_delta))
+    lines.append("")
+    sensitivity_pairwise = sensitivity.get("pairwise") if isinstance(sensitivity.get("pairwise"), Mapping) else {}
+    lines.append("### T5 — Paired Δ at each % (Youden τ)")
+    lines.extend(_render_pairwise_sections(sensitivity_pairwise, metrics=PRIMARY_METRICS))
+    lines.append("")
+    return "\n".join(line.rstrip() for line in lines).strip() + "\n"
+
+
+def _render_composition_table(composition: Mapping[str, object]) -> List[str]:
+    if not composition:
+        return ["No composition data available."]
+    n_pos = composition.get("n_pos")
+    n_neg = composition.get("n_neg")
+    prevalence = composition.get("prevalence")
+    try:
+        n_pos_text = str(int(round(float(n_pos)))) if n_pos is not None else "—"
+    except (TypeError, ValueError):
+        n_pos_text = "—"
+    try:
+        n_neg_text = str(int(round(float(n_neg)))) if n_neg is not None else "—"
+    except (TypeError, ValueError):
+        n_neg_text = "—"
+    prevalence_text = format_scalar(prevalence)
+    rows = ["| Metric | Value |", "| --- | --- |"]
+    rows.append(f"| n_pos | {n_pos_text} |")
+    rows.append(f"| n_neg | {n_neg_text} |")
+    rows.append(f"| prevalence | {prevalence_text} |")
+    return rows
+
+
+def _render_learning_long_table(entries: Sequence[Mapping[str, object]]) -> List[str]:
+    if not entries:
+        return ["No aggregated metrics available."]
+    model_order = {model: index for index, model in enumerate(PREFERRED_MODELS)}
+    metric_order = {metric: index for index, metric in enumerate(LEARNING_TABLE_METRICS)}
+
+    def sort_key(entry: Mapping[str, object]) -> Tuple[int, float, int, str]:
+        model = str(entry.get("model", ""))
+        model_rank = model_order.get(model, len(model_order) + 1)
+        percent_value = float(entry.get("percent", float("nan")))
+        metric_name = str(entry.get("metric", ""))
+        metric_rank = metric_order.get(metric_name, len(metric_order) + 1)
+        return model_rank, percent_value, metric_rank, metric_name
+
+    sorted_entries = sorted(entries, key=sort_key)
+    header = "| Model | Percent | Metric | Mean | SD |"
+    separator = "| --- | --- | --- | --- | --- |"
+    rows = [header, separator]
+    for entry in sorted_entries:
+        model = str(entry.get("model", ""))
+        percent = entry.get("percent")
+        metric = str(entry.get("metric", ""))
+        mean = entry.get("mean")
+        std = entry.get("std")
+        rows.append(
+            "| "
+            + " | ".join(
+                [
+                    MODEL_LABELS.get(model, model),
+                    _format_percent(percent),
+                    METRIC_LABELS.get(metric, metric.upper()),
+                    format_scalar(mean),
+                    format_scalar(std),
+                ]
+            )
+            + " |"
+        )
+    return rows
+
+
+def _render_learning_curve_sections(curves: Mapping[str, Mapping[str, Dict[float, Mapping[str, float]]]]) -> List[str]:
+    lines: List[str] = []
+    if not curves:
+        return ["No runs available."]
     for metric in PRIMARY_METRICS:
         metric_curves_obj = curves.get(metric, {})
         metric_curves = metric_curves_obj if isinstance(metric_curves_obj, Mapping) else {}
-        lines.append(f"## Learning curves – {METRIC_LABELS.get(metric, metric.upper())}")
+        lines.append(f"#### {METRIC_LABELS.get(metric, metric.upper())}")
         lines.extend(_render_learning_table(metric_curves))
         lines.append("")
-    slopes_obj = summary.get("slopes")
-    slopes = slopes_obj if isinstance(slopes_obj, Mapping) else {}
-    for metric in PRIMARY_METRICS:
-        metric_slopes_obj = slopes.get(metric, {})
-        metric_slopes = metric_slopes_obj if isinstance(metric_slopes_obj, Mapping) else {}
-        lines.append(f"## Marginal gains – {METRIC_LABELS.get(metric, metric.upper())}")
-        lines.extend(_render_slope_table(metric_slopes))
-        lines.append("")
-    aulc_obj = summary.get("aulc")
-    aulc = aulc_obj if isinstance(aulc_obj, Mapping) else {}
-    lines.append("## Area under the learning curve")
-    lines.extend(_render_aulc_table(aulc))
-    lines.append("")
-    pairwise_obj = summary.get("pairwise")
-    pairwise = pairwise_obj if isinstance(pairwise_obj, Mapping) else {}
-    for metric in PRIMARY_METRICS:
-        metric_pairwise_obj = pairwise.get(metric, {})
-        metric_pairwise = metric_pairwise_obj if isinstance(metric_pairwise_obj, Mapping) else {}
-        for baseline, entries in metric_pairwise.items():
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines or ["No runs available."]
+
+
+def _render_pairwise_sections(
+    pairwise: Mapping[str, Mapping[str, object]],
+    *,
+    metrics: Sequence[str],
+) -> List[str]:
+    lines: List[str] = []
+    any_rows = False
+    for metric in metrics:
+        metric_entries_obj = pairwise.get(metric, {}) if isinstance(pairwise, Mapping) else {}
+        metric_entries = metric_entries_obj if isinstance(metric_entries_obj, Mapping) else {}
+        if not metric_entries:
+            continue
+        for baseline, entries in metric_entries.items():
+            any_rows = True
             lines.append(
-                f"## Pairwise Δ vs {MODEL_LABELS.get(baseline, baseline)} – {METRIC_LABELS.get(metric, metric.upper())}"
+                f"### ΔSSL-Colon − {MODEL_LABELS.get(baseline, baseline)} ({METRIC_LABELS.get(metric, metric.upper())})"
             )
             lines.extend(_render_pairwise_table(entries if isinstance(entries, Mapping) else {}))
             lines.append("")
-    aulc_delta_obj = summary.get("aulc_delta")
-    aulc_delta = aulc_delta_obj if isinstance(aulc_delta_obj, Mapping) else {}
-    lines.append("## ΔAULC vs baselines")
-    lines.extend(_render_aulc_delta_table(aulc_delta))
-    lines.append("")
-    targets_obj = summary.get("targets")
-    targets = targets_obj if isinstance(targets_obj, Mapping) else {}
-    s_at_target_obj = summary.get("s_at_target")
-    s_at_target = s_at_target_obj if isinstance(s_at_target_obj, Mapping) else {}
-    lines.append("## S@target")
-    lines.extend(_render_s_at_target_table(targets, s_at_target))
-    lines.append("")
-    return "\n".join(line.rstrip() for line in lines).strip() + "\n"
+    if not any_rows:
+        return ["No overlapping runs for comparison."]
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 def _render_learning_table(curves: Mapping[str, Dict[float, Mapping[str, float]]]) -> List[str]:
