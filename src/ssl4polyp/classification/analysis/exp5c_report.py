@@ -1404,6 +1404,45 @@ def write_pairwise_csv(
     _write_rows(output_path, fieldnames, rows)
 
 
+def write_learning_curves_csv(
+    summary: Mapping[str, Any],
+    output_path: Path,
+    *,
+    policy: str = "primary",
+) -> None:
+    policy_block = _get_policy_block(summary, policy)
+    learning_curves = policy_block.get("learning_curves")
+    if not isinstance(learning_curves, Mapping):
+        raise ValueError(
+            f"Summary payload does not contain learning curve data for policy '{policy}'"
+        )
+    rows: List[Dict[str, Any]] = []
+    for metric, model_block in learning_curves.items():
+        if not isinstance(model_block, Mapping):
+            continue
+        for model, per_budget in model_block.items():
+            if not isinstance(per_budget, Mapping):
+                continue
+            for budget, stats in per_budget.items():
+                if not isinstance(stats, Mapping):
+                    continue
+                rows.append(
+                    {
+                        "policy": policy,
+                        "metric": metric,
+                        "model": model,
+                        "budget": budget,
+                        "mean": stats.get("mean"),
+                        "std": stats.get("std"),
+                        "n": stats.get("n"),
+                    }
+                )
+    if not rows:
+        raise ValueError("No learning curve rows available for CSV export")
+    fieldnames = ["policy", "metric", "model", "budget", "mean", "std", "n"]
+    _write_rows(output_path, fieldnames, rows)
+
+
 def write_aulc_csv(
     summary: Mapping[str, Any],
     output_path: Path,
@@ -1490,6 +1529,7 @@ __all__ = [
     "write_performance_csv",
     "write_gain_csv",
     "write_pairwise_csv",
+    "write_learning_curves_csv",
     "write_aulc_csv",
     "EXPECTED_SEEDS",
 ]
