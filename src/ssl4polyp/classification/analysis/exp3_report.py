@@ -95,6 +95,7 @@ class RunDataset:
     seed: int
     primary_policy: str
     thresholds: Dict[str, float]
+    data_splits: Dict[str, str]
     frames: List[FrameRecord]
     cases: Dict[str, List[FrameRecord]]
 
@@ -214,15 +215,47 @@ def load_run(
         frames.append(record)
         cases[frame.case_id].append(record)
     payload = base_run.payload
+    data_block = payload.get("data") if isinstance(payload.get("data"), Mapping) else {}
+    data_splits: Dict[str, str] = {}
+    if isinstance(data_block, Mapping):
+        for split in ("train", "val", "test"):
+            entry = data_block.get(split)
+            if not isinstance(entry, Mapping):
+                continue
+            raw_path = entry.get("path")
+            if isinstance(raw_path, str):
+                path_text = raw_path.strip()
+                if path_text:
+                    data_splits[split] = path_text
+
     thresholds_payload = payload.get("thresholds") if isinstance(payload.get("thresholds"), Mapping) else {}
     primary_record = (
         thresholds_payload.get("primary")
         if isinstance(thresholds_payload, Mapping) and isinstance(thresholds_payload.get("primary"), Mapping)
         else None
     )
-    primary_policy = _canonical_policy(primary_record.get("policy")) if isinstance(primary_record, Mapping) else None
-    if not primary_policy:
-        primary_policy = "primary"
+    if not isinstance(primary_record, Mapping):
+        raise RuntimeError(
+            f"Metrics file '{base_run.metrics_path}' does not define thresholds.primary block"
+        )
+    expected_primary_policy = _canonical_policy("f1_opt_on_val")
+    primary_policy_recorded = _canonical_policy(primary_record.get("policy"))
+    if primary_policy_recorded != expected_primary_policy:
+        raise RuntimeError(
+            f"Metrics file '{base_run.metrics_path}' declares thresholds.primary.policy="
+            f"{primary_policy_recorded!r} instead of 'f1_opt_on_val'"
+        )
+    primary_tau_recorded = _coerce_float(primary_record.get("tau"))
+    if primary_tau_recorded is None:
+        raise RuntimeError(
+            f"Metrics file '{base_run.metrics_path}' is missing thresholds.primary.tau"
+        )
+    if not math.isclose(primary_tau_recorded, float(base_run.tau), rel_tol=0.0, abs_tol=1e-9):
+        raise RuntimeError(
+            f"Metrics file '{base_run.metrics_path}' reports test_primary.tau={base_run.tau} "
+            f"but thresholds.primary.tau={primary_tau_recorded}"
+        )
+    primary_policy = "f1_opt_on_val"
     thresholds: Dict[str, float] = {primary_policy: float(base_run.tau)}
 
     def _register_policy(policy: Optional[str], tau_value: Optional[float]) -> None:
@@ -262,6 +295,7 @@ def load_run(
         seed=base_run.seed,
         primary_policy=primary_policy,
         thresholds=thresholds,
+        data_splits=data_splits,
         frames=frames,
         cases=dict(cases),
     )
@@ -584,6 +618,29 @@ def _runs_have_policy(
     return True
 
 
+def _ensure_sun_morphology_test(
+    runs_by_model: Mapping[str, Mapping[int, RunDataset]]
+) -> None:
+    expected_suffixes = ("sun_morphology/test.csv", "sun_morphology/test")
+    for model, runs in runs_by_model.items():
+        for run in runs.values():
+            test_path = run.data_splits.get("test")
+            if not test_path:
+                raise RuntimeError(
+                    f"Run {model!r} seed {run.seed} is missing data.test.path"
+                )
+            normalised = str(test_path).strip().replace("\\", "/")
+            if not normalised:
+                raise RuntimeError(
+                    f"Run {model!r} seed {run.seed} has empty data.test.path"
+                )
+            if not any(normalised.endswith(suffix) for suffix in expected_suffixes):
+                raise RuntimeError(
+                    f"Run {model!r} seed {run.seed} uses unexpected test split {test_path!r}; "
+                    "expected sun_morphology/test"
+                )
+
+
 def _collect_deltas(
     runs_by_model: Mapping[str, Mapping[int, RunDataset]],
     *,
@@ -805,6 +862,7 @@ def generate_report(
         expected_seeds=EXPECTED_SEEDS,
         context="Experiment 3",
     )
+    _ensure_sun_morphology_test(runs_by_model)
     primary_policy: Optional[str] = None
     for runs in runs_by_model.values():
         if runs:
