@@ -881,11 +881,16 @@ def _build_result_loader_data_block(
         return None
 
     data_block: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+    required_splits = {
+        split for split in ("val", "test") if isinstance(dataset_summary.get(split), Mapping)
+    }
     for split in ("train", "val", "test"):
         summary = dataset_summary.get(split)
+        if summary is None:
+            continue
         if not isinstance(summary, Mapping):
             raise RuntimeError(
-                f"Dataset summary missing mapping for split '{split}'"
+                f"Dataset summary mapping for split '{split}' must be a mapping"
             )
         csv_path = summary.get("csv_path") or summary.get("path")
         csv_sha256 = summary.get("csv_sha256") or summary.get("sha256")
@@ -905,11 +910,11 @@ def _build_result_loader_data_block(
             entry["summary"] = _convert_json_compatible(extra_summary)
         data_block[split] = dict(entry)
 
-    if len(data_block) != 3:
-        missing = sorted({"train", "val", "test"} - set(data_block))
+    missing_required = sorted(required_splits - set(data_block))
+    if missing_required:
         raise RuntimeError(
             "Dataset summary missing required splits for ResultLoader data block: "
-            + ", ".join(missing)
+            + ", ".join(missing_required)
         )
 
     return dict(data_block)
