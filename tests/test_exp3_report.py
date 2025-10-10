@@ -196,3 +196,39 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
     ]
     assert delta_rows, "Expected delta table rows with 95% CI information"
     assert any("±" in line for line in delta_rows), "Expected at least one delta row with a mean ± sd display"
+
+
+def test_generate_report_rejects_mismatched_primary_tau(tmp_path: Path) -> None:
+    rows = [
+        {"case_id": "a", "prob": 0.9, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.1, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    for seed in EXPECTED_SEEDS:
+        _write_run(tmp_path, "ssl_colon", seed=seed, rows=rows, tau=0.5)
+        _write_run(tmp_path, "sup_imnet", seed=seed, rows=rows, tau=0.5)
+
+    metrics_path = tmp_path / "ssl_colon__sun_morphology_s13_last.metrics.json"
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    payload["thresholds"]["primary"]["tau"] = 0.42
+    metrics_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="primary.*tau"):
+        generate_report(tmp_path, bootstrap=0, rng_seed=11)
+
+
+def test_generate_report_rejects_unexpected_test_split(tmp_path: Path) -> None:
+    rows = [
+        {"case_id": "a", "prob": 0.9, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.1, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    for seed in EXPECTED_SEEDS:
+        _write_run(tmp_path, "ssl_colon", seed=seed, rows=rows, tau=0.5)
+        _write_run(tmp_path, "sup_imnet", seed=seed, rows=rows, tau=0.5)
+
+    metrics_path = tmp_path / "ssl_colon__sun_morphology_s13_last.metrics.json"
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    payload["data"]["test"]["path"] = "other_dataset/test.csv"
+    metrics_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="sun_morphology/test"):
+        generate_report(tmp_path, bootstrap=0, rng_seed=5)
