@@ -348,6 +348,7 @@ def load_run(
         )
     sun_tau = _coerce_float(sun_metrics.get("tau"))
     sun_frames: Optional[Dict[str, EvalFrame]] = None
+    base_tau = _coerce_float(base_run.tau)
     if parent_metrics_path and parent_metrics_path.exists():
         try:
             parent_run = load_common_run(parent_metrics_path, loader=active_loader)
@@ -368,6 +369,15 @@ def load_run(
     if sun_tau is None:
         raise ValueError(
             f"SUN baseline tau missing for Experiment 5A run at {metrics_path}"
+        )
+    if (
+        base_tau is not None
+        and not math.isclose(
+            float(base_tau), float(sun_tau), rel_tol=1e-9, abs_tol=1e-6
+        )
+    ):
+        raise ValueError(
+            "Experiment 5A run uses a threshold tau that differs from the SUN baseline"
         )
     if sun_frames is None:
         raise ValueError(

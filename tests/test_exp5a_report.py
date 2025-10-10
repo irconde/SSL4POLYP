@@ -126,7 +126,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "seed": 0,
         "data": _data_block(),
         "test_primary": {
-            "tau": 0.55,
+            "tau": 0.45,
             "auprc": 0.8,
             "auroc": 0.9,
             "f1": 0.75,
@@ -146,7 +146,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "thresholds": {
             "primary": {
                 "policy": "sun_val_frozen",
-                "tau": 0.55,
+                "tau": 0.45,
                 "split": val_path,
                 "source_split": "sun_full/val",
                 "source_checkpoint": "sun_parent/seed1.pth",
@@ -163,7 +163,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "seed": 0,
         "data": _data_block(),
         "test_primary": {
-            "tau": 0.6,
+            "tau": 0.45,
             "auprc": 0.7,
             "auroc": 0.82,
             "f1": 0.68,
@@ -183,7 +183,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "thresholds": {
             "primary": {
                 "policy": "sun_val_frozen",
-                "tau": 0.6,
+                "tau": 0.45,
                 "split": val_path,
                 "source_split": "sun_full/val",
                 "source_checkpoint": "sun_parent/seed1.pth",
@@ -200,7 +200,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "seed": 0,
         "data": _data_block(),
         "test_primary": {
-            "tau": 0.58,
+            "tau": 0.45,
             "auprc": 0.72,
             "auroc": 0.85,
             "f1": 0.7,
@@ -220,7 +220,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "thresholds": {
             "primary": {
                 "policy": "sun_val_frozen",
-                "tau": 0.58,
+                "tau": 0.45,
                 "split": val_path,
                 "source_split": "sun_full/val",
                 "source_checkpoint": "sun_parent/seed1.pth",
@@ -277,7 +277,7 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
         "seed": 1,
         "data": _data_block(),
         "test_primary": {
-            "tau": 0.5,
+            "tau": 0.4,
             "auprc": 0.75,
             "auroc": 0.88,
             "f1": 0.7,
@@ -297,7 +297,7 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
         "thresholds": {
             "primary": {
                 "policy": "sun_val_frozen",
-                "tau": 0.5,
+                "tau": 0.4,
                 "split": val_path,
                 "source_split": "sun_full/val",
                 "source_checkpoint": "sun_parent/seed1.pth",
@@ -343,6 +343,67 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
     assert run.sun_tau == 0.4
     assert run.sun_frames is not None
     assert len(run.frames) == 4
+
+
+def test_load_run_raises_when_tau_mismatch(tmp_path: Path) -> None:
+    runs_root = tmp_path / "results"
+    colon_dir = runs_root / "ssl_colon" / "seed1"
+    sun_dir = runs_root / "sun_parent"
+    outputs_path = colon_dir / "ssl_colon__seed1_last_test_outputs.csv"
+    sun_outputs_path = sun_dir / "seed1_test_outputs.csv"
+    _write_outputs(outputs_path, _polyp_rows())
+    _write_outputs(sun_outputs_path, _sun_rows())
+    val_path = _data_block()["val"]["path"]
+    metrics_payload = {
+        "seed": 1,
+        "data": _data_block(),
+        "test_primary": {
+            "tau": 0.5,
+            "auprc": 0.8,
+            "auroc": 0.9,
+            "f1": 0.75,
+            "recall": 0.78,
+            "precision": 0.82,
+            "balanced_accuracy": 0.85,
+            "mcc": 0.67,
+            "loss": 0.15,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+            "prevalence": 0.5,
+        },
+        "thresholds": {
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.5,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
+        },
+        "val": {"path": val_path},
+        "run": {"exp": "exp5a"},
+        "provenance": {
+            "model": "ssl_colon",
+            "test_outputs_csv_sha256": "deadbeef",
+            "parent_run": {
+                "metrics": {
+                    "path": "../sun_parent/seed1.metrics.json",
+                    "payload": _sun_payload(tau=0.4, offset=-0.05),
+                },
+                "outputs": {
+                    "path": "../sun_parent/seed1_test_outputs.csv",
+                },
+            },
+        },
+    }
+    metrics_path = colon_dir / "ssl_colon__seed1_last.metrics.json"
+    _write_metrics(metrics_path, metrics_payload)
+    with pytest.raises(ValueError, match="tau"):
+        load_run(metrics_path)
 
 
 def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
