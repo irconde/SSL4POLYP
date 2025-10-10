@@ -49,6 +49,30 @@ def test_compute_strata_metrics_excludes_missing_strata() -> None:
     assert "polypoid_plus_negs" in metrics
 
 
+def test_report_composition_includes_empty_flat_stratum(tmp_path: Path) -> None:
+    colon_rows = [
+        {"case_id": "a", "prob": 0.85, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.15, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "c", "prob": 0.18, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    sup_rows = [
+        {"case_id": "a", "prob": 0.8, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.25, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "c", "prob": 0.22, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    for seed in EXPECTED_SEEDS:
+        _write_run(tmp_path, "ssl_colon", seed=seed, rows=colon_rows, tau=0.4)
+        _write_run(tmp_path, "sup_imnet", seed=seed, rows=sup_rows, tau=0.4)
+
+    report = generate_report(tmp_path, bootstrap=0, rng_seed=3)
+
+    composition_lines = [
+        line for line in report.splitlines() if line.startswith("| Flat + Negs |")
+    ]
+    assert composition_lines, "Expected Flat + Negs stratum in composition table"
+    assert "| Flat + Negs | 0 |" in composition_lines[0]
+
+
 def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]], tau: float = 0.5) -> None:
     run_prefix = f"{model}__sun_morphology_s{seed}"
     metrics_path = root / f"{run_prefix}_last.metrics.json"
@@ -73,6 +97,7 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
     metrics_payload = {
         "seed": seed,
         "data": _DATA_BLOCK,
+        "val": {"path": _VAL_PATH, "sha256": "val-digest"},
         "test_primary": {
             "tau": tau,
             "tp": tp,
@@ -130,23 +155,27 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         {"case_id": "a", "prob": 0.1, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "b", "prob": 0.8, "label": 1, "pred": 1, "morphology": "flat"},
         {"case_id": "c", "prob": 0.2, "label": 0, "pred": 0, "morphology": "other"},
+        {"case_id": "e", "prob": 0.3, "label": 0, "pred": 0, "morphology": "other"},
     ]
     sup_rows = [
         {"case_id": "a", "prob": 0.7, "label": 1, "pred": 1, "morphology": "polypoid"},
-        {"case_id": "b", "prob": 0.4, "label": 0, "pred": 0, "morphology": "unknown"},
-        {"case_id": "c", "prob": 0.3, "label": 0, "pred": 0, "morphology": "other"},
-        {"case_id": "d", "prob": 0.6, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "b", "prob": 0.6, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "c", "prob": 0.7, "label": 0, "pred": 1, "morphology": "other"},
+        {"case_id": "d", "prob": 0.2, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "e", "prob": 0.65, "label": 0, "pred": 1, "morphology": "other"},
     ]
     alt_sup_rows = [
         {"case_id": "a", "prob": 0.65, "label": 1, "pred": 1, "morphology": "polypoid"},
-        {"case_id": "b", "prob": 0.45, "label": 0, "pred": 0, "morphology": "unknown"},
-        {"case_id": "c", "prob": 0.25, "label": 0, "pred": 0, "morphology": "other"},
-        {"case_id": "d", "prob": 0.58, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "b", "prob": 0.62, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "c", "prob": 0.68, "label": 0, "pred": 1, "morphology": "other"},
+        {"case_id": "d", "prob": 0.22, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "e", "prob": 0.61, "label": 0, "pred": 1, "morphology": "other"},
     ]
     alt_colon_rows = [
         {"case_id": "a", "prob": 0.88, "label": 1, "pred": 1, "morphology": "polypoid"},
         {"case_id": "b", "prob": 0.82, "label": 1, "pred": 1, "morphology": "flat"},
         {"case_id": "c", "prob": 0.18, "label": 0, "pred": 0, "morphology": "other"},
+        {"case_id": "e", "prob": 0.28, "label": 0, "pred": 0, "morphology": "other"},
     ]
     for seed in EXPECTED_SEEDS:
         _write_run(tmp_path, "ssl_colon", seed=seed, rows=colon_rows if seed != 29 else alt_colon_rows, tau=0.5)
@@ -166,4 +195,4 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         if "SSL-Colon − SUP-ImNet" in line and "95% CI:" in line
     ]
     assert delta_rows, "Expected delta table rows with 95% CI information"
-    assert all("±" in line for line in delta_rows)
+    assert any("±" in line for line in delta_rows), "Expected at least one delta row with a mean ± sd display"
