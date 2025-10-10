@@ -39,6 +39,7 @@ PRIMARY_METRICS: Tuple[str, ...] = (
     "mcc",
     "loss",
 )
+PAIRWISE_METRICS: Tuple[str, ...] = PRIMARY_METRICS
 PAIRWISE_BASELINES: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 CI_LEVEL = 0.95
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
@@ -666,6 +667,7 @@ def summarize_runs(
         "metadata": {
             "metrics": list(PRIMARY_METRICS),
             "delta_metrics": list(PRIMARY_METRICS),
+            "pairwise_metrics": list(PAIRWISE_METRICS),
             "bootstrap": int(max(0, bootstrap)),
             "ci_level": CI_LEVEL,
         },
@@ -796,7 +798,7 @@ def summarize_runs(
     colon_runs = runs_by_model.get("ssl_colon", {})
     if colon_runs:
         pairwise_summary: Dict[str, Dict[str, Any]] = {}
-        for metric in ("auprc", "f1"):
+        for metric in PAIRWISE_METRICS:
             metric_entry: Dict[str, Any] = {}
             for baseline in PAIRWISE_BASELINES:
                 baseline_runs = runs_by_model.get(baseline, {})
@@ -1083,4 +1085,6 @@ __all__ = [
     "write_seed_metrics_csv",
     "write_pairwise_csv",
     "EXPECTED_SEEDS",
+    "PRIMARY_METRICS",
+    "PAIRWISE_METRICS",
 ]

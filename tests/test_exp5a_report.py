@@ -22,6 +22,7 @@ pytest.importorskip("numpy")
 from ssl4polyp.classification.analysis.common_loader import CommonFrame
 from ssl4polyp.classification.analysis.exp5a_report import (  # type: ignore[import]
     EXPECTED_SEEDS,
+    PAIRWISE_METRICS,
     PRIMARY_METRICS,
     _build_cluster_set,
     _frames_to_eval,
@@ -29,6 +30,7 @@ from ssl4polyp.classification.analysis.exp5a_report import (  # type: ignore[imp
     load_run,
     summarize_runs,
     write_domain_shift_csv,
+    write_pairwise_csv,
     write_seed_metrics_csv,
 )
 
@@ -368,6 +370,10 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
     assert isinstance(delta_metadata, list)
     for metric in PRIMARY_METRICS:
         assert metric in delta_metadata
+    pairwise_metadata = metadata.get("pairwise_metrics")
+    assert isinstance(pairwise_metadata, list)
+    for metric in PAIRWISE_METRICS:
+        assert metric in pairwise_metadata
     seed_payload = colon_entry["seeds"][EXPECTED_SEEDS[0]]
     delta_block = seed_payload.get("delta")
     assert isinstance(delta_block, dict)
@@ -383,15 +389,20 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
         assert metric in domain_shift_ci
     pairwise = summary.get("pairwise")
     assert isinstance(pairwise, dict)
-    assert "auprc" in pairwise
+    for metric in PAIRWISE_METRICS:
+        assert metric in pairwise
+        for baseline in ("sup_imnet", "ssl_imnet"):
+            assert baseline in pairwise[metric]
 
 
 def test_extended_delta_metrics_propagate_to_csv(tmp_path: Path) -> None:
     summary = _build_summary(tmp_path, bootstrap=8)
     domain_shift_path = tmp_path / "domain_shift.csv"
     seed_metrics_path = tmp_path / "seed_metrics.csv"
+    pairwise_path = tmp_path / "pairwise.csv"
     write_domain_shift_csv(summary, domain_shift_path)
     write_seed_metrics_csv(summary, seed_metrics_path)
+    write_pairwise_csv(summary, pairwise_path)
 
     with domain_shift_path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
@@ -405,6 +416,20 @@ def test_extended_delta_metrics_propagate_to_csv(tmp_path: Path) -> None:
     domain_seed_metrics = {row["metric"] for row in domain_rows}
     for metric in ("precision", "balanced_accuracy", "mcc", "loss"):
         assert metric in domain_seed_metrics
+
+    with pairwise_path.open(newline="", encoding="utf-8") as handle:
+        pairwise_rows = list(csv.DictReader(handle))
+    pairwise_metrics = {row.get("metric") for row in pairwise_rows}
+    for metric in PAIRWISE_METRICS:
+        assert metric in pairwise_metrics
+    metric_baseline_pairs = {
+        (row.get("metric"), row.get("baseline"))
+        for row in pairwise_rows
+        if row.get("baseline") is not None
+    }
+    for metric in PAIRWISE_METRICS:
+        for baseline in ("sup_imnet", "ssl_imnet"):
+            assert (metric, baseline) in metric_baseline_pairs
 
 
 def test_sun_bootstrap_clusters_group_positive_frames_by_case() -> None:
