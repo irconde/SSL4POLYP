@@ -19,6 +19,11 @@ def _base_payload(exp_id: str) -> dict[str, object]:
             "val": {"path": val_path, "sha256": "val-digest"},
             "test": {"path": "sun_full/test.csv", "sha256": "test-digest"},
         },
+        "val": {
+            "loss": 0.25,
+            "auroc": 0.85,
+            "auprc": 0.75,
+        },
         "test_primary": {
             "tau": 0.4,
             "tp": 10,
