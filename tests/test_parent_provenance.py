@@ -29,7 +29,7 @@ def parent_artifacts(tmp_path: Path) -> Path:
             "test": {"path": "sun_full/test.csv", "sha256": "test-digest"},
         },
         "val": {"auroc": 0.88},
-        "test_primary": {"auroc": 0.91, "auprc": 0.87},
+        "test_primary": {"auroc": 0.91, "auprc": 0.87, "prevalence": 0.5},
         "threshold_policy": "youden",
     }
     metrics_path = checkpoint_dir / "model_demo.metrics.json"

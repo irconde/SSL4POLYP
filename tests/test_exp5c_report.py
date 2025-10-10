@@ -30,6 +30,7 @@ def _write_metrics(path: Path) -> None:
             "fn": 0,
             "n_pos": 1,
             "n_neg": 1,
+            "prevalence": 0.5,
         },
         "test_sensitivity": {
             "tau": 0.4,
@@ -39,6 +40,7 @@ def _write_metrics(path: Path) -> None:
             "fn": 0,
             "n_pos": 1,
             "n_neg": 1,
+            "prevalence": 0.5,
         },
         "thresholds": {
             "primary": {

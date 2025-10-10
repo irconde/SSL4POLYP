@@ -331,12 +331,31 @@ class ResultLoader:
                     f"Metrics file '{metrics_path}' contains non-integer confusion entries in {block_name}"
                 )
             return
+        prevalence_value = block.get("prevalence")
+        prevalence = _as_float(prevalence_value)
+        if prevalence is None:
+            if self.strict:
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' is missing {block_name}.prevalence"
+                )
+            return
+        if not 0.0 <= prevalence <= 1.0:
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' reports invalid {block_name}.prevalence={prevalence_value!r}"
+            )
         confusion_total = tp + fp + tn + fn  # type: ignore[operator]
         class_total = n_pos + n_neg  # type: ignore[operator]
         if confusion_total != class_total:
             raise GuardrailViolation(
                 f"Confusion totals disagree with class counts in {block_name} for '{metrics_path}'"
             )
+        if class_total > 0:
+            expected_prevalence = float(n_pos) / float(class_total)
+            if not math.isclose(prevalence, expected_prevalence, rel_tol=1e-6, abs_tol=1e-6):
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' reports {block_name}.prevalence={prevalence_value!r} "
+                    f"but expected approximately {expected_prevalence:.6f}"
+                )
 
     def _validate_csv_hashes(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
         digests: Dict[str, str] = {}

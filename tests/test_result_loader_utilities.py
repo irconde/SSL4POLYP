@@ -55,6 +55,7 @@ def _make_payload(curve_path: Path) -> dict[str, object]:
             "fn": 10,
             "n_pos": 50,
             "n_neg": 90,
+            "prevalence": float(50) / float(140),
         },
         "test_sensitivity": {
             "auprc": 0.71,
@@ -65,6 +66,7 @@ def _make_payload(curve_path: Path) -> dict[str, object]:
             "fn": 10,
             "n_pos": 50,
             "n_neg": 90,
+            "prevalence": float(50) / float(140),
         },
         "curve_exports": {
             "pr": {"path": curve_path.name, "sha256": curve_digest},

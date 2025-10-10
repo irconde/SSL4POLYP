@@ -57,7 +57,7 @@ def test_parse_case_metrics_block_preserves_auxiliary_fields():
 def _write_minimal_metrics(path: Path, *, seed: int, model: str) -> None:
     payload = {
         "seed": seed,
-        "test_primary": {"tau": 0.5},
+        "test_primary": {"tau": 0.5, "prevalence": 0.5},
         "test_perturbations": {
             "per_tag": {
                 "clean": {"f1": 1.0, "tp": 1, "fp": 0, "tn": 1, "fn": 0, "n_pos": 1, "n_neg": 1}
