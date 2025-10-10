@@ -872,6 +872,66 @@ def _summarize_dataset_for_metrics(
     return summary
 
 
+def _build_result_loader_data_block(
+    dataset_summary: Optional[Mapping[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """Transform ``dataset_summary`` into the ``data`` layout required by ``ResultLoader``."""
+
+    if not isinstance(dataset_summary, Mapping):
+        return None
+
+    data_block: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+    for split in ("train", "val", "test"):
+        summary = dataset_summary.get(split)
+        if not isinstance(summary, Mapping):
+            raise RuntimeError(
+                f"Dataset summary missing mapping for split '{split}'"
+            )
+        csv_path = summary.get("csv_path") or summary.get("path")
+        csv_sha256 = summary.get("csv_sha256") or summary.get("sha256")
+        if not csv_path or not csv_sha256:
+            raise RuntimeError(
+                f"Dataset summary for split '{split}' missing csv path/sha256"
+            )
+        entry: "OrderedDict[str, Any]" = OrderedDict()
+        entry["path"] = str(csv_path)
+        entry["sha256"] = str(csv_sha256)
+        extra_summary = {
+            key: value
+            for key, value in summary.items()
+            if key not in {"csv_path", "csv_sha256"}
+        }
+        if extra_summary:
+            entry["summary"] = _convert_json_compatible(extra_summary)
+        data_block[split] = dict(entry)
+
+    if len(data_block) != 3:
+        missing = sorted({"train", "val", "test"} - set(data_block))
+        raise RuntimeError(
+            "Dataset summary missing required splits for ResultLoader data block: "
+            + ", ".join(missing)
+        )
+
+    return dict(data_block)
+
+
+def _update_threshold_split(
+    metadata: Optional[Mapping[str, Any]],
+    *,
+    split_path: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Return a copy of ``metadata`` with its ``split`` field aligned to ``split_path``."""
+
+    if metadata is None:
+        return None
+    if not isinstance(metadata, Mapping):
+        return dict(_convert_json_compatible(metadata))
+    updated = dict(metadata)
+    if split_path:
+        updated["split"] = split_path
+    return updated
+
+
 def _collect_experiment4_trace(
     args,
     datasets: Mapping[str, "PackDataset"],
@@ -5439,6 +5499,19 @@ def train(rank, args):
                 tau_info_candidate = test_metrics.get("tau_info")
                 if isinstance(tau_info_candidate, str) and tau_info_candidate:
                     tau_info_value = tau_info_candidate
+            dataset_summary = getattr(args, "dataset_summary", None)
+            try:
+                data_block = _build_result_loader_data_block(dataset_summary)
+            except RuntimeError as exc:
+                raise RuntimeError("Unable to construct metrics data block") from exc
+            val_data_path: Optional[str] = None
+            if data_block:
+                val_entry = data_block.get("val")
+                if isinstance(val_entry, Mapping):
+                    candidate_path = str(val_entry.get("path") or "").strip()
+                    if candidate_path:
+                        val_data_path = candidate_path
+
             primary_record = _resolve_primary_threshold_record(
                 threshold_key=eval_tau_key,
                 threshold_records=cached_threshold_records if isinstance(cached_threshold_records, Mapping) else None,
@@ -5480,6 +5553,10 @@ def train(rank, args):
                 primary_metadata.setdefault("source_key", str(eval_tau_key))
             if tau_info_value:
                 primary_metadata.setdefault("info", tau_info_value)
+            if val_data_path:
+                primary_metadata = _update_threshold_split(
+                    primary_metadata, split_path=val_data_path
+                )
             if not primary_metadata:
                 primary_metadata = None
 
@@ -5488,7 +5565,9 @@ def train(rank, args):
                 policy=getattr(args, "threshold_policy", None),
                 sources=threshold_sources,
                 primary=primary_metadata,
-                sensitivity=sensitivity_record,
+                sensitivity=_update_threshold_split(
+                    sensitivity_record, split_path=val_data_path
+                ),
             )
             selection_tag = _format_selection_tag(getattr(args, "early_stop_monitor", None))
             run_block = _build_run_metadata(args, selection_tag=selection_tag)
@@ -5511,7 +5590,8 @@ def train(rank, args):
             perturbation_block = _build_perturbation_export(test_metrics)
             if perturbation_block:
                 metrics_payload["test_perturbations"] = perturbation_block
-            dataset_summary = getattr(args, "dataset_summary", None)
+            if data_block:
+                metrics_payload["data"] = data_block
             if dataset_summary:
                 metrics_payload["dataset"] = dataset_summary
             if threshold_sources:
@@ -5947,6 +6027,33 @@ def train(rank, args):
                     info_value = sensitivity_threshold_record.get("info") or sensitivity_threshold_record.get("tau_info")
                     if isinstance(info_value, str) and info_value:
                         last_sensitivity_tau_info = info_value
+                dataset_summary = getattr(args, "dataset_summary", None)
+                try:
+                    data_block = _build_result_loader_data_block(dataset_summary)
+                except RuntimeError as exc:
+                    raise RuntimeError("Unable to construct metrics data block") from exc
+                val_data_path: Optional[str] = None
+                if data_block:
+                    val_entry = data_block.get("val")
+                    if isinstance(val_entry, Mapping):
+                        candidate_path = str(val_entry.get("path") or "").strip()
+                        if candidate_path:
+                            val_data_path = candidate_path
+                threshold_record = _update_threshold_split(
+                    threshold_record, split_path=val_data_path
+                )
+                sensitivity_threshold_record = _update_threshold_split(
+                    sensitivity_threshold_record, split_path=val_data_path
+                )
+                if threshold_key is not None and threshold_record is not None:
+                    threshold_record_cache[str(threshold_key)] = dict(threshold_record)
+                if (
+                    sensitivity_threshold_key is not None
+                    and sensitivity_threshold_record is not None
+                ):
+                    threshold_record_cache[str(sensitivity_threshold_key)] = dict(
+                        sensitivity_threshold_record
+                    )
                 model_to_save = _unwrap_model(model)
                 payload = {
                     "epoch": epoch,
@@ -6062,7 +6169,8 @@ def train(rank, args):
                     metrics_payload["test_morphology"] = morphology_block_epoch
                 if run_block:
                     metrics_payload["run"] = run_block
-                dataset_summary = getattr(args, "dataset_summary", None)
+                if data_block:
+                    metrics_payload["data"] = data_block
                 if dataset_summary:
                     metrics_payload["dataset"] = dataset_summary
                 if isinstance(val_tau_info, str) and val_tau_info:
@@ -6338,6 +6446,33 @@ def train(rank, args):
 
     tb_logger.close()
     if rank == 0 and last_epoch is not None:
+        dataset_summary = getattr(args, "dataset_summary", None)
+        try:
+            data_block_final = _build_result_loader_data_block(dataset_summary)
+        except RuntimeError as exc:
+            raise RuntimeError("Unable to construct metrics data block") from exc
+        val_data_path: Optional[str] = None
+        if data_block_final:
+            val_entry = data_block_final.get("val")
+            if isinstance(val_entry, Mapping):
+                candidate_path = str(val_entry.get("path") or "").strip()
+                if candidate_path:
+                    val_data_path = candidate_path
+        latest_threshold_record = _update_threshold_split(
+            latest_threshold_record, split_path=val_data_path
+        )
+        sensitivity_record_final = _update_threshold_split(
+            sensitivity_record_final, split_path=val_data_path
+        )
+        if threshold_key is not None and latest_threshold_record is not None:
+            threshold_record_cache[str(threshold_key)] = dict(latest_threshold_record)
+        if (
+            sensitivity_threshold_key is not None
+            and sensitivity_record_final is not None
+        ):
+            threshold_record_cache[str(sensitivity_threshold_key)] = dict(
+                sensitivity_record_final
+            )
         last_payload: Dict[str, Any] = {
             "epoch": int(last_epoch),
             "model_state_dict": _unwrap_model(model).state_dict(),
@@ -6453,7 +6588,8 @@ def train(rank, args):
         perturbation_block = _build_perturbation_export(final_test_metrics)
         if perturbation_block:
             last_metrics_payload["test_perturbations"] = perturbation_block
-        dataset_summary = getattr(args, "dataset_summary", None)
+        if data_block_final:
+            last_metrics_payload["data"] = data_block_final
         if dataset_summary:
             last_metrics_payload["dataset"] = dataset_summary
         if last_val_tau_info:

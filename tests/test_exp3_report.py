@@ -14,6 +14,14 @@ from ssl4polyp.classification.analysis.exp3_report import (  # type: ignore[impo
 )
 
 
+_DATA_BLOCK = {
+    "train": {"path": "sun_morphology/train.csv", "sha256": "train-digest"},
+    "val": {"path": "sun_morphology/val.csv", "sha256": "val-digest"},
+    "test": {"path": "sun_morphology/test.csv", "sha256": "test-digest"},
+}
+_VAL_PATH = _DATA_BLOCK["val"]["path"]
+
+
 @pytest.mark.parametrize("tau", [0.5, 0.7])
 def test_compute_strata_metrics_counts(tau: float) -> None:
     records = [
@@ -63,6 +71,7 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
                 tn += 1
     metrics_payload = {
         "seed": seed,
+        "data": _DATA_BLOCK,
         "test_primary": {
             "tau": tau,
             "tp": tp,
@@ -82,8 +91,18 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
             "n_neg": n_neg,
         },
         "thresholds": {
-            "primary": {"policy": "f1_opt_on_val", "tau": tau},
-            "sensitivity": {"policy": "youden_on_val", "tau": tau},
+            "primary": {
+                "policy": "f1_opt_on_val",
+                "tau": tau,
+                "split": _VAL_PATH,
+                "epoch": 1,
+            },
+            "sensitivity": {
+                "policy": "youden_on_val",
+                "tau": tau,
+                "split": _VAL_PATH,
+                "epoch": 1,
+            },
         },
         "provenance": {
             "model": model,
