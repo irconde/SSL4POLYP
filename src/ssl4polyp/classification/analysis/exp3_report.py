@@ -46,7 +46,7 @@ _PRIMARY_METRICS = (
     "loss",
 )
 
-_DELTA_METRICS = ("auprc", "f1", "auroc")
+_DELTA_METRICS = _PRIMARY_METRICS
 _METRIC_LABELS = {
     "auprc": "AUPRC",
     "auroc": "AUROC",
@@ -299,7 +299,7 @@ def bootstrap_deltas(
     baseline_runs: Mapping[int, RunDataset],
     *,
     policy: str,
-    metrics: Sequence[str] = ("auprc", "f1", "auroc"),
+    metrics: Sequence[str] = _PRIMARY_METRICS,
     bootstrap: int = 2000,
     rng_seed: int = 12345,
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
@@ -430,12 +430,49 @@ def bootstrap_deltas(
 
 
 def summarise_composition(metrics: Mapping[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+    def _extract_count(stats: Mapping[str, float], key: str) -> float:
+        value = stats.get(key, 0.0)
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        if math.isnan(numeric):
+            return 0.0
+        return numeric
+
+    def _extract_prevalence(stats: Mapping[str, float]) -> float:
+        value = stats.get("prevalence", float("nan"))
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return float("nan")
+        return numeric
+
     summary: Dict[str, Dict[str, float]] = {}
-    for stratum, stats in metrics.items():
+    overall_stats = metrics.get("overall", {})
+    overall_entry = {
+        "n_pos": _extract_count(overall_stats, "n_pos"),
+        "n_neg": _extract_count(overall_stats, "n_neg"),
+        "prevalence": _extract_prevalence(overall_stats),
+    }
+    summary["overall"] = overall_entry
+    overall_neg = overall_entry["n_neg"]
+    for stratum in _STRATA:
+        if stratum == "overall":
+            continue
+        stats = metrics.get(stratum)
+        if stats:
+            summary[stratum] = {
+                "n_pos": _extract_count(stats, "n_pos"),
+                "n_neg": _extract_count(stats, "n_neg"),
+                "prevalence": _extract_prevalence(stats),
+            }
+            continue
+        prevalence = 0.0 if overall_neg > 0 else float("nan")
         summary[stratum] = {
-            "n_pos": float(stats.get("n_pos", float("nan"))),
-            "n_neg": float(stats.get("n_neg", float("nan"))),
-            "prevalence": float(stats.get("prevalence", float("nan"))),
+            "n_pos": 0.0,
+            "n_neg": overall_neg,
+            "prevalence": prevalence,
         }
     return summary
 
