@@ -65,6 +65,7 @@ def _write_run(
             "fn": 0,
             "n_pos": 2,
             "n_neg": 2,
+            "prevalence": 0.5,
         },
         "test_sensitivity": {
             "auprc": auprc,
@@ -80,6 +81,7 @@ def _write_run(
             "loss": 0.32,
             "n_pos": 2,
             "n_neg": 2,
+            "prevalence": 0.5,
         },
         "provenance": {
             "model": model,

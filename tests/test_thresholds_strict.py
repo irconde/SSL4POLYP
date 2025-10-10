@@ -32,6 +32,7 @@ def _base_payload(exp_id: str) -> dict[str, object]:
             "fn": 3,
             "n_pos": 13,
             "n_neg": 22,
+            "prevalence": float(13) / float(35),
         },
         "thresholds": {},
     }
@@ -59,6 +60,7 @@ def _base_payload(exp_id: str) -> dict[str, object]:
             "fn": 1,
             "n_pos": 13,
             "n_neg": 22,
+            "prevalence": float(13) / float(35),
         }
         sensitivity_policy = "youden_on_val"
         if exp_id == "exp5c":

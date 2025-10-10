@@ -27,7 +27,7 @@ from .common_metrics import (
     _coerce_float,
     _coerce_int,
 )
-from .seed_checks import SeedValidationResult, ensure_expected_seeds
+from .seed_checks import ensure_expected_seeds
 
 PRIMARY_METRICS: Tuple[str, ...] = (
     "auprc",
@@ -643,13 +643,12 @@ def summarize_runs(
     rng_seed: int = 12345,
 ) -> Dict[str, Any]:
     if not runs_by_model:
-        seed_validation = SeedValidationResult((), MappingProxyType({}))
-    else:
-        seed_validation = ensure_expected_seeds(
-            runs_by_model,
-            expected_seeds=EXPECTED_SEEDS,
-            context="Experiment 5A",
-        )
+        raise ValueError("Experiment 5A summary requires at least one discovered run")
+    seed_validation = ensure_expected_seeds(
+        runs_by_model,
+        expected_seeds=EXPECTED_SEEDS,
+        context="Experiment 5A",
+    )
     summary: Dict[str, Any] = {
         "metadata": {
             "metrics": list(PRIMARY_METRICS),
@@ -789,7 +788,9 @@ def summarize_runs(
             for baseline in PAIRWISE_BASELINES:
                 baseline_runs = runs_by_model.get(baseline, {})
                 if not baseline_runs:
-                    continue
+                    raise ValueError(
+                        f"Experiment 5A pairwise summary requires runs for baseline '{baseline}'"
+                    )
                 ensure_expected_seeds(
                     {
                         "ssl_colon": colon_runs,

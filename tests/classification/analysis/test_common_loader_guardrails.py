@@ -53,6 +53,7 @@ def _base_payload(
             "fn": 0,
             "n_pos": 1,
             "n_neg": 1,
+            "prevalence": 0.5,
         },
         "test_sensitivity": {
             "tau": tau,
@@ -62,6 +63,7 @@ def _base_payload(
             "fn": 0,
             "n_pos": 1,
             "n_neg": 1,
+            "prevalence": 0.5,
         },
         "thresholds": {
             "primary": {

@@ -84,6 +84,7 @@ def _sun_payload(tau: float, offset: float) -> dict[str, object]:
             "auroc": 0.7 + offset,
             "f1": 0.55 + offset,
             "recall": 0.6 + offset,
+            "prevalence": 0.5,
         }
     }
 
@@ -115,6 +116,7 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
             "fn": 0,
             "n_pos": 2,
             "n_neg": 2,
+            "prevalence": 0.5,
         },
         "thresholds": {
             "primary": {
@@ -190,6 +192,7 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "fn": 0,
             "n_pos": 2,
             "n_neg": 2,
+            "prevalence": 0.5,
         },
         "thresholds": {
             "primary": {
@@ -228,6 +231,7 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "fn": 0,
             "n_pos": 2,
             "n_neg": 2,
+            "prevalence": 0.5,
         },
         "thresholds": {
             "primary": {

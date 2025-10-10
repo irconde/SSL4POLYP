@@ -69,6 +69,7 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
                 fp += 1
             else:
                 tn += 1
+    total = n_pos + n_neg
     metrics_payload = {
         "seed": seed,
         "data": _DATA_BLOCK,
@@ -80,6 +81,7 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
             "fn": fn,
             "n_pos": n_pos,
             "n_neg": n_neg,
+            "prevalence": float(n_pos) / float(total) if total else 0.0,
         },
         "test_sensitivity": {
             "tau": tau,
@@ -89,6 +91,7 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
             "fn": fn,
             "n_pos": n_pos,
             "n_neg": n_neg,
+            "prevalence": float(n_pos) / float(total) if total else 0.0,
         },
         "thresholds": {
             "primary": {
