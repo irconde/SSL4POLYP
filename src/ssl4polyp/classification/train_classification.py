@@ -144,6 +144,20 @@ def _compute_file_sha256(path: Path) -> Optional[str]:
         return None
 
 
+def _record_test_outputs_digest(args, outputs_path: Optional[Path]) -> None:
+    """Compute and cache the SHA-256 digest for the exported test outputs."""
+
+    if outputs_path is None:
+        return
+    path = Path(outputs_path).expanduser()
+    setattr(args, "latest_test_outputs_path", path)
+    sha256 = _compute_file_sha256(path)
+    if sha256:
+        setattr(args, "latest_test_outputs_sha256", sha256)
+    else:
+        setattr(args, "latest_test_outputs_sha256", None)
+
+
 def _safe_relpath(path: Path, base: Path) -> str:
     """Return a stable string path relative to ``base`` when possible."""
 
@@ -1657,6 +1671,20 @@ def _build_metrics_provenance(
         csv_hash = test_summary.get("csv_sha256")
         if csv_hash:
             provenance["test_csv_sha256"] = str(csv_hash)
+
+    latest_outputs_path = getattr(args, "latest_test_outputs_path", None)
+    latest_outputs_sha = getattr(args, "latest_test_outputs_sha256", None)
+    base_output_dir = getattr(args, "output_dir", None)
+    base_dir = Path(str(base_output_dir)).expanduser() if base_output_dir else Path.cwd()
+    if latest_outputs_path:
+        try:
+            outputs_path_obj = Path(latest_outputs_path)
+        except (TypeError, ValueError):
+            outputs_path_obj = None
+        if outputs_path_obj:
+            provenance["test_outputs_csv"] = _safe_relpath(outputs_path_obj, base_dir)
+    if latest_outputs_sha:
+        provenance["test_outputs_csv_sha256"] = str(latest_outputs_sha)
 
     fewshot_budget: Optional[int] = None
     pack_seed_value: Optional[int] = None
@@ -4712,6 +4740,9 @@ def build(args, rank, device: torch.device, distributed: bool):
     eval_context_lookup = _prepare_eval_contexts(args, datasets)
     args.eval_context_lookup = eval_context_lookup
 
+    args.latest_test_outputs_path = None
+    args.latest_test_outputs_sha256 = None
+
     train_dataset = (
         datasets.get(args.train_split) if getattr(args, "train_split", None) else None
     )
@@ -5400,6 +5431,7 @@ def train(rank, args):
                     eval_context=eval_context_lookup.get("Test"),
                     save_outputs_path=test_outputs_path,
                 )
+                _record_test_outputs_digest(args, test_outputs_path)
                 curve_export_metadata = _maybe_export_curves_for_split(
                     args,
                     ckpt_stem=ckpt_stem,
@@ -6334,6 +6366,7 @@ def train(rank, args):
             eval_context=eval_context_lookup.get("Test"),
             save_outputs_path=test_outputs_path,
         )
+        _record_test_outputs_digest(args, test_outputs_path)
         curve_export_metadata = _maybe_export_curves_for_split(
             args,
             ckpt_stem=ckpt_stem,
