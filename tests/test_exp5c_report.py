@@ -14,30 +14,32 @@ if str(SRC_ROOT) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-sklearn_stub = ModuleType("sklearn")
-sklearn_metrics_stub = ModuleType("sklearn.metrics")
+try:  # pragma: no cover - exercised implicitly
+    import sklearn  # type: ignore[import-not-found]
+    from sklearn import metrics as sklearn_metrics  # type: ignore[attr-defined]
+except Exception:  # pragma: no cover - fallback for environments without sklearn
+    sklearn_stub = ModuleType("sklearn")
+    sklearn_metrics_stub = ModuleType("sklearn.metrics")
 
+    def _unavailable(*args, **kwargs):  # pragma: no cover - safety guard
+        raise RuntimeError("scikit-learn functionality unavailable in tests")
 
-def _unavailable(*args, **kwargs):  # pragma: no cover - safety guard
-    raise RuntimeError("scikit-learn functionality unavailable in tests")
+    for _name in (
+        "average_precision_score",
+        "balanced_accuracy_score",
+        "f1_score",
+        "matthews_corrcoef",
+        "precision_score",
+        "precision_recall_curve",
+        "recall_score",
+        "roc_auc_score",
+        "roc_curve",
+    ):
+        setattr(sklearn_metrics_stub, _name, _unavailable)
 
-
-for _name in (
-    "average_precision_score",
-    "balanced_accuracy_score",
-    "f1_score",
-    "matthews_corrcoef",
-    "precision_score",
-    "precision_recall_curve",
-    "recall_score",
-    "roc_auc_score",
-    "roc_curve",
-):
-    setattr(sklearn_metrics_stub, _name, _unavailable)
-
-sklearn_stub.metrics = sklearn_metrics_stub
-sys.modules.setdefault("sklearn", sklearn_stub)
-sys.modules.setdefault("sklearn.metrics", sklearn_metrics_stub)
+    sklearn_stub.metrics = sklearn_metrics_stub
+    sys.modules.setdefault("sklearn", sklearn_stub)
+    sys.modules.setdefault("sklearn.metrics", sklearn_metrics_stub)
 
 from ssl4polyp.classification.analysis import exp5c_report  # type: ignore[import]
 from ssl4polyp.classification.analysis.common_loader import CommonFrame
