@@ -212,6 +212,19 @@ def load_run(
         )
         frames.append(record)
         cases[frame.case_id].append(record)
+    unexpected_morphologies = sorted(
+        {
+            record.morphology
+            for record in frames
+            if record.label == 1 and record.morphology not in {"flat", "polypoid"}
+        }
+    )
+    if unexpected_morphologies:
+        details = ", ".join(unexpected_morphologies)
+        raise RuntimeError(
+            "Experiment 3 requires positive cases to declare 'flat' or 'polypoid' morphology; "
+            f"found unexpected labels {{{details}}} in run {base_run.model!r} seed {base_run.seed}"
+        )
     payload = base_run.payload
     data_block = payload.get("data") if isinstance(payload.get("data"), Mapping) else {}
     data_splits: Dict[str, str] = {}

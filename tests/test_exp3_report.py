@@ -7,10 +7,11 @@ from pathlib import Path
 import pytest  # type: ignore[import]
 
 from ssl4polyp.classification.analysis.exp3_report import (  # type: ignore[import]
+    EXPECTED_SEEDS,
     FrameRecord,
     compute_strata_metrics,
     generate_report,
-    EXPECTED_SEEDS,
+    load_run,
 )
 
 
@@ -78,6 +79,18 @@ def test_report_composition_includes_empty_flat_stratum(tmp_path: Path) -> None:
     ]
     assert composition_lines, "Expected Flat + Negs stratum in composition table"
     assert "| Flat + Negs | 0 |" in composition_lines[0]
+
+
+def test_load_run_rejects_unexpected_positive_morphology(tmp_path: Path) -> None:
+    rows = [
+        {"case_id": "a", "prob": 0.81, "label": 1, "pred": 1, "morphology": "sessile"},
+        {"case_id": "b", "prob": 0.24, "label": 0, "pred": 0, "morphology": "unknown"},
+    ]
+    seed = 13
+    _write_run(tmp_path, "ssl_colon", seed=seed, rows=rows, tau=0.5)
+    metrics_path = tmp_path / f"ssl_colon__sun_morphology_s{seed}_last.metrics.json"
+    with pytest.raises(RuntimeError, match="unexpected labels"):
+        load_run(metrics_path)
 
 
 def test_generate_report_requires_all_deltas(tmp_path: Path) -> None:

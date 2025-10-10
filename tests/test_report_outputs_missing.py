@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -24,6 +25,9 @@ from ssl4polyp.classification.analysis import (  # type: ignore[import]
 
 def _deep_update(target: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in updates.items():
+        if value is None:
+            target.pop(key, None)
+            continue
         if isinstance(value, dict) and isinstance(target.get(key), dict):
             target[key] = _deep_update(dict(target[key]), value)
         else:
@@ -38,6 +42,11 @@ def _write_metrics(path: Path, *, overrides: Dict[str, Any] | None = None) -> No
             "train": {"path": "sun_full/train.csv", "sha256": "train-digest"},
             "val": {"path": "sun_full/val.csv", "sha256": "val-digest"},
             "test": {"path": "sun_full/test.csv", "sha256": "test-digest"},
+        },
+        "val": {
+            "loss": 0.4,
+            "auroc": 0.8,
+            "auprc": 0.7,
         },
         "test_primary": {
             "tau": 0.5,
@@ -84,21 +93,123 @@ def _write_metrics(path: Path, *, overrides: Dict[str, Any] | None = None) -> No
     if overrides:
         payload = _deep_update(payload, overrides)
     path.parent.mkdir(parents=True, exist_ok=True)
+    curve_exports = payload.get("curve_exports")
+    if isinstance(curve_exports, dict):
+        for entry in curve_exports.values():
+            if not isinstance(entry, dict):
+                continue
+            raw_path = entry.get("path")
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                continue
+            rel_path = Path(raw_path.strip())
+            curve_path = rel_path if rel_path.is_absolute() else path.parent / rel_path
+            curve_path.parent.mkdir(parents=True, exist_ok=True)
+            if not curve_path.exists():
+                curve_path.write_text("threshold,precision,recall\n0.0,1.0,0.0\n1.0,0.0,1.0\n", encoding="utf-8")
+            digest = hashlib.sha256(curve_path.read_bytes()).hexdigest()
+            sha_value = entry.get("sha256")
+            if not isinstance(sha_value, str) or not sha_value.strip():
+                entry["sha256"] = digest
+            else:
+                entry["sha256"] = sha_value.strip().lower()
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 @pytest.mark.parametrize(
     "module, filename, overrides",
     (
-        (exp1_report, "ssl_colon_s13_last.metrics.json", {}),
-        (exp2_report, "ssl_colon_s13_last.metrics.json", {}),
-        (exp3_report, "ssl_colon__sun_morphology_s13_last.metrics.json", {}),
+        (
+            exp1_report,
+            "ssl_colon_s13_last.metrics.json",
+            {
+                "thresholds": {
+                    "primary": {
+                        "policy": "f1_opt_on_val",
+                        "split": "sun_full/val.csv",
+                        "epoch": 3,
+                    },
+                    "sensitivity": {
+                        "policy": "youden_on_val",
+                        "split": "sun_full/val.csv",
+                        "epoch": 3,
+                    },
+                }
+            },
+        ),
+        (
+            exp2_report,
+            "ssl_colon_s13_last.metrics.json",
+            {
+                "thresholds": {
+                    "primary": {
+                        "policy": "f1_opt_on_val",
+                        "split": "sun_full/val.csv",
+                        "epoch": 3,
+                    },
+                    "sensitivity": {
+                        "policy": "youden_on_val",
+                        "split": "sun_full/val.csv",
+                        "epoch": 3,
+                    },
+                }
+            },
+        ),
+        (
+            exp3_report,
+            "ssl_colon__sun_morphology_s13_last.metrics.json",
+            {
+                "data": {
+                    "train": {"path": "sun_morphology/train.csv"},
+                    "val": {"path": "sun_morphology/val.csv"},
+                    "test": {"path": "sun_morphology/test.csv"},
+                },
+                "thresholds": {
+                    "primary": {
+                        "policy": "f1_opt_on_val",
+                        "split": "sun_morphology/val.csv",
+                        "epoch": 3,
+                    },
+                    "sensitivity": {
+                        "policy": "youden_on_val",
+                        "split": "sun_morphology/val.csv",
+                        "epoch": 3,
+                    },
+                },
+            },
+        ),
         (
             exp4_report,
             "ssl_colon_p50_s13_last.metrics.json",
-            {"provenance": {"subset_percent": 50.0}},
+            {
+                "provenance": {"subset_percent": 50.0},
+                "thresholds": {
+                    "primary": {
+                        "policy": "f1_opt_on_val",
+                        "split": "sun_full/val.csv",
+                        "epoch": 3,
+                    },
+                    "sensitivity": {
+                        "policy": "youden_on_val",
+                        "split": "sun_full/val.csv",
+                        "epoch": 3,
+                    },
+                },
+                "curve_exports": {
+                    "test": {
+                        "path": "ssl_colon_p50_s13_last_test_curve.csv",
+                    }
+                },
+            },
         ),
-        (exp5a_report, "ssl_colon_seed13_last.metrics.json", {"run": {"exp": "exp5a"}}),
+        (
+            exp5a_report,
+            "ssl_colon_seed13_last.metrics.json",
+            {
+                "run": {"exp": "exp5a"},
+                "test_sensitivity": None,
+                "thresholds": {"sensitivity": None},
+            },
+        ),
         (
             exp5b_report,
             "ssl_colon_s13_last.metrics.json",
@@ -106,7 +217,9 @@ def _write_metrics(path: Path, *, overrides: Dict[str, Any] | None = None) -> No
                 "test_perturbations": {
                     "per_tag": {"clean": {"f1": 1.0}},
                     "per_case": {},
-                }
+                },
+                "test_sensitivity": None,
+                "thresholds": {"sensitivity": None},
             },
         ),
     ),

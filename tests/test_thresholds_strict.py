@@ -147,6 +147,16 @@ def test_exp3_loader_rejects_wrong_val_path() -> None:
         loader.validate(Path("metrics.json"), payload)
 
 
+def test_exp3_loader_rejects_prefixed_val_path() -> None:
+    loader = ResultLoader(exp_id="exp3b")
+    payload = _base_payload("exp3b")
+    payload["data"]["val"]["path"] = "alt/sun_morphology/val.csv"  # type: ignore[index]
+    payload["thresholds"]["primary"]["split"] = "alt/sun_morphology/val.csv"  # type: ignore[index]
+    payload["thresholds"]["sensitivity"]["split"] = "alt/sun_morphology/val.csv"  # type: ignore[index]
+    with pytest.raises(GuardrailViolation):
+        loader.validate(Path("metrics.json"), payload)
+
+
 @pytest.mark.parametrize("exp_id", ["exp5a", "exp5b", "exp5c"])
 def test_loader_requires_frozen_sources(exp_id: str) -> None:
     loader = ResultLoader(exp_id=exp_id)
