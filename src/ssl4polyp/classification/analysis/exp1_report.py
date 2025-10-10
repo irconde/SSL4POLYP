@@ -157,10 +157,15 @@ class Exp1Summary:
 def _get_loader(*, strict: bool = True) -> ResultLoader:
     return ResultLoader(exp_id="exp1", required_curve_keys=(), strict=strict)
 
-def _resolve_outputs_path(metrics_path: Path) -> Path:
+def _resolve_outputs_path(metrics_path: Path) -> Tuple[Path, ...]:
     stem = metrics_path.stem
     base = stem[:-5] if stem.endswith("_last") else stem
-    return metrics_path.with_name(f"{base}_test_outputs.csv")
+    candidates = [metrics_path.with_name(f"{base}_test_outputs.csv")]
+    if base.endswith(".metrics"):
+        trimmed = base[:-8]
+        if trimmed:
+            candidates.append(metrics_path.with_name(f"{trimmed}_test_outputs.csv"))
+    return tuple(candidates)
 
 
 def _normalise_case_id(raw: Optional[object], fallback_index: int) -> str:
@@ -306,8 +311,23 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ex
         raise ValueError(f"Metrics file '{metrics_path}' is missing test_primary.tau")
     tau_sensitivity_raw = sensitivity_metrics.get("tau") if sensitivity_metrics else None
     tau_sensitivity = _coerce_float(tau_sensitivity_raw) if tau_sensitivity_raw is not None else None
-    outputs_path = _resolve_outputs_path(metrics_path)
-    frames, cases = _read_outputs(outputs_path)
+    frames: Optional[Tuple[EvalFrame, ...]] = None
+    cases: Optional[Dict[str, Tuple[EvalFrame, ...]]] = None
+    outputs_candidates = _resolve_outputs_path(metrics_path)
+    last_error: Optional[Exception] = None
+    for candidate in outputs_candidates:
+        try:
+            frames, cases = _read_outputs(candidate)
+            break
+        except FileNotFoundError as exc:
+            last_error = exc
+    else:
+        tried = ", ".join(str(path) for path in outputs_candidates)
+        message = (
+            f"No test outputs CSV found for metrics file '{metrics_path}'. Tried: {tried}"
+        )
+        raise FileNotFoundError(message) from last_error
+    assert frames is not None and cases is not None
     computed_primary = _metrics_from_frames(frames, float(tau_primary))
     _merge_metric_block(primary_metrics, computed_primary)
     if tau_sensitivity is not None:
@@ -375,7 +395,7 @@ def discover_runs(
             run = load_run(metrics_path, loader=loader)
         except FileNotFoundError as exc:
             raise RuntimeError(
-                f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
+                f"Failed to load metrics from {metrics_path} (missing per-frame outputs). {exc}"
             ) from exc
         except (ValueError, GuardrailViolation) as exc:
             raise RuntimeError(f"Failed to load metrics from {metrics_path}") from exc
