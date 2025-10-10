@@ -227,17 +227,22 @@ class ResultLoader:
                     f"Metrics file '{metrics_path}' data.{split}.sha256 is required"
                 )
         val_info = data_block["val"]
-        val_path = str(val_info.get("path"))
-        if not val_path:
+        val_path_raw = val_info.get("path")
+        if not isinstance(val_path_raw, str) or not val_path_raw.strip():
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' data.val.path is required"
             )
+        val_path = val_path_raw.strip()
+        normalised_val_path = self._normalise_manifest_path(val_path)
         if expected_val_paths:
-            allowed_suffixes = self._expand_expected_val_paths(expected_val_paths)
-            if not any(str(val_path).endswith(suffix) for suffix in allowed_suffixes):
-                options = ", ".join(sorted(dict.fromkeys(allowed_suffixes))) or "<unknown>"
+            allowed = {
+                self._normalise_manifest_path(candidate)
+                for candidate in expected_val_paths
+            }
+            if normalised_val_path not in allowed:
+                options = ", ".join(sorted(allowed)) or "<unknown>"
                 raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' data.val.path must end with one of "
+                    f"Metrics file '{metrics_path}' data.val.path must reference one of "
                     f"[{options}] (found {val_path!r})"
                 )
         test_primary = payload.get("test_primary")
@@ -334,18 +339,16 @@ class ResultLoader:
         return tuple(normalised)
 
     @staticmethod
-    def _expand_expected_val_paths(paths: Sequence[str]) -> Tuple[str, ...]:
-        suffixes: list[str] = []
-        for candidate in paths:
-            text = str(candidate).strip()
-            if not text:
-                continue
-            suffixes.append(text)
-            if text.endswith(".csv"):
-                suffixes.append(text[:-4])
-            else:
-                suffixes.append(f"{text}.csv")
-        return tuple(dict.fromkeys(suffixes))
+    def _normalise_manifest_path(candidate: object) -> str:
+        text = str(candidate).strip()
+        if not text:
+            return ""
+        text = text.replace("\\", "/")
+        while text.startswith("./"):
+            text = text[2:]
+        if text.endswith(".csv"):
+            text = text[:-4]
+        return text
 
     def _validate_confusion(
         self,
