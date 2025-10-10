@@ -336,3 +336,77 @@ def test_sun_bootstrap_clusters_group_positive_frames_by_case() -> None:
     clusters = _build_cluster_set(eval_frames, domain="sun")
     positive_clusters = [set(cluster) for cluster in clusters.positives]
     assert any({"f_pos_caseA_1", "f_pos_caseA_2"} == cluster for cluster in positive_clusters)
+
+
+def test_polypgen_clusters_group_positive_frames_by_center() -> None:
+    frames = [
+        CommonFrame(
+            frame_id="f_pos_centerA_1",
+            case_id="caseA",
+            prob=0.95,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"center_id": "centerA", "sequence_id": "seq1", "origin": "centerA"}),
+        ),
+        CommonFrame(
+            frame_id="f_pos_centerA_2",
+            case_id="caseB",
+            prob=0.9,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"center_id": "centerA", "sequence_id": "seq2", "origin": "centerA"}),
+        ),
+        CommonFrame(
+            frame_id="f_pos_centerB",
+            case_id="caseC",
+            prob=0.85,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"center_id": "centerB", "sequence_id": "seq3", "origin": "centerB"}),
+        ),
+        CommonFrame(
+            frame_id="f_neg_centerA",
+            case_id="caseA",
+            prob=0.2,
+            label=0,
+            pred=0,
+            row=MappingProxyType({"center_id": "centerA", "sequence_id": "seq1", "origin": "centerA"}),
+        ),
+    ]
+    eval_frames = _frames_to_eval(frames)
+    clusters = _build_cluster_set(eval_frames, domain="polypgen")
+    positive_clusters = [set(cluster) for cluster in clusters.positives]
+    assert any({"f_pos_centerA_1", "f_pos_centerA_2"} == cluster for cluster in positive_clusters)
+
+
+def test_polypgen_clusters_group_positive_frames_by_sequence_when_center_missing() -> None:
+    frames = [
+        CommonFrame(
+            frame_id="f_pos_seq_shared_1",
+            case_id="caseX",
+            prob=0.92,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"center_id": "", "sequence_id": "seq_shared", "origin": ""}),
+        ),
+        CommonFrame(
+            frame_id="f_pos_seq_shared_2",
+            case_id="caseY",
+            prob=0.91,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"center_id": None, "sequence_id": "seq_shared", "origin": None}),
+        ),
+        CommonFrame(
+            frame_id="f_pos_seq_other",
+            case_id="caseZ",
+            prob=0.88,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"center_id": "", "sequence_id": "seq_other", "origin": ""}),
+        ),
+    ]
+    eval_frames = _frames_to_eval(frames)
+    clusters = _build_cluster_set(eval_frames, domain="polypgen")
+    positive_clusters = [set(cluster) for cluster in clusters.positives]
+    assert any({"f_pos_seq_shared_1", "f_pos_seq_shared_2"} == cluster for cluster in positive_clusters)
