@@ -23,6 +23,11 @@ def parent_artifacts(tmp_path: Path) -> Path:
 
     metrics_payload = {
         "seed": 42,
+        "data": {
+            "train": {"path": "sun_full/train.csv", "sha256": "train-digest"},
+            "val": {"path": "sun_full/val.csv", "sha256": "val-digest"},
+            "test": {"path": "sun_full/test.csv", "sha256": "test-digest"},
+        },
         "val": {"auroc": 0.88},
         "test_primary": {"auroc": 0.91, "auprc": 0.87},
         "threshold_policy": "youden",

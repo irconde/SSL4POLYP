@@ -42,6 +42,14 @@ def _write_metrics(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _data_block() -> dict[str, dict[str, str]]:
+    return {
+        "train": {"path": "sun_full/train.csv", "sha256": "train-digest"},
+        "val": {"path": "sun_full/val.csv", "sha256": "val-digest"},
+        "test": {"path": "sun_full/test.csv", "sha256": "test-digest"},
+    }
+
+
 def _polyp_rows() -> list[dict[str, object]]:
     return [
         {"frame_id": "f1", "prob": 0.9, "label": 1, "center_id": "A", "sequence_id": "seq1", "origin": "A"},
@@ -82,8 +90,10 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
     _write_outputs(sun_outputs_path, _sun_rows())
     alt_sun_outputs_path = colon_dir.parent / "sun_parent" / "seed1_test_outputs.csv"
     _write_outputs(alt_sun_outputs_path, _sun_rows())
+    val_path = _data_block()["val"]["path"]
     metrics_payload = {
         "seed": 1,
+        "data": _data_block(),
         "test_primary": {
             "tau": 0.5,
             "auprc": 0.75,
@@ -99,7 +109,13 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
             "n_neg": 2,
         },
         "thresholds": {
-            "primary": {"policy": "sun_val_frozen", "tau": 0.5, "split": "sun_full/val"},
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.5,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
         },
         "domain_shift_delta": {
             "metrics": {
@@ -149,8 +165,10 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
         _write_outputs((colon_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
         _write_outputs((sup_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
     parent_payload = _sun_payload(tau=0.45, offset=-0.08)
+    val_path = _data_block()["val"]["path"]
     colon_metrics = {
         "seed": 0,  # placeholder updated per seed
+        "data": _data_block(),
         "test_primary": {
             "tau": 0.55,
             "auprc": 0.8,
@@ -166,7 +184,13 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "n_neg": 2,
         },
         "thresholds": {
-            "primary": {"policy": "sun_val_frozen", "tau": 0.55, "split": "sun_full/val"},
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.55,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
         },
         "run": {"exp": "exp5a"},
         "provenance": {
@@ -182,6 +206,7 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
     }
     sup_metrics = {
         "seed": 0,
+        "data": _data_block(),
         "test_primary": {
             "tau": 0.6,
             "auprc": 0.7,
@@ -197,7 +222,13 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
             "n_neg": 2,
         },
         "thresholds": {
-            "primary": {"policy": "sun_val_frozen", "tau": 0.6, "split": "sun_full/val"},
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.6,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
         },
         "run": {"exp": "exp5a"},
         "provenance": {
