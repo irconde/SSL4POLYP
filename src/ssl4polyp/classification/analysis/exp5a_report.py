@@ -148,6 +148,15 @@ def _build_cluster_set(frames: Mapping[str, EvalFrame], *, domain: str) -> Clust
             if record.sequence_id:
                 return f"pos_sequence::{record.sequence_id}"
             return None
+        if domain_key == "polypgen":
+            center = record.center_id or record.origin
+            if center:
+                return f"pos_center::{center}"
+            if record.sequence_id:
+                return f"pos_sequence::{record.sequence_id}"
+            if record.case_id:
+                return f"pos_case::{record.case_id}"
+            return None
         return None
 
     def negative_key(record: EvalFrame) -> Optional[str]:
