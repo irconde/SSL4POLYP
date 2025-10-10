@@ -17,6 +17,7 @@ from sklearn.metrics import (  # type: ignore[import]
 )
 
 __all__ = [
+    "DEFAULT_BINARY_METRIC_KEYS",
     "_clean_text",
     "_coerce_float",
     "_coerce_int",
@@ -36,6 +37,13 @@ _DEFAULT_BINARY_METRICS: Tuple[str, ...] = (
     "mcc",
     "loss",
 )
+
+
+# Public alias for the default binary metric set so report modules can share
+# a single definition when they need to stay in sync with the computation
+# defaults.  The tuple is intentionally immutable to guard against accidental
+# mutation across imports.
+DEFAULT_BINARY_METRIC_KEYS: Tuple[str, ...] = _DEFAULT_BINARY_METRICS
 
 
 def _clean_text(value: Optional[object]) -> Optional[str]:

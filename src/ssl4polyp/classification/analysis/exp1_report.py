@@ -24,7 +24,13 @@ from typing import (
 
 import numpy as np
 
-from .common_metrics import _clean_text, _coerce_float, _coerce_int, compute_binary_metrics
+from .common_metrics import (
+    DEFAULT_BINARY_METRIC_KEYS,
+    _clean_text,
+    _coerce_float,
+    _coerce_int,
+    compute_binary_metrics,
+)
 from .display import PLACEHOLDER, format_ci, format_mean_std, format_scalar, format_signed
 from .exp2_report import DeltaSummary, MetricAggregate
 from .result_loader import (
@@ -36,16 +42,7 @@ from .result_loader import (
 )
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
-PRIMARY_METRICS: Tuple[str, ...] = (
-    "auprc",
-    "auroc",
-    "recall",
-    "precision",
-    "f1",
-    "balanced_accuracy",
-    "mcc",
-    "loss",
-)
+PRIMARY_METRICS: Tuple[str, ...] = DEFAULT_BINARY_METRIC_KEYS
 EXPECTED_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 MODEL_LABELS: Dict[str, str] = {

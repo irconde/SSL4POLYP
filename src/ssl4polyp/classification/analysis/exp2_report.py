@@ -24,7 +24,13 @@ from typing import (
 
 import numpy as np
 
-from .common_metrics import _clean_text, _coerce_float, _coerce_int, compute_binary_metrics
+from .common_metrics import (
+    DEFAULT_BINARY_METRIC_KEYS,
+    _clean_text,
+    _coerce_float,
+    _coerce_int,
+    compute_binary_metrics,
+)
 from .display import (
     PLACEHOLDER,
     format_ci,
@@ -35,16 +41,7 @@ from .display import (
 from .result_loader import GuardrailViolation, ResultLoader, build_report_manifest
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
-PRIMARY_METRICS: Tuple[str, ...] = (
-    "auprc",
-    "auroc",
-    "recall",
-    "precision",
-    "f1",
-    "balanced_accuracy",
-    "mcc",
-    "loss",
-)
+PRIMARY_METRICS: Tuple[str, ...] = DEFAULT_BINARY_METRIC_KEYS
 ALL_METRICS: Tuple[str, ...] = PRIMARY_METRICS
 EXPECTED_MODELS: Tuple[str, ...] = ("ssl_imnet", "ssl_colon")
 DEFAULT_PAIRED_MODELS: Tuple[str, str] = ("ssl_colon", "ssl_imnet")
