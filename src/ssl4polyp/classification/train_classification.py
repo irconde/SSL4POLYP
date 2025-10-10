@@ -1460,34 +1460,73 @@ def _build_metric_block(
     return dict(block)
 
 
+def _build_case_metrics_export(
+    per_case_raw: Optional[Mapping[str, Any]]
+) -> Optional[Dict[str, Dict[str, Dict[str, float | int]]]]:
+    """Convert nested per-case metrics into a JSON-serialisable mapping."""
+
+    if not isinstance(per_case_raw, Mapping):
+        return None
+    export: Dict[str, Dict[str, Dict[str, float | int]]] = {}
+    for tag, case_block in per_case_raw.items():
+        if not isinstance(case_block, Mapping):
+            continue
+        sanitized_cases: Dict[str, Dict[str, float | int]] = {}
+        for case_id, metrics in case_block.items():
+            if not isinstance(metrics, Mapping):
+                continue
+            sanitized_metrics: Dict[str, float | int] = {}
+            for key, value in metrics.items():
+                numeric = _coerce_metric_value(value)
+                if numeric is None:
+                    continue
+                if key in INTEGER_METRIC_KEYS:
+                    sanitized_metrics[str(key)] = int(numeric)
+                else:
+                    sanitized_metrics[str(key)] = float(numeric)
+            if sanitized_metrics:
+                sanitized_cases[str(case_id)] = dict(sorted(sanitized_metrics.items()))
+        if sanitized_cases:
+            export[str(tag)] = dict(sorted(sanitized_cases.items()))
+    if not export:
+        return None
+    return export
+
+
 def _build_perturbation_export(
     metrics: Optional[Mapping[str, Any]]
-) -> Optional[Dict[str, Dict[str, float | int]]]:
+) -> Optional[Dict[str, Any]]:
     """Select perturbation metrics for export when available."""
 
     if not isinstance(metrics, Mapping):
         return None
     per_tag_raw = metrics.get("perturbation_metrics")
-    if not isinstance(per_tag_raw, Mapping):
-        return None
-    export: Dict[str, Dict[str, float | int]] = {}
-    for tag, stats in per_tag_raw.items():
-        if not isinstance(stats, Mapping):
-            continue
-        sanitized: Dict[str, float | int] = {}
-        for key, value in stats.items():
-            numeric = _coerce_metric_value(value)
-            if numeric is None:
+    per_case_raw = metrics.get("perturbation_case_metrics")
+    per_tag_export: Dict[str, Dict[str, float | int]] = {}
+    if isinstance(per_tag_raw, Mapping):
+        for tag, stats in per_tag_raw.items():
+            if not isinstance(stats, Mapping):
                 continue
-            if key in INTEGER_METRIC_KEYS:
-                sanitized[key] = int(numeric)
-            else:
-                sanitized[key] = float(numeric)
-        if sanitized:
-            export[str(tag)] = sanitized
-    if not export:
+            sanitized: Dict[str, float | int] = {}
+            for key, value in stats.items():
+                numeric = _coerce_metric_value(value)
+                if numeric is None:
+                    continue
+                if key in INTEGER_METRIC_KEYS:
+                    sanitized[key] = int(numeric)
+                else:
+                    sanitized[key] = float(numeric)
+            if sanitized:
+                per_tag_export[str(tag)] = sanitized
+    per_case_export = _build_case_metrics_export(per_case_raw)
+    block: Dict[str, Any] = {}
+    if per_tag_export:
+        block["per_tag"] = dict(sorted(per_tag_export.items()))
+    if per_case_export:
+        block["per_case"] = per_case_export
+    if not block:
         return None
-    return {"per_tag": dict(sorted(export.items()))}
+    return block
 
 
 def _build_morphology_block(
@@ -4328,8 +4367,10 @@ def test(
         if len(perturbation_tags) < logits.size(0):
             perturbation_tags.extend(["clean"] * (logits.size(0) - len(perturbation_tags)))
         perturbation_tags_aligned = list(perturbation_tags[: logits.size(0)])
+        perturbation_case_ids = list(case_ids[: logits.size(0)]) if case_ids else []
         results["perturbation_samples"] = {
             "tags": perturbation_tags_aligned,
+            "case_ids": perturbation_case_ids,
             "logits": logits,
             "probabilities": probs,
             "targets": targets,
@@ -4550,6 +4591,13 @@ def test(
         tags_array = np.array(perturbation_tags_aligned)
         unique_tags = sorted(set(tags_array.tolist()), key=_perturbation_tag_sort_key)
         per_tag_metrics: Dict[str, Dict[str, float]] = {}
+        per_case_metrics: Dict[str, Dict[str, Dict[str, float]]] = {}
+        case_ids_array: Optional[np.ndarray]
+        if case_ids:
+            case_ids_array = np.array(case_ids[: logits.size(0)], dtype=object)
+        else:
+            case_ids_array = None
+        preds_cpu = preds.detach().cpu()
 
         def compute_metrics_for_indices(indices: torch.Tensor) -> Dict[str, float]:
             subset_metrics: Dict[str, float] = {}
@@ -4585,6 +4633,43 @@ def test(
                 per_tag_metrics[tag] = metrics_for_tag
                 if tag == "clean":
                     clean_metrics = metrics_for_tag
+                if case_ids_array is not None:
+                    tag_case_metrics: Dict[str, Dict[str, float]] = {}
+                    tag_case_ids = case_ids_array[indices_np]
+                    unique_cases = sorted({str(case_id) for case_id in tag_case_ids.tolist()})
+                    for case_id in unique_cases:
+                        case_mask = tag_case_ids == case_id
+                        if not np.any(case_mask):
+                            continue
+                        case_indices_np = indices_np[case_mask]
+                        case_indices_tensor = torch.from_numpy(case_indices_np).to(
+                            dtype=torch.long
+                        )
+                        case_targets = targets.index_select(0, case_indices_tensor)
+                        case_preds = preds_cpu.index_select(0, case_indices_tensor)
+                        if case_targets.numel() == 0:
+                            continue
+                        try:
+                            recall_val = recall_score(
+                                case_targets.numpy(),
+                                case_preds.numpy(),
+                                zero_division=0,
+                            )
+                            f1_val = f1_score(
+                                case_targets.numpy(),
+                                case_preds.numpy(),
+                                zero_division=0,
+                            )
+                        except Exception:
+                            continue
+                        case_metrics: Dict[str, float] = {
+                            "recall": float(recall_val),
+                            "f1": float(f1_val),
+                            "count": float(int(case_targets.numel())),
+                        }
+                        tag_case_metrics[str(case_id)] = case_metrics
+                    if tag_case_metrics:
+                        per_case_metrics[tag] = tag_case_metrics
 
         non_clean_mask = tags_array != "clean"
         if np.any(non_clean_mask):
@@ -4593,6 +4678,39 @@ def test(
             metrics_for_tag = compute_metrics_for_indices(indices_tensor)
             if metrics_for_tag:
                 per_tag_metrics["ALL-perturbed"] = metrics_for_tag
+            if case_ids_array is not None:
+                tag_case_metrics: Dict[str, Dict[str, float]] = {}
+                tag_case_ids = case_ids_array[indices_np]
+                unique_cases = sorted({str(case_id) for case_id in tag_case_ids.tolist()})
+                for case_id in unique_cases:
+                    case_mask = tag_case_ids == case_id
+                    if not np.any(case_mask):
+                        continue
+                    case_indices_np = indices_np[case_mask]
+                    case_indices_tensor = torch.from_numpy(case_indices_np).to(
+                        dtype=torch.long
+                    )
+                    case_targets = targets.index_select(0, case_indices_tensor)
+                    case_preds = preds_cpu.index_select(0, case_indices_tensor)
+                    if case_targets.numel() == 0:
+                        continue
+                    try:
+                        recall_val = recall_score(
+                            case_targets.numpy(), case_preds.numpy(), zero_division=0
+                        )
+                        f1_val = f1_score(
+                            case_targets.numpy(), case_preds.numpy(), zero_division=0
+                        )
+                    except Exception:
+                        continue
+                    case_metrics = {
+                        "recall": float(recall_val),
+                        "f1": float(f1_val),
+                        "count": float(int(case_targets.numel())),
+                    }
+                    tag_case_metrics[str(case_id)] = case_metrics
+                if tag_case_metrics:
+                    per_case_metrics["ALL-perturbed"] = tag_case_metrics
 
         def _format_metric_display(
             metric_key: str,
@@ -4662,6 +4780,8 @@ def test(
         if perturbation_output_lines:
             output_lines.extend(perturbation_output_lines)
         results["perturbation_metrics"] = per_tag_metrics
+        if per_case_metrics:
+            results["perturbation_case_metrics"] = per_case_metrics
 
     for line in output_lines:
         print(line)
