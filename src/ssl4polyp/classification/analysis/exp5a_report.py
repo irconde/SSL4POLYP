@@ -142,6 +142,12 @@ def _build_cluster_set(frames: Mapping[str, EvalFrame], *, domain: str) -> Clust
     domain_key = domain.lower()
 
     def positive_key(record: EvalFrame) -> Optional[str]:
+        if domain_key == "sun":
+            if record.case_id:
+                return f"pos_case::{record.case_id}"
+            if record.sequence_id:
+                return f"pos_sequence::{record.sequence_id}"
+            return None
         return None
 
     def negative_key(record: EvalFrame) -> Optional[str]:

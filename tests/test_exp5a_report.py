@@ -4,17 +4,25 @@ import json
 import math
 import sys
 from pathlib import Path
+from types import MappingProxyType
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+pytest.importorskip("numpy")
+
+from ssl4polyp.classification.analysis.common_loader import CommonFrame
 from ssl4polyp.classification.analysis.exp5a_report import (  # type: ignore[import]
+    EXPECTED_SEEDS,
+    _build_cluster_set,
+    _frames_to_eval,
     discover_runs,
     load_run,
     summarize_runs,
-    EXPECTED_SEEDS,
 )
 
 
@@ -283,3 +291,44 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
     pairwise = summary.get("pairwise")
     assert isinstance(pairwise, dict)
     assert "auprc" in pairwise
+
+
+def test_sun_bootstrap_clusters_group_positive_frames_by_case() -> None:
+    frames = [
+        CommonFrame(
+            frame_id="f_pos_caseA_1",
+            case_id="caseA",
+            prob=0.9,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"sequence_id": "caseA"}),
+        ),
+        CommonFrame(
+            frame_id="f_pos_caseA_2",
+            case_id="caseA",
+            prob=0.8,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"sequence_id": "caseA"}),
+        ),
+        CommonFrame(
+            frame_id="f_pos_caseB",
+            case_id="caseB",
+            prob=0.85,
+            label=1,
+            pred=1,
+            row=MappingProxyType({"sequence_id": "caseB"}),
+        ),
+        CommonFrame(
+            frame_id="f_neg_caseA",
+            case_id="caseA",
+            prob=0.1,
+            label=0,
+            pred=0,
+            row=MappingProxyType({"sequence_id": "caseA"}),
+        ),
+    ]
+    eval_frames = _frames_to_eval(frames)
+    clusters = _build_cluster_set(eval_frames, domain="sun")
+    positive_clusters = [set(cluster) for cluster in clusters.positives]
+    assert any({"f_pos_caseA_1", "f_pos_caseA_2"} == cluster for cluster in positive_clusters)
