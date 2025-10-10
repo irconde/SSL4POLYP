@@ -181,13 +181,11 @@ def compute_strata_metrics(frames: Sequence[FrameRecord], tau: float) -> Dict[st
     pos_mask = labels == 1
     neg_mask = labels == 0
     flat_mask = neg_mask | (pos_mask & (morph == "flat"))
-    if np.any(pos_mask & (morph == "flat")):
-        metrics["flat_plus_negs"] = _binary_metrics(probs[flat_mask], labels[flat_mask], tau)
+    metrics["flat_plus_negs"] = _binary_metrics(probs[flat_mask], labels[flat_mask], tau)
     polypoid_mask = neg_mask | (pos_mask & (morph == "polypoid"))
-    if np.any(pos_mask & (morph == "polypoid")):
-        metrics["polypoid_plus_negs"] = _binary_metrics(
-            probs[polypoid_mask], labels[polypoid_mask], tau
-        )
+    metrics["polypoid_plus_negs"] = _binary_metrics(
+        probs[polypoid_mask], labels[polypoid_mask], tau
+    )
     return metrics
 
 
@@ -659,17 +657,27 @@ def _collect_deltas(
     List[str],
 ]:
     colon_runs = runs_by_model.get("ssl_colon")
+    if not colon_runs:
+        raise RuntimeError(
+            "Experiment 3 delta computation requires SSL-Colon runs."
+        )
+    missing_baselines = [
+        baseline for baseline in ("sup_imnet", "ssl_imnet") if not runs_by_model.get(baseline)
+    ]
+    if missing_baselines:
+        missing_labels = ", ".join(model_label(baseline) for baseline in missing_baselines)
+        raise RuntimeError(
+            "Experiment 3 delta computation requires baseline runs for "
+            f"{missing_labels}."
+        )
     delta_results: Dict[
         str,
         Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, List[float]]]],
     ] = {}
     baseline_order: List[str] = []
-    if not colon_runs:
-        return delta_results, baseline_order
     for baseline in ("sup_imnet", "ssl_imnet"):
         baseline_runs = runs_by_model.get(baseline)
-        if not baseline_runs:
-            continue
+        assert baseline_runs is not None
         point, samples = bootstrap_deltas(
             colon_runs,
             baseline_runs,
