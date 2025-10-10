@@ -524,12 +524,15 @@ def _compute_delta_summaries(
         seed_values = [value for value in per_seed_map.values() if math.isfinite(value)]
         if not seed_values:
             continue
-        mean_delta = float(np.mean(seed_values))
+        array = np.array(seed_values, dtype=float)
+        mean_delta = float(np.mean(array))
+        std_delta = float(np.std(array, ddof=1)) if array.size > 1 else 0.0
         samples = replicates.get(metric, [])
         ci = _ci_bounds(samples, level=CI_LEVEL) if samples else None
         summaries[metric] = DeltaSummary(
             per_seed=dict(sorted(per_seed_map.items())),
             mean=mean_delta,
+            std=std_delta,
             ci_lower=ci[0] if ci else None,
             ci_upper=ci[1] if ci else None,
             samples=tuple(samples),
