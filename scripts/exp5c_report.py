@@ -31,6 +31,7 @@ write_test_composition_csv = cast(WriteCsvFn, _exp5c_module.write_test_compositi
 write_performance_csv = cast(WriteCsvFn, _exp5c_module.write_performance_csv)
 write_gain_csv = cast(WriteCsvFn, _exp5c_module.write_gain_csv)
 write_pairwise_csv = cast(WriteCsvFn, _exp5c_module.write_pairwise_csv)
+write_learning_curves_csv = cast(WriteCsvFn, _exp5c_module.write_learning_curves_csv)
 write_aulc_csv = cast(WriteCsvFn, _exp5c_module.write_aulc_csv)
 
 
@@ -91,6 +92,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional path to export the AULC and ΔAULC table (T5).",
+    )
+    parser.add_argument(
+        "--t5-learning-curves-csv",
+        type=Path,
+        default=None,
+        help="Optional path to export the learning curve summary table (T5).",
     )
     parser.add_argument(
         "--output-dir",
@@ -268,6 +275,10 @@ def main() -> None:
         path = args.t5_aulc_csv.expanduser()
         write_aulc_csv(summary, path, policy="primary")
         print(f"Wrote T5 AULC table to {_stringify_path(path)}")
+    if args.t5_learning_curves_csv is not None:
+        path = args.t5_learning_curves_csv.expanduser()
+        write_learning_curves_csv(summary, path, policy="primary")
+        print(f"Wrote T5 learning curves table to {_stringify_path(path)}")
     if args.output_dir is not None:
         output_dir = args.output_dir.expanduser()
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -279,6 +290,7 @@ def main() -> None:
             "T4 primary deltas": output_dir / "T4_postadapt_deltas.csv",
             "T4 sensitivity deltas": output_dir / "T4_postadapt_sensitivity.csv",
             "T5 AULC": output_dir / "T5_aulc_primary.csv",
+            "T5 learning curves": output_dir / "T5_learning_curves_primary.csv",
         }
         write_test_composition_csv(summary, artifacts["T1 test composition"])
         write_performance_csv(summary, artifacts["T2 primary performance"], policy="primary")
@@ -287,6 +299,7 @@ def main() -> None:
         write_pairwise_csv(summary, artifacts["T4 primary deltas"], policy="primary")
         write_pairwise_csv(summary, artifacts["T4 sensitivity deltas"], policy="sensitivity")
         write_aulc_csv(summary, artifacts["T5 AULC"], policy="primary")
+        write_learning_curves_csv(summary, artifacts["T5 learning curves"], policy="primary")
         for label, path in artifacts.items():
             print(f"Wrote {label} table to {_stringify_path(path)}")
     if args.output_json is None:
