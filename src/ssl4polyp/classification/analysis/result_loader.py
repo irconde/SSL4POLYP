@@ -333,13 +333,12 @@ class ResultLoader:
             return
         prevalence_value = block.get("prevalence")
         prevalence = _as_float(prevalence_value)
-        if prevalence is None:
-            if self.strict:
-                raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' is missing {block_name}.prevalence"
-                )
-            return
-        if not 0.0 <= prevalence <= 1.0:
+        prevalence_missing = prevalence is None
+        if prevalence_missing and self.strict:
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' is missing {block_name}.prevalence"
+            )
+        if prevalence is not None and not 0.0 <= prevalence <= 1.0:
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' reports invalid {block_name}.prevalence={prevalence_value!r}"
             )
@@ -349,7 +348,7 @@ class ResultLoader:
             raise GuardrailViolation(
                 f"Confusion totals disagree with class counts in {block_name} for '{metrics_path}'"
             )
-        if class_total > 0:
+        if class_total > 0 and not prevalence_missing:
             expected_prevalence = float(n_pos) / float(class_total)
             if not math.isclose(prevalence, expected_prevalence, rel_tol=1e-6, abs_tol=1e-6):
                 raise GuardrailViolation(
