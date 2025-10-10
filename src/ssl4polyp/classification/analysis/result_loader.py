@@ -186,7 +186,7 @@ class ResultLoader:
             )
 
     def _validate_schema(self, metrics_path: Path, payload: Mapping[str, Any]) -> str:
-        for key in ("thresholds", "data", "test_primary"):
+        for key in ("thresholds", "data", "val", "test_primary"):
             if key not in payload:
                 raise GuardrailViolation(
                     f"Metrics file '{metrics_path}' is missing required block '{key}'"
@@ -223,6 +223,11 @@ class ResultLoader:
         if not isinstance(test_primary, Mapping):
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' test_primary block must be a mapping"
+            )
+        val_block = payload.get("val")
+        if not isinstance(val_block, Mapping):
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' val block must be a mapping"
             )
         return val_path
 

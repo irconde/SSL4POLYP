@@ -40,6 +40,11 @@ def _base_payload(
             "val": {"path": val_path, "sha256": "val-digest"},
             "test": {"path": "sun_full/test.csv", "sha256": digest},
         },
+        "val": {
+            "loss": 0.2,
+            "auroc": 0.9,
+            "auprc": 0.8,
+        },
         "test_primary": {
             "tau": tau,
             "tp": 1,
@@ -82,7 +87,7 @@ def _write_metrics(path: Path, payload: dict[str, object]) -> None:
 
 def _materialise_run(tmp_path: Path, payload: dict[str, object], stem: str = "run") -> Path:
     metrics_path = tmp_path / f"{stem}.metrics.json"
-    outputs_path = tmp_path / f"{stem}_test_outputs.csv"
+    outputs_path = metrics_path.with_name(f"{metrics_path.stem}_test_outputs.csv")
     _write_outputs(outputs_path)
     _write_metrics(metrics_path, payload)
     return metrics_path
@@ -92,6 +97,15 @@ def test_missing_thresholds_triggers_guardrail(tmp_path: Path) -> None:
     payload = _base_payload()
     payload.pop("thresholds", None)
     metrics_path = _materialise_run(tmp_path, payload, stem="missing_thresholds")
+    loader = get_default_loader(exp_id="exp1")
+    with pytest.raises(GuardrailViolation):
+        load_common_run(metrics_path, loader=loader)
+
+
+def test_missing_val_block_triggers_guardrail(tmp_path: Path) -> None:
+    payload = _base_payload()
+    payload.pop("val", None)
+    metrics_path = _materialise_run(tmp_path, payload, stem="missing_val")
     loader = get_default_loader(exp_id="exp1")
     with pytest.raises(GuardrailViolation):
         load_common_run(metrics_path, loader=loader)
