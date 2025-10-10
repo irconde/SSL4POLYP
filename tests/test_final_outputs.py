@@ -228,7 +228,11 @@ def test_build_sensitivity_block_filters_invalid_entries():
     assert block["flat_plus_negs"]["n_pos"] == 2
 
 
-def test_build_metrics_provenance_prefers_subset_trace():
+def test_build_metrics_provenance_prefers_subset_trace(tmp_path: Path):
+    outputs_csv = tmp_path / "demo_outputs.csv"
+    outputs_csv.write_text("frame_id,prob,label,pred\n", encoding="utf-8")
+    outputs_sha = tc._compute_file_sha256(outputs_csv)
+
     args = SimpleNamespace(
         seed=7,
         active_seed=11,
@@ -240,6 +244,9 @@ def test_build_metrics_provenance_prefers_subset_trace():
         dataset_seed=23,
         test_split="test",
         dataset_layout={"percent": 50, "dataset_seed": 99},
+        output_dir=str(tmp_path),
+        latest_test_outputs_path=outputs_csv,
+        latest_test_outputs_sha256=outputs_sha,
     )
     trace = tc.Experiment4SubsetTrace(
         percent=25,
@@ -263,6 +270,8 @@ def test_build_metrics_provenance_prefers_subset_trace():
     assert provenance["subset_percent"] == pytest.approx(25.0)
     assert provenance["pack_seed"] == 42
     assert provenance["split"] == "test"
+    assert provenance["test_outputs_csv_sha256"] == outputs_sha
+    assert provenance["test_outputs_csv"] == "demo_outputs.csv"
 
 
 def test_build_run_metadata_collects_core_fields():
