@@ -139,7 +139,14 @@ class ResultLoader:
             threshold_spec = THRESHOLD_SPECS[self.exp_id]
         except KeyError as exc:  # pragma: no cover - defensive guard
             raise GuardrailViolation(f"Unknown experiment id '{self.exp_id}'") from exc
-        val_path = self._validate_schema(metrics_path, normalised)
+        expected_val_paths = self._normalise_expected_val_paths(
+            threshold_spec.get("expected_val_path")
+        )
+        val_path = self._validate_schema(
+            metrics_path,
+            normalised,
+            expected_val_paths=expected_val_paths,
+        )
         self._validate_thresholds(metrics_path, normalised, val_path, threshold_spec)
         if "sensitivity" in threshold_spec:
             if not isinstance(normalised.get("test_sensitivity"), Mapping):
@@ -185,7 +192,13 @@ class ResultLoader:
                 f"Metrics file '{metrics_path}' contains disallowed evaluation keys: {sorted(bad)}"
             )
 
-    def _validate_schema(self, metrics_path: Path, payload: Mapping[str, Any]) -> str:
+    def _validate_schema(
+        self,
+        metrics_path: Path,
+        payload: Mapping[str, Any],
+        *,
+        expected_val_paths: Sequence[str] = (),
+    ) -> str:
         for key in ("thresholds", "data", "val", "test_primary"):
             if key not in payload:
                 raise GuardrailViolation(
@@ -219,6 +232,14 @@ class ResultLoader:
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' data.val.path is required"
             )
+        if expected_val_paths:
+            allowed_suffixes = self._expand_expected_val_paths(expected_val_paths)
+            if not any(str(val_path).endswith(suffix) for suffix in allowed_suffixes):
+                options = ", ".join(sorted(dict.fromkeys(allowed_suffixes))) or "<unknown>"
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' data.val.path must end with one of "
+                    f"[{options}] (found {val_path!r})"
+                )
         test_primary = payload.get("test_primary")
         if not isinstance(test_primary, Mapping):
             raise GuardrailViolation(
@@ -236,7 +257,7 @@ class ResultLoader:
         metrics_path: Path,
         payload: Mapping[str, Any],
         val_path: str,
-        spec: Mapping[str, Mapping[str, Any]],
+        spec: Mapping[str, Any],
     ) -> None:
         thresholds = payload.get("thresholds")
         if not isinstance(thresholds, Mapping):
@@ -296,6 +317,35 @@ class ResultLoader:
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' unexpectedly defines thresholds.sensitivity"
             )
+
+    @staticmethod
+    def _normalise_expected_val_paths(raw: Optional[object]) -> Tuple[str, ...]:
+        if raw is None:
+            return ()
+        if isinstance(raw, (list, tuple, set, frozenset)):
+            items = list(raw)
+        else:
+            items = [raw]
+        normalised: list[str] = []
+        for item in items:
+            text = str(item).strip()
+            if text:
+                normalised.append(text)
+        return tuple(normalised)
+
+    @staticmethod
+    def _expand_expected_val_paths(paths: Sequence[str]) -> Tuple[str, ...]:
+        suffixes: list[str] = []
+        for candidate in paths:
+            text = str(candidate).strip()
+            if not text:
+                continue
+            suffixes.append(text)
+            if text.endswith(".csv"):
+                suffixes.append(text[:-4])
+            else:
+                suffixes.append(f"{text}.csv")
+        return tuple(dict.fromkeys(suffixes))
 
     def _validate_confusion(
         self,

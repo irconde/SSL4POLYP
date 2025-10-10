@@ -14,6 +14,7 @@ THRESHOLD_SPECS = {
     "exp3b": {
         "primary":     {"policy": "f1_opt_on_val", "split": "${val_path}", "require": ["tau", "split", "epoch"]},
         "sensitivity": {"policy": "youden_on_val", "split": "${val_path}", "require": ["tau", "split", "epoch"]},
+        "expected_val_path": "sun_morphology/val",
     },
     "exp4": {
         "primary":     {"policy": "f1_opt_on_val", "split": "${val_path}", "require": ["tau", "split", "epoch"]},

@@ -12,12 +12,18 @@ _EXP_IDS = ("exp1", "exp2", "exp3b", "exp4", "exp5a", "exp5b", "exp5c")
 
 def _base_payload(exp_id: str) -> dict[str, object]:
     val_path = "sun_full/val.csv"
+    train_path = "sun_full/train.csv"
+    test_path = "sun_full/test.csv"
+    if exp_id == "exp3b":
+        val_path = "sun_morphology/val.csv"
+        train_path = "sun_morphology/train.csv"
+        test_path = "sun_morphology/test.csv"
     payload: dict[str, object] = {
         "seed": 13,
         "data": {
-            "train": {"path": "sun_full/train.csv", "sha256": "train-digest"},
+            "train": {"path": train_path, "sha256": "train-digest"},
             "val": {"path": val_path, "sha256": "val-digest"},
-            "test": {"path": "sun_full/test.csv", "sha256": "test-digest"},
+            "test": {"path": test_path, "sha256": "test-digest"},
         },
         "val": {
             "loss": 0.25,
@@ -127,6 +133,16 @@ def test_loader_rejects_wrong_sensitivity_split(exp_id: str) -> None:
     if "sensitivity" not in payload["thresholds"]:
         pytest.skip("Experiment does not define sensitivity thresholds")
     payload["thresholds"]["sensitivity"]["split"] = "other"
+    with pytest.raises(GuardrailViolation):
+        loader.validate(Path("metrics.json"), payload)
+
+
+def test_exp3_loader_rejects_wrong_val_path() -> None:
+    loader = ResultLoader(exp_id="exp3b")
+    payload = _base_payload("exp3b")
+    payload["data"]["val"]["path"] = "sun_full/val.csv"  # type: ignore[index]
+    payload["thresholds"]["primary"]["split"] = "sun_full/val.csv"  # type: ignore[index]
+    payload["thresholds"]["sensitivity"]["split"] = "sun_full/val.csv"  # type: ignore[index]
     with pytest.raises(GuardrailViolation):
         loader.validate(Path("metrics.json"), payload)
 
