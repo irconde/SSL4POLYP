@@ -39,14 +39,15 @@ def test_compute_strata_metrics_counts(tau: float) -> None:
     assert metrics["polypoid_plus_negs"]["n_neg"] == 2
 
 
-def test_compute_strata_metrics_excludes_missing_strata() -> None:
+def test_compute_strata_metrics_includes_empty_strata() -> None:
     records = [
         FrameRecord(prob=0.7, label=1, pred=1, case_id="case_polyp", morphology="polypoid"),
         FrameRecord(prob=0.2, label=0, pred=0, case_id="case_neg", morphology="unknown"),
     ]
     metrics = compute_strata_metrics(records, tau=0.5)
-    assert "flat_plus_negs" not in metrics
-    assert "polypoid_plus_negs" in metrics
+    assert metrics["flat_plus_negs"]["n_pos"] == 0
+    assert metrics["flat_plus_negs"]["n_neg"] == 1
+    assert metrics["polypoid_plus_negs"]["n_pos"] == 1
 
 
 def test_report_composition_includes_empty_flat_stratum(tmp_path: Path) -> None:
@@ -60,9 +61,15 @@ def test_report_composition_includes_empty_flat_stratum(tmp_path: Path) -> None:
         {"case_id": "b", "prob": 0.25, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "c", "prob": 0.22, "label": 0, "pred": 0, "morphology": "other"},
     ]
+    ssl_rows = [
+        {"case_id": "a", "prob": 0.78, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.3, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "c", "prob": 0.27, "label": 0, "pred": 0, "morphology": "other"},
+    ]
     for seed in EXPECTED_SEEDS:
         _write_run(tmp_path, "ssl_colon", seed=seed, rows=colon_rows, tau=0.4)
         _write_run(tmp_path, "sup_imnet", seed=seed, rows=sup_rows, tau=0.4)
+        _write_run(tmp_path, "ssl_imnet", seed=seed, rows=ssl_rows, tau=0.4)
 
     report = generate_report(tmp_path, bootstrap=0, rng_seed=3)
 
@@ -71,6 +78,18 @@ def test_report_composition_includes_empty_flat_stratum(tmp_path: Path) -> None:
     ]
     assert composition_lines, "Expected Flat + Negs stratum in composition table"
     assert "| Flat + Negs | 0 |" in composition_lines[0]
+
+
+def test_generate_report_requires_all_deltas(tmp_path: Path) -> None:
+    rows = [
+        {"case_id": "a", "prob": 0.75, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.35, "label": 0, "pred": 0, "morphology": "other"},
+    ]
+    for seed in EXPECTED_SEEDS:
+        _write_run(tmp_path, "ssl_colon", seed=seed, rows=rows, tau=0.5)
+        _write_run(tmp_path, "sup_imnet", seed=seed, rows=rows, tau=0.5)
+    with pytest.raises(RuntimeError, match="SSL-ImNet"):
+        generate_report(tmp_path, bootstrap=0, rng_seed=19)
 
 
 def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]], tau: float = 0.5) -> None:
@@ -164,12 +183,26 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         {"case_id": "d", "prob": 0.2, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "e", "prob": 0.65, "label": 0, "pred": 1, "morphology": "other"},
     ]
+    ssl_rows = [
+        {"case_id": "a", "prob": 0.68, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.58, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "c", "prob": 0.66, "label": 0, "pred": 1, "morphology": "other"},
+        {"case_id": "d", "prob": 0.21, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "e", "prob": 0.6, "label": 0, "pred": 1, "morphology": "other"},
+    ]
     alt_sup_rows = [
         {"case_id": "a", "prob": 0.65, "label": 1, "pred": 1, "morphology": "polypoid"},
         {"case_id": "b", "prob": 0.62, "label": 1, "pred": 1, "morphology": "flat"},
         {"case_id": "c", "prob": 0.68, "label": 0, "pred": 1, "morphology": "other"},
         {"case_id": "d", "prob": 0.22, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "e", "prob": 0.61, "label": 0, "pred": 1, "morphology": "other"},
+    ]
+    alt_ssl_rows = [
+        {"case_id": "a", "prob": 0.64, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.6, "label": 1, "pred": 1, "morphology": "flat"},
+        {"case_id": "c", "prob": 0.64, "label": 0, "pred": 1, "morphology": "other"},
+        {"case_id": "d", "prob": 0.24, "label": 0, "pred": 0, "morphology": "unknown"},
+        {"case_id": "e", "prob": 0.58, "label": 0, "pred": 1, "morphology": "other"},
     ]
     alt_colon_rows = [
         {"case_id": "a", "prob": 0.88, "label": 1, "pred": 1, "morphology": "polypoid"},
@@ -181,12 +214,15 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         _write_run(tmp_path, "ssl_colon", seed=seed, rows=colon_rows if seed != 29 else alt_colon_rows, tau=0.5)
         sup_payload = sup_rows if seed != 47 else alt_sup_rows
         _write_run(tmp_path, "sup_imnet", seed=seed, rows=sup_payload, tau=0.5)
+        ssl_payload = ssl_rows if seed != 47 else alt_ssl_rows
+        _write_run(tmp_path, "ssl_imnet", seed=seed, rows=ssl_payload, tau=0.5)
 
     report = generate_report(tmp_path, bootstrap=2, rng_seed=7)
 
     assert "## Metrics at τ_F1(val-morph) — Overall" in report
     assert "Flat + Negs" in report
     assert "SSL-Colon − SUP-ImNet" in report
+    assert "SSL-Colon − SSL-ImNet" in report
     assert "Interaction effect" in report
     assert "Appendix: Sensitivity operating point (τ_Youden(val-morph))" in report
     delta_rows = [
@@ -206,6 +242,7 @@ def test_generate_report_rejects_mismatched_primary_tau(tmp_path: Path) -> None:
     for seed in EXPECTED_SEEDS:
         _write_run(tmp_path, "ssl_colon", seed=seed, rows=rows, tau=0.5)
         _write_run(tmp_path, "sup_imnet", seed=seed, rows=rows, tau=0.5)
+        _write_run(tmp_path, "ssl_imnet", seed=seed, rows=rows, tau=0.5)
 
     metrics_path = tmp_path / "ssl_colon__sun_morphology_s13_last.metrics.json"
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
@@ -224,6 +261,7 @@ def test_generate_report_rejects_unexpected_test_split(tmp_path: Path) -> None:
     for seed in EXPECTED_SEEDS:
         _write_run(tmp_path, "ssl_colon", seed=seed, rows=rows, tau=0.5)
         _write_run(tmp_path, "sup_imnet", seed=seed, rows=rows, tau=0.5)
+        _write_run(tmp_path, "ssl_imnet", seed=seed, rows=rows, tau=0.5)
 
     metrics_path = tmp_path / "ssl_colon__sun_morphology_s13_last.metrics.json"
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
