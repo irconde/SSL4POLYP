@@ -8,6 +8,15 @@ from ssl4polyp.classification.analysis.exp4_report import collect_summary, rende
 from ssl4polyp.classification.analysis.result_loader import build_report_manifest
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(
+            "Bootstrap iterations must be a positive integer (>= 1)."
+        )
+    return parsed
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate the Experiment 4 learning-curve and delta summary report.",
@@ -26,9 +35,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--bootstrap",
-        type=int,
+        type=_positive_int,
         default=1000,
-        help="Number of bootstrap iterations for confidence intervals (default: 1000).",
+        help=(
+            "Number of bootstrap iterations for confidence intervals (default: 1000). "
+            "Must be a positive integer."
+        ),
     )
     parser.add_argument(
         "--seed",
@@ -58,7 +70,7 @@ def main() -> None:
     args = parse_args()
     runs, summary, loader = collect_summary(
         args.runs_root,
-        bootstrap=max(0, args.bootstrap),
+        bootstrap=args.bootstrap,
         rng_seed=args.seed,
         strict=args.strict,
     )
@@ -79,7 +91,7 @@ def main() -> None:
             loader=loader,
             runs=loader.loaded_runs,
             rng_seed=args.seed,
-            bootstrap=max(0, args.bootstrap),
+            bootstrap=args.bootstrap,
             validated_seeds=validated_seeds,
             seed_groups=seed_groups if isinstance(seed_groups, dict) else None,
         )
