@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import copy
+import csv
 import math
 import sys
 from pathlib import Path
@@ -12,17 +14,22 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 pytest.importorskip("numpy")
 
 from ssl4polyp.classification.analysis.common_loader import CommonFrame
 from ssl4polyp.classification.analysis.exp5a_report import (  # type: ignore[import]
     EXPECTED_SEEDS,
+    PRIMARY_METRICS,
     _build_cluster_set,
     _frames_to_eval,
     discover_runs,
     load_run,
     summarize_runs,
+    write_domain_shift_csv,
+    write_seed_metrics_csv,
 )
 
 
@@ -84,9 +91,173 @@ def _sun_payload(tau: float, offset: float) -> dict[str, object]:
             "auroc": 0.7 + offset,
             "f1": 0.55 + offset,
             "recall": 0.6 + offset,
+            "precision": 0.62 + offset,
+            "balanced_accuracy": 0.66 + offset,
+            "mcc": 0.4 + offset,
+            "loss": 0.3 - offset,
             "prevalence": 0.5,
         }
     }
+
+
+def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
+    root = tmp_path / "results"
+    sun_root = root / "sun_parent"
+    for seed in EXPECTED_SEEDS:
+        colon_dir = root / "ssl_colon" / f"seed{seed}"
+        sup_dir = root / "sup_imnet" / f"seed{seed}"
+        ssl_dir = root / "ssl_imnet" / f"seed{seed}"
+        colon_dir.mkdir(parents=True, exist_ok=True)
+        sup_dir.mkdir(parents=True, exist_ok=True)
+        ssl_dir.mkdir(parents=True, exist_ok=True)
+        _write_outputs(colon_dir / f"ssl_colon__seed{seed}_last_test_outputs.csv", _polyp_rows())
+        _write_outputs(sup_dir / f"sup_imnet__seed{seed}_last_test_outputs.csv", _polyp_rows())
+        _write_outputs(ssl_dir / f"ssl_imnet__seed{seed}_last_test_outputs.csv", _polyp_rows())
+        sun_outputs_path = sun_root / f"seed{seed}_test_outputs.csv"
+        _write_outputs(sun_outputs_path, _sun_rows())
+        _write_outputs((colon_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
+        _write_outputs((sup_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
+        _write_outputs((ssl_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
+    parent_payload = _sun_payload(tau=0.45, offset=-0.08)
+    val_path = _data_block()["val"]["path"]
+    colon_metrics_template = {
+        "seed": 0,
+        "data": _data_block(),
+        "test_primary": {
+            "tau": 0.55,
+            "auprc": 0.8,
+            "auroc": 0.9,
+            "f1": 0.75,
+            "recall": 0.78,
+            "precision": 0.82,
+            "balanced_accuracy": 0.85,
+            "mcc": 0.67,
+            "loss": 0.15,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+            "prevalence": 0.5,
+        },
+        "thresholds": {
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.55,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
+        },
+        "val": {"path": val_path},
+        "run": {"exp": "exp5a"},
+        "provenance": {
+            "model": "ssl_colon",
+            "test_outputs_csv_sha256": "deadbeef",
+        },
+    }
+    sup_metrics_template = {
+        "seed": 0,
+        "data": _data_block(),
+        "test_primary": {
+            "tau": 0.6,
+            "auprc": 0.7,
+            "auroc": 0.82,
+            "f1": 0.68,
+            "recall": 0.7,
+            "precision": 0.74,
+            "balanced_accuracy": 0.78,
+            "mcc": 0.6,
+            "loss": 0.22,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+            "prevalence": 0.5,
+        },
+        "thresholds": {
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.6,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
+        },
+        "val": {"path": val_path},
+        "run": {"exp": "exp5a"},
+        "provenance": {
+            "model": "sup_imnet",
+            "test_outputs_csv_sha256": "deadbeef",
+        },
+    }
+    ssl_metrics_template = {
+        "seed": 0,
+        "data": _data_block(),
+        "test_primary": {
+            "tau": 0.58,
+            "auprc": 0.72,
+            "auroc": 0.85,
+            "f1": 0.7,
+            "recall": 0.72,
+            "precision": 0.76,
+            "balanced_accuracy": 0.8,
+            "mcc": 0.62,
+            "loss": 0.21,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+            "prevalence": 0.5,
+        },
+        "thresholds": {
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.58,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
+        },
+        "val": {"path": val_path},
+        "run": {"exp": "exp5a"},
+        "provenance": {
+            "model": "ssl_imnet",
+            "test_outputs_csv_sha256": "deadbeef",
+        },
+    }
+    for seed in EXPECTED_SEEDS:
+        colon_metrics_seed = copy.deepcopy(colon_metrics_template)
+        colon_metrics_seed["seed"] = seed
+        colon_metrics_seed["provenance"]["parent_run"] = {
+            "metrics": {"path": f"../sun_parent/seed{seed}.metrics.json", "payload": parent_payload},
+            "outputs": {"path": f"../sun_parent/seed{seed}_test_outputs.csv"},
+        }
+        sup_metrics_seed = copy.deepcopy(sup_metrics_template)
+        sup_metrics_seed["seed"] = seed
+        sup_metrics_seed["provenance"]["parent_run"] = {
+            "metrics": {"path": f"../sun_parent/seed{seed}.metrics.json", "payload": parent_payload},
+            "outputs": {"path": f"../sun_parent/seed{seed}_test_outputs.csv"},
+        }
+        ssl_metrics_seed = copy.deepcopy(ssl_metrics_template)
+        ssl_metrics_seed["seed"] = seed
+        ssl_metrics_seed["provenance"]["parent_run"] = {
+            "metrics": {"path": f"../sun_parent/seed{seed}.metrics.json", "payload": parent_payload},
+            "outputs": {"path": f"../sun_parent/seed{seed}_test_outputs.csv"},
+        }
+        colon_dir = root / "ssl_colon" / f"seed{seed}"
+        sup_dir = root / "sup_imnet" / f"seed{seed}"
+        ssl_dir = root / "ssl_imnet" / f"seed{seed}"
+        _write_metrics(colon_dir / f"ssl_colon__seed{seed}_last.metrics.json", colon_metrics_seed)
+        _write_metrics(sup_dir / f"sup_imnet__seed{seed}_last.metrics.json", sup_metrics_seed)
+        _write_metrics(ssl_dir / f"ssl_imnet__seed{seed}_last.metrics.json", ssl_metrics_seed)
+    runs = discover_runs(root)
+    return summarize_runs(runs, bootstrap=bootstrap, rng_seed=123)
 
 
 def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
@@ -109,6 +280,9 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
             "auroc": 0.88,
             "f1": 0.7,
             "recall": 0.72,
+            "precision": 0.78,
+            "balanced_accuracy": 0.83,
+            "mcc": 0.61,
             "loss": 0.2,
             "tp": 2,
             "fp": 0,
@@ -127,6 +301,7 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
                 "source_checkpoint": "sun_parent/seed1.pth",
             },
         },
+        "val": {"path": val_path},
         "domain_shift_delta": {
             "metrics": {
                 "auprc": 0.1,
@@ -155,126 +330,21 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
     assert run.seed == 1
     assert math.isclose(run.metrics["auprc"], 0.75)
     assert math.isclose(run.delta["auprc"], 0.1)
+    assert "precision" in run.delta
+    assert "balanced_accuracy" in run.delta
+    assert "mcc" in run.delta
+    assert "loss" in run.delta
+    assert math.isclose(run.delta["precision"], 0.21)
+    assert math.isclose(run.delta["balanced_accuracy"], 0.22)
+    assert math.isclose(run.delta["mcc"], 0.26)
+    assert math.isclose(run.delta["loss"], -0.15)
     assert run.sun_tau == 0.4
     assert run.sun_frames is not None
     assert len(run.frames) == 4
 
 
 def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
-    root = tmp_path / "results"
-    sun_root = root / "sun_parent"
-    for seed in EXPECTED_SEEDS:
-        colon_dir = root / "ssl_colon" / f"seed{seed}"
-        sup_dir = root / "sup_imnet" / f"seed{seed}"
-        colon_dir.mkdir(parents=True, exist_ok=True)
-        sup_dir.mkdir(parents=True, exist_ok=True)
-        _write_outputs(colon_dir / f"ssl_colon__seed{seed}_last_test_outputs.csv", _polyp_rows())
-        _write_outputs(sup_dir / f"sup_imnet__seed{seed}_last_test_outputs.csv", _polyp_rows())
-        sun_outputs_path = sun_root / f"seed{seed}_test_outputs.csv"
-        _write_outputs(sun_outputs_path, _sun_rows())
-        _write_outputs((colon_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
-        _write_outputs((sup_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
-    parent_payload = _sun_payload(tau=0.45, offset=-0.08)
-    val_path = _data_block()["val"]["path"]
-    colon_metrics = {
-        "seed": 0,  # placeholder updated per seed
-        "data": _data_block(),
-        "test_primary": {
-            "tau": 0.55,
-            "auprc": 0.8,
-            "auroc": 0.9,
-            "f1": 0.75,
-            "recall": 0.78,
-            "loss": 0.15,
-            "tp": 2,
-            "fp": 0,
-            "tn": 2,
-            "fn": 0,
-            "n_pos": 2,
-            "n_neg": 2,
-            "prevalence": 0.5,
-        },
-        "thresholds": {
-            "primary": {
-                "policy": "sun_val_frozen",
-                "tau": 0.55,
-                "split": val_path,
-                "source_split": "sun_full/val",
-                "source_checkpoint": "sun_parent/seed1.pth",
-            },
-        },
-        "run": {"exp": "exp5a"},
-        "provenance": {
-            "model": "ssl_colon",
-            "test_outputs_csv_sha256": "deadbeef",
-            "parent_run": {
-                "metrics": {
-                    "path": "../sun_parent/seed.metrics.json",
-                    "payload": parent_payload,
-                },
-            },
-        },
-    }
-    sup_metrics = {
-        "seed": 0,
-        "data": _data_block(),
-        "test_primary": {
-            "tau": 0.6,
-            "auprc": 0.7,
-            "auroc": 0.82,
-            "f1": 0.68,
-            "recall": 0.7,
-            "loss": 0.22,
-            "tp": 2,
-            "fp": 0,
-            "tn": 2,
-            "fn": 0,
-            "n_pos": 2,
-            "n_neg": 2,
-            "prevalence": 0.5,
-        },
-        "thresholds": {
-            "primary": {
-                "policy": "sun_val_frozen",
-                "tau": 0.6,
-                "split": val_path,
-                "source_split": "sun_full/val",
-                "source_checkpoint": "sun_parent/seed1.pth",
-            },
-        },
-        "run": {"exp": "exp5a"},
-        "provenance": {
-            "model": "sup_imnet",
-            "test_outputs_csv_sha256": "deadbeef",
-            "parent_run": {
-                "metrics": {
-                    "path": "../sun_parent/seed.metrics.json",
-                    "payload": parent_payload,
-                },
-            },
-        },
-    }
-    for seed in EXPECTED_SEEDS:
-        colon_metrics_seed = dict(colon_metrics)
-        colon_metrics_seed["seed"] = seed
-        colon_metrics_seed["provenance"] = dict(colon_metrics["provenance"])
-        colon_metrics_seed["provenance"]["parent_run"] = {
-            "metrics": {"path": f"../sun_parent/seed{seed}.metrics.json", "payload": parent_payload},
-            "outputs": {"path": f"../sun_parent/seed{seed}_test_outputs.csv"},
-        }
-        sup_metrics_seed = dict(sup_metrics)
-        sup_metrics_seed["seed"] = seed
-        sup_metrics_seed["provenance"] = dict(sup_metrics["provenance"])
-        sup_metrics_seed["provenance"]["parent_run"] = {
-            "metrics": {"path": f"../sun_parent/seed{seed}.metrics.json", "payload": parent_payload},
-            "outputs": {"path": f"../sun_parent/seed{seed}_test_outputs.csv"},
-        }
-        colon_dir = root / "ssl_colon" / f"seed{seed}"
-        sup_dir = root / "sup_imnet" / f"seed{seed}"
-        _write_metrics(colon_dir / f"ssl_colon__seed{seed}_last.metrics.json", colon_metrics_seed)
-        _write_metrics(sup_dir / f"sup_imnet__seed{seed}_last.metrics.json", sup_metrics_seed)
-    runs = discover_runs(root)
-    summary = summarize_runs(runs, bootstrap=10, rng_seed=123)
+    summary = _build_summary(tmp_path, bootstrap=10)
     assert "models" in summary
     assert "ssl_colon" in summary["models"]
     assert summary["validated_seeds"] == list(EXPECTED_SEEDS)
@@ -292,9 +362,49 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
     colon_entry = summary["models"]["ssl_colon"]
     assert "performance" in colon_entry
     assert "seeds" in colon_entry
+    metadata = summary.get("metadata")
+    assert isinstance(metadata, dict)
+    delta_metadata = metadata.get("delta_metrics")
+    assert isinstance(delta_metadata, list)
+    for metric in PRIMARY_METRICS:
+        assert metric in delta_metadata
+    seed_payload = colon_entry["seeds"][EXPECTED_SEEDS[0]]
+    delta_block = seed_payload.get("delta")
+    assert isinstance(delta_block, dict)
+    for metric in ("precision", "balanced_accuracy", "mcc", "loss"):
+        assert metric in delta_block
+    domain_shift_summary = colon_entry.get("domain_shift")
+    assert isinstance(domain_shift_summary, dict)
+    for metric in ("precision", "balanced_accuracy", "mcc", "loss"):
+        assert metric in domain_shift_summary
+    domain_shift_ci = colon_entry.get("domain_shift_ci")
+    assert isinstance(domain_shift_ci, dict)
+    for metric in ("precision", "balanced_accuracy", "mcc", "loss"):
+        assert metric in domain_shift_ci
     pairwise = summary.get("pairwise")
     assert isinstance(pairwise, dict)
     assert "auprc" in pairwise
+
+
+def test_extended_delta_metrics_propagate_to_csv(tmp_path: Path) -> None:
+    summary = _build_summary(tmp_path, bootstrap=8)
+    domain_shift_path = tmp_path / "domain_shift.csv"
+    seed_metrics_path = tmp_path / "seed_metrics.csv"
+    write_domain_shift_csv(summary, domain_shift_path)
+    write_seed_metrics_csv(summary, seed_metrics_path)
+
+    with domain_shift_path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        domain_metrics = {row["metric"] for row in reader}
+    for metric in ("precision", "balanced_accuracy", "mcc", "loss"):
+        assert metric in domain_metrics
+
+    with seed_metrics_path.open(newline="", encoding="utf-8") as handle:
+        reader = list(csv.DictReader(handle))
+    domain_rows = [row for row in reader if row.get("kind") == "domain_shift"]
+    domain_seed_metrics = {row["metric"] for row in domain_rows}
+    for metric in ("precision", "balanced_accuracy", "mcc", "loss"):
+        assert metric in domain_seed_metrics
 
 
 def test_sun_bootstrap_clusters_group_positive_frames_by_case() -> None:

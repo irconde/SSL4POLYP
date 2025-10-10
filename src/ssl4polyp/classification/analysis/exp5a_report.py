@@ -297,10 +297,11 @@ def _load_parent_payload(provenance: Mapping[str, Any], metrics_path: Path) -> T
 def _derive_delta(
     polyp_metrics: Mapping[str, float],
     sun_metrics: Mapping[str, float],
-    metrics: Sequence[str] = ("recall", "f1", "auprc", "auroc"),
+    metrics: Optional[Sequence[str]] = None,
 ) -> Dict[str, float]:
+    metric_list = tuple(metrics) if metrics is not None else PRIMARY_METRICS
     deltas: Dict[str, float] = {}
-    for metric in metrics:
+    for metric in metric_list:
         polyp_value = _coerce_float(polyp_metrics.get(metric))
         sun_value = _coerce_float(sun_metrics.get(metric))
         if polyp_value is None or sun_value is None:
@@ -371,8 +372,9 @@ def load_run(
         raise ValueError(
             f"SUN baseline outputs missing for Experiment 5A run at {metrics_path}"
         )
+    computed_delta = _derive_delta(test_metrics, sun_metrics)
     if not delta_block:
-        delta_metrics = _derive_delta(test_metrics, sun_metrics)
+        delta_metrics = computed_delta
     else:
         metrics_subblock = (
             delta_block.get("metrics")
@@ -385,6 +387,8 @@ def load_run(
             if isinstance(value, (int, float, np.integer, np.floating))
             and math.isfinite(float(value))
         }
+        for metric, value in computed_delta.items():
+            delta_metrics.setdefault(metric, value)
     frames = _frames_to_eval(base_run.frames)
     composition = _compute_composition(test_metrics, frames)
     outputs_sha = _clean_text(provenance.get("test_outputs_csv_sha256"))
@@ -661,7 +665,7 @@ def summarize_runs(
     summary: Dict[str, Any] = {
         "metadata": {
             "metrics": list(PRIMARY_METRICS),
-            "delta_metrics": ["recall", "f1", "auprc", "auroc"],
+            "delta_metrics": list(PRIMARY_METRICS),
             "bootstrap": int(max(0, bootstrap)),
             "ci_level": CI_LEVEL,
         },
@@ -730,7 +734,7 @@ def summarize_runs(
             )
             delta_ci_replicates = _bootstrap_domain_shift(
                 run,
-                metrics=("recall", "f1", "auprc", "auroc"),
+                metrics=PRIMARY_METRICS,
                 bootstrap=bootstrap,
                 rng_seed=rng_seed + seed * 7,
             )
@@ -756,13 +760,13 @@ def summarize_runs(
                 value = _coerce_float(run.metrics.get(metric))
                 if value is not None:
                     metric_accumulators[metric].append(value)
-            for metric in ("recall", "f1", "auprc", "auroc"):
+            for metric in PRIMARY_METRICS:
                 value = _coerce_float(run.delta.get(metric))
                 if value is not None:
                     delta_accumulators[metric].append(value)
         delta_summary_ci_replicates = _bootstrap_domain_shift_summary(
             runs,
-            metrics=("recall", "f1", "auprc", "auroc"),
+            metrics=PRIMARY_METRICS,
             bootstrap=bootstrap,
             rng_seed=rng_seed + len(model) * 17,
         )
