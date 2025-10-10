@@ -1485,6 +1485,7 @@ def write_aulc_csv(
                 if not isinstance(stats, Mapping):
                     continue
                 ci_value = stats.get("ci") if isinstance(stats.get("ci"), Mapping) else {}
+                colon_aulc = stats.get("colon_aulc") if isinstance(stats.get("colon_aulc"), Mapping) else {}
                 rows.append(
                     {
                         "policy": policy,
@@ -1492,9 +1493,9 @@ def write_aulc_csv(
                         "metric": metric,
                         "model": TARGET_MODEL,
                         "baseline": baseline,
-                        "mean": stats.get("colon_aulc"),
-                        "std": None,
-                        "n": stats.get("seeds"),
+                        "mean": colon_aulc.get("mean"),
+                        "std": colon_aulc.get("std"),
+                        "n": colon_aulc.get("n"),
                         "delta": stats.get("delta"),
                         "ci_lower": ci_value.get("lower"),
                         "ci_upper": ci_value.get("upper"),
