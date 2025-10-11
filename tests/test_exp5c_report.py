@@ -51,6 +51,10 @@ def _write_metrics(path: Path) -> None:
             "val": {"path": "sun_full/val.csv", "sha256": "val-digest"},
             "test": {"path": "sun_full/test.csv", "sha256": "test-digest"},
         },
+        "dataset": {
+            "test_primary": {"pack": "polypgen_fewshot_s50", "subset_seed": 13},
+            "train": {"subset_seed": 13},
+        },
         "test_primary": {
             "tau": 0.5,
             "tp": 1,
@@ -90,6 +94,7 @@ def _write_metrics(path: Path) -> None:
             "model": "ssl_colon",
             "train_seed": 13,
             "pack_seed": 29,
+            "fewshot_budget": 50,
             "split": "test",
             "test_outputs_csv_sha256": "deadbeef",
         },
