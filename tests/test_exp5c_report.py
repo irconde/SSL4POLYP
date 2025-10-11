@@ -252,3 +252,32 @@ def test_compute_test_composition_errors_when_subset_seed_missing() -> None:
         )
 
     assert "Missing subset seed metadata" in str(excinfo.value)
+
+
+def test_extract_subset_seed_ignores_zero_shot_blocks() -> None:
+    run = exp5c_report.FewShotRun(
+        model="ssl_colon",
+        seed=13,
+        budget=50,
+        tau=0.5,
+        sensitivity_tau=None,
+        primary_metrics={},
+        primary_counts={},
+        sensitivity_metrics={},
+        sensitivity_counts={},
+        val_metrics={},
+        provenance={"subset_seed": 13},
+        dataset={
+            "train": {"subset_seed": 13},
+            "test_primary": {"subset_seed": 13},
+            "zero_shot": {"subset_seed": 29},
+            "test_zero_shot": {"subset_seed": 29},
+        },
+        frames={},
+        zero_shot=None,
+        path=Path("dummy"),
+    )
+
+    subset_seed = exp5c_report._extract_subset_seed(run, pack_identifier=None)
+
+    assert subset_seed == 13
