@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import csv
 import math
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 import numpy as np
+import yaml
 
 from reporting.metrics import bce_loss_from_csv
 
@@ -42,6 +44,24 @@ VAL_METRICS: Tuple[str, ...] = ("auprc", "auroc", "loss")
 PAIRWISE_METRICS: Tuple[str, ...] = ("auprc", "f1")
 AULC_METRICS: Tuple[str, ...] = ("auprc", "f1")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
+EXPECTED_BUDGETS: Tuple[int, ...] = (50, 100, 200, 500)
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_DATA_PACK_ROOTS: Tuple[Path, ...] = (
+    _REPO_ROOT / "data_packs",
+    Path.cwd() / "data_packs",
+)
+_PACK_MANIFEST_CACHE: Dict[str, Optional[Path]] = {}
+_MANIFEST_SEED_CACHE: Dict[Path, Optional[int]] = {}
+_SEED_PATTERN = re.compile(r"seed[\s:=_-]*?(\d+)", re.IGNORECASE)
+
+
+def _validate_budget(budget: int) -> int:
+    if budget not in EXPECTED_BUDGETS:
+        raise GuardrailViolation(
+            f"Unexpected few-shot budget {budget}; expected one of {EXPECTED_BUDGETS}"
+        )
+    return budget
 
 
 def _get_loader(*, strict: bool = True) -> ResultLoader:
@@ -182,7 +202,7 @@ def load_run(
             pack_spec = provenance.get("train_pack") or (train_summary.get("pack_spec") if isinstance(train_summary, Mapping) else None)
             if isinstance(pack_spec, str) and "_s" in pack_spec:
                 budget_value = pack_spec
-    budget = _normalize_budget(budget_value, fallback=None)
+    budget = _validate_budget(_normalize_budget(budget_value, fallback=None))
     frames = _frames_to_eval(base_run.frames)
     zero_shot = _load_zero_shot(base_run, payload)
     return FewShotRun(
@@ -533,6 +553,174 @@ def _collect_shared_seeds(
 def _clean_optional_text(value: object) -> Optional[str]:
     text = _clean_text(value)
     return text if text else None
+
+
+def _extract_seeds_from_text(value: object) -> List[int]:
+    text = _clean_optional_text(value)
+    if not text:
+        return []
+    seeds: List[int] = []
+    for match in _SEED_PATTERN.finditer(text):
+        try:
+            seeds.append(int(match.group(1)))
+        except ValueError:  # pragma: no cover - defensive guard
+            continue
+    return seeds
+
+
+def _resolve_existing_manifest(path: Path) -> Optional[Path]:
+    if path.is_file():
+        return path
+    if path.is_dir():
+        manifest = path / "manifest.yaml"
+        if manifest.is_file():
+            return manifest
+    candidate = path.with_suffix("")
+    if candidate != path and candidate.is_file():
+        return candidate
+    manifest_yaml = path.with_suffix(".yaml")
+    if manifest_yaml.is_file():
+        return manifest_yaml
+    return None
+
+
+def _resolve_pack_manifest(identifier: str) -> Optional[Path]:
+    key = identifier.strip()
+    if not key:
+        return None
+    cached = _PACK_MANIFEST_CACHE.get(key)
+    if cached is not None:
+        return cached
+    candidate = Path(key).expanduser()
+    manifest = _resolve_existing_manifest(candidate)
+    if manifest is not None:
+        _PACK_MANIFEST_CACHE[key] = manifest
+        return manifest
+    for base in (_REPO_ROOT, Path.cwd()):
+        manifest = _resolve_existing_manifest(base / candidate)
+        if manifest is not None:
+            _PACK_MANIFEST_CACHE[key] = manifest
+            return manifest
+    for root in _DATA_PACK_ROOTS:
+        if not root.exists():
+            continue
+        manifest = _resolve_existing_manifest(root / candidate)
+        if manifest is not None:
+            _PACK_MANIFEST_CACHE[key] = manifest
+            return manifest
+        try:
+            for nested in root.glob(f"**/{key}/manifest.yaml"):
+                if nested.is_file():
+                    _PACK_MANIFEST_CACHE[key] = nested
+                    return nested
+        except OSError:  # pragma: no cover - defensive guard
+            continue
+    _PACK_MANIFEST_CACHE[key] = None
+    return None
+
+
+def _subset_seed_from_manifest(manifest_path: Path) -> Optional[int]:
+    cached = _MANIFEST_SEED_CACHE.get(manifest_path)
+    if cached is not None:
+        return cached
+    try:
+        manifest_data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        _MANIFEST_SEED_CACHE[manifest_path] = None
+        return None
+    seeds: List[int] = []
+
+    def _push(value: object) -> None:
+        numeric = _coerce_int(value)
+        if numeric is not None:
+            seeds.append(int(numeric))
+
+    if isinstance(manifest_data, Mapping):
+        policy_block = manifest_data.get("policy")
+        if isinstance(policy_block, Mapping):
+            for key in ("seed", "subset_seed", "fewshot_seed"):
+                _push(policy_block.get(key))
+            seeds.extend(_extract_seeds_from_text(policy_block.get("sampling")))
+        generator_block = manifest_data.get("generator")
+        if isinstance(generator_block, Mapping):
+            _push(generator_block.get("seed"))
+        _push(manifest_data.get("subset_seed"))
+    unique = {seed for seed in seeds if seed is not None}
+    if len(unique) > 1:
+        raise GuardrailViolation(
+            f"Manifest '{manifest_path}' encodes multiple subset seeds: {sorted(unique)}"
+        )
+    resolved = next(iter(unique)) if unique else None
+    _MANIFEST_SEED_CACHE[manifest_path] = resolved
+    return resolved
+
+
+def _extract_subset_seed(run: FewShotRun, pack_identifier: Optional[str]) -> Optional[int]:
+    seeds: List[int] = []
+
+    def _push(value: object) -> None:
+        numeric = _coerce_int(value)
+        if numeric is not None:
+            seeds.append(int(numeric))
+
+    def _push_many(values: Iterable[int]) -> None:
+        for item in values:
+            _push(item)
+
+    dataset = run.dataset if isinstance(run.dataset, Mapping) else {}
+    for block in dataset.values():
+        if not isinstance(block, Mapping):
+            continue
+        for key in ("subset_seed", "pack_subset_seed", "fewshot_seed"):
+            _push(block.get(key))
+        subset_list = block.get("subset_seeds")
+        if isinstance(subset_list, (list, tuple, set)):
+            for entry in subset_list:
+                _push(entry)
+        _push_many(_extract_seeds_from_text(block.get("sampling")))
+        manifest_field = block.get("manifest") or block.get("pack_manifest")
+        if isinstance(manifest_field, str):
+            manifest_path = _resolve_pack_manifest(manifest_field)
+            if manifest_path is not None:
+                manifest_seed = _subset_seed_from_manifest(manifest_path)
+                if manifest_seed is not None:
+                    seeds.append(manifest_seed)
+
+    provenance = run.provenance if isinstance(run.provenance, Mapping) else {}
+    for key in ("subset_seed", "pack_subset_seed", "fewshot_seed"):
+        _push(provenance.get(key))
+    subset_list = provenance.get("subset_seeds")
+    if isinstance(subset_list, (list, tuple, set)):
+        for entry in subset_list:
+            _push(entry)
+    manifest_field = (
+        provenance.get("pack_manifest")
+        or provenance.get("train_pack_manifest")
+        or provenance.get("manifest")
+    )
+    if isinstance(manifest_field, str):
+        manifest_path = _resolve_pack_manifest(manifest_field)
+        if manifest_path is not None:
+            manifest_seed = _subset_seed_from_manifest(manifest_path)
+            if manifest_seed is not None:
+                seeds.append(manifest_seed)
+
+    if pack_identifier:
+        _push_many(_extract_seeds_from_text(pack_identifier))
+        manifest_path = _resolve_pack_manifest(pack_identifier)
+        if manifest_path is not None:
+            manifest_seed = _subset_seed_from_manifest(manifest_path)
+            if manifest_seed is not None:
+                seeds.append(manifest_seed)
+
+    unique = {seed for seed in seeds if seed is not None}
+    if not unique:
+        return None
+    if len(unique) > 1:
+        raise GuardrailViolation(
+            f"Conflicting subset seeds detected for pack '{pack_identifier}': {sorted(unique)}"
+        )
+    return next(iter(unique))
 
 
 def _normalise_sha256(value: Optional[str]) -> Optional[str]:
@@ -1014,6 +1202,8 @@ def _compute_test_composition(
     expected_seeds: Sequence[int],
 ) -> Dict[int, Dict[str, Any]]:
     composition: Dict[int, Dict[str, Any]] = {}
+    per_budget_subset_seeds: DefaultDict[int, Set[int]] = defaultdict(set)
+    global_subset_seeds: Set[int] = set()
     for model, per_budget in runs_by_model.items():
         for budget, seed_map in per_budget.items():
             ensure_expected_seeds(
@@ -1035,6 +1225,9 @@ def _compute_test_composition(
                         f"Missing test CSV SHA256 for {model} seed {seed} budget {budget}"
                     )
                 pack = _extract_pack_identifier(run)
+                subset_seed = _extract_subset_seed(run, pack)
+                if subset_seed is not None:
+                    per_budget_subset_seeds[budget].add(subset_seed)
                 entry = composition.get(budget)
                 if entry is None:
                     entry = {
@@ -1047,6 +1240,8 @@ def _compute_test_composition(
                         "models": {model},
                         "seeds": {seed},
                     }
+                    if subset_seed is not None:
+                        entry["subset_seed"] = subset_seed
                     composition[budget] = entry
                 else:
                     if entry["n_pos"] != int(n_pos) or entry["n_neg"] != int(n_neg):
@@ -1064,6 +1259,15 @@ def _compute_test_composition(
                             f"Pack identifier mismatch for budget {budget}: "
                             f"{entry['pack']} vs {pack}"
                         )
+                    if subset_seed is not None:
+                        existing_seed = entry.get("subset_seed")
+                        if existing_seed is None:
+                            entry["subset_seed"] = subset_seed
+                        elif int(existing_seed) != int(subset_seed):
+                            raise GuardrailViolation(
+                                f"Subset seed mismatch for budget {budget}: "
+                                f"{existing_seed} vs {subset_seed}"
+                            )
                     if not math.isfinite(entry["prevalence"]) and not math.isfinite(prevalence):
                         pass
                     else:
@@ -1083,6 +1287,23 @@ def _compute_test_composition(
     for entry in composition.values():
         entry["models"] = sorted(entry.get("models", ()))
         entry["seeds"] = sorted(entry.get("seeds", ()))
+        subset_seed = entry.get("subset_seed")
+        if subset_seed is not None:
+            global_subset_seeds.add(int(subset_seed))
+    if not global_subset_seeds:
+        raise GuardrailViolation(
+            "Unable to determine subset seed from experiment metadata; "
+            "packs must record a single subset seed"
+        )
+    for budget, seeds in per_budget_subset_seeds.items():
+        if len(seeds) > 1:
+            raise GuardrailViolation(
+                f"Multiple subset seeds detected for budget {budget}: {sorted(seeds)}"
+            )
+    if global_subset_seeds and len(global_subset_seeds) > 1:
+        raise GuardrailViolation(
+            f"Multiple subset seeds detected across budgets: {sorted(global_subset_seeds)}"
+        )
     return composition
 
 
