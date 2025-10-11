@@ -1284,12 +1284,20 @@ def _compute_test_composition(
                         entry["pack"] = pack
                     entry["models"].add(model)
                     entry["seeds"].add(seed)
+    missing_subset_seed_budgets: List[int] = []
     for entry in composition.values():
         entry["models"] = sorted(entry.get("models", ()))
         entry["seeds"] = sorted(entry.get("seeds", ()))
         subset_seed = entry.get("subset_seed")
         if subset_seed is not None:
             global_subset_seeds.add(int(subset_seed))
+        else:
+            missing_subset_seed_budgets.append(int(entry["budget"]))
+    if missing_subset_seed_budgets:
+        raise GuardrailViolation(
+            "Missing subset seed metadata for budgets "
+            f"{sorted(missing_subset_seed_budgets)}; packs must record a single subset seed"
+        )
     if not global_subset_seeds:
         raise GuardrailViolation(
             "Unable to determine subset seed from experiment metadata; "
