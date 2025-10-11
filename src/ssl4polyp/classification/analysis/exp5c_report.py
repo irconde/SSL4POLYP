@@ -53,6 +53,8 @@ _DATA_PACK_ROOTS: Tuple[Path, ...] = (
 )
 _PACK_MANIFEST_CACHE: Dict[str, Optional[Path]] = {}
 _MANIFEST_SEED_CACHE: Dict[Path, Optional[int]] = {}
+
+_ZERO_SHOT_KEY_TOKENS: Tuple[str, ...] = ("zero_shot", "zeroshot")
 _SEED_PATTERN = re.compile(r"seed[\s:=_-]*?(\d+)", re.IGNORECASE)
 
 
@@ -668,8 +670,11 @@ def _extract_subset_seed(run: FewShotRun, pack_identifier: Optional[str]) -> Opt
             _push(item)
 
     dataset = run.dataset if isinstance(run.dataset, Mapping) else {}
-    for block in dataset.values():
+    for block_key, block in dataset.items():
         if not isinstance(block, Mapping):
+            continue
+        key_text = str(block_key).lower()
+        if any(token in key_text for token in _ZERO_SHOT_KEY_TOKENS):
             continue
         for key in ("subset_seed", "pack_subset_seed", "fewshot_seed"):
             _push(block.get(key))
