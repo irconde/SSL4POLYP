@@ -5348,6 +5348,12 @@ def train(rank, args):
     )
     need_val_outputs = compute_threshold or compute_sensitivity_threshold
     sensitivity_threshold_key = getattr(args, "sensitivity_threshold_key", None)
+    cached_threshold_records = getattr(args, "cached_threshold_records", None)
+    if isinstance(cached_threshold_records, MutableMapping):
+        threshold_record_cache = cached_threshold_records
+    else:
+        threshold_record_cache = {}
+        args.cached_threshold_records = threshold_record_cache
 
     if best_monitor_value is not None:
         try:
