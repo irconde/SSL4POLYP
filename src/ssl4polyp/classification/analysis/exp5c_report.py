@@ -65,6 +65,9 @@ class ZeroShotResult:
     counts: Dict[str, int]
     frames: Dict[str, EvalFrame]
     path: Optional[Path]
+    dataset: Dict[str, Any]
+    provenance: Dict[str, Any]
+    test_sha256: Optional[str]
 
 
 @dataclass
@@ -275,6 +278,16 @@ def _load_zero_shot(base_run: CommonRun, payload: Mapping[str, Any]) -> Optional
                     break
             if zero_block is None:
                 zero_block = zero_root
+    zero_root = payload.get("zero_shot") if isinstance(payload.get("zero_shot"), Mapping) else None
+    zero_dataset: Dict[str, Any] = {}
+    zero_provenance: Dict[str, Any] = {}
+    if isinstance(zero_root, Mapping):
+        dataset_candidate = zero_root.get("dataset")
+        if isinstance(dataset_candidate, Mapping):
+            zero_dataset = dict(dataset_candidate)
+        provenance_candidate = zero_root.get("provenance")
+        if isinstance(provenance_candidate, Mapping):
+            zero_provenance = dict(provenance_candidate)
     metrics = _extract_metrics(zero_block)
     counts = _extract_counts(zero_block)
     tau = _extract_tau(zero_block, base_run.tau)
@@ -304,12 +317,22 @@ def _load_zero_shot(base_run: CommonRun, payload: Mapping[str, Any]) -> Optional
                 metrics.setdefault("loss", float(loss_value))
     if not metrics and not counts and not frames:
         return None
+    zero_sha256 = _extract_zero_shot_csv_sha256(
+        zero_root=zero_root,
+        zero_dataset=zero_dataset,
+        zero_provenance=zero_provenance,
+        payload=payload,
+        base_provenance=base_run.provenance,
+    )
     return ZeroShotResult(
         tau=float(tau) if tau is not None else None,
         metrics=metrics,
         counts=counts,
         frames=frames,
         path=resolved_path,
+        dataset=zero_dataset,
+        provenance=zero_provenance,
+        test_sha256=zero_sha256,
     )
 
 
@@ -512,6 +535,13 @@ def _clean_optional_text(value: object) -> Optional[str]:
     return text if text else None
 
 
+def _normalise_sha256(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    text = str(value).strip().lower()
+    return text or None
+
+
 def _extract_dataset_block(dataset: Mapping[str, Any], keys: Sequence[str]) -> Optional[Mapping[str, Any]]:
     for key in keys:
         block = dataset.get(key)
@@ -549,7 +579,7 @@ def _extract_csv_sha256_from_block(block: Mapping[str, Any]) -> Optional[str]:
     for key in ("csv_sha256", "sha256", "hash"):
         value = _clean_optional_text(block.get(key))
         if value:
-            return value
+            return _normalise_sha256(value)
     return None
 
 
@@ -568,15 +598,108 @@ def _extract_test_csv_sha256(run: FewShotRun) -> Optional[str]:
         "test_csv_sha256",
         "test_primary_csv_sha256",
         "eval_csv_sha256",
+        "test_sha256",
     ):
         value = _clean_optional_text(provenance.get(key))
         if value:
-            return value
+            return _normalise_sha256(value)
     for nested in provenance.values():
         if isinstance(nested, Mapping):
             digest = _extract_csv_sha256_from_block(nested)
             if digest:
                 return digest
+    return None
+
+
+_ZERO_SHOT_DATASET_KEYS: Tuple[str, ...] = (
+    "test_zero_shot",
+    "zero_shot_test",
+    "zero_shot",
+    "test_primary",
+    "test",
+    "test_split",
+    "test_set",
+)
+
+
+_ZERO_SHOT_DIGEST_KEYS: Tuple[str, ...] = (
+    "test_zero_shot_csv_sha256",
+    "zero_shot_csv_sha256",
+    "test_zero_shot_sha256",
+    "zero_shot_sha256",
+    "test_csv_sha256",
+    "test_primary_csv_sha256",
+    "eval_csv_sha256",
+    "test_sha256",
+    "csv_sha256",
+    "sha256",
+    "hash",
+)
+
+
+def _extract_zero_shot_csv_sha256(
+    *,
+    zero_root: Optional[Mapping[str, Any]],
+    zero_dataset: Mapping[str, Any],
+    zero_provenance: Mapping[str, Any],
+    payload: Mapping[str, Any],
+    base_provenance: Mapping[str, Any],
+) -> Optional[str]:
+    def _pull_from_mapping(
+        mapping: Optional[Mapping[str, Any]],
+        *,
+        treat_as_dataset: bool,
+    ) -> Optional[str]:
+        if not isinstance(mapping, Mapping):
+            return None
+        if treat_as_dataset:
+            block = _extract_dataset_block(mapping, _ZERO_SHOT_DATASET_KEYS)
+            if isinstance(block, Mapping):
+                digest = _extract_csv_sha256_from_block(block)
+                if digest:
+                    return digest
+            dataset_block = mapping.get("dataset")
+            if isinstance(dataset_block, Mapping):
+                block = _extract_dataset_block(dataset_block, _ZERO_SHOT_DATASET_KEYS)
+                if isinstance(block, Mapping):
+                    digest = _extract_csv_sha256_from_block(block)
+                    if digest:
+                        return digest
+        for key in _ZERO_SHOT_DIGEST_KEYS:
+            candidate = mapping.get(key)
+            digest = _normalise_sha256(_clean_optional_text(candidate))
+            if digest:
+                return digest
+        for key, nested in mapping.items():
+            if not isinstance(nested, Mapping):
+                continue
+            key_text = str(key).lower()
+            if any(token in key_text for token in ("test", "eval", "zero_shot", "zeroshot")):
+                digest = _extract_csv_sha256_from_block(nested)
+                if digest:
+                    return digest
+        return None
+
+    candidates: List[Tuple[Optional[Mapping[str, Any]], bool]] = [
+        (zero_dataset, True),
+        (zero_root, True),
+        (zero_provenance, False),
+    ]
+    dataset_payload = payload.get("dataset")
+    if isinstance(dataset_payload, Mapping):
+        candidates.append((dataset_payload, True))
+    provenance_payload = payload.get("provenance")
+    if isinstance(provenance_payload, Mapping):
+        candidates.append((provenance_payload, False))
+    if isinstance(base_provenance, Mapping):
+        candidates.append((base_provenance, False))
+        for nested in base_provenance.values():
+            if isinstance(nested, Mapping):
+                candidates.append((nested, False))
+    for mapping, treat_as_dataset in candidates:
+        digest = _pull_from_mapping(mapping, treat_as_dataset=treat_as_dataset)
+        if digest:
+            return digest
     return None
 
 
@@ -847,6 +970,8 @@ def _ensure_zero_shot_complete(
     context: str,
 ) -> None:
     missing: List[int] = []
+    missing_digest: List[int] = []
+    mismatched_digest: List[Tuple[int, str, str]] = []
     for seed in expected_seeds:
         run = seed_map.get(seed)
         if run is None or run.zero_shot is None or not _get_policy_metrics(run, "zero_shot"):
@@ -855,9 +980,31 @@ def _ensure_zero_shot_complete(
             raise GuardrailViolation(
                 f"Missing zero-shot outputs for seed {seed} in {context}"
             )
+        else:
+            expected_sha = _extract_test_csv_sha256(run)
+            zero_sha = _normalise_sha256(
+                run.zero_shot.test_sha256 if run.zero_shot is not None else None
+            )
+            if expected_sha:
+                if not zero_sha:
+                    missing_digest.append(int(seed))
+                elif zero_sha != expected_sha:
+                    mismatched_digest.append((int(seed), expected_sha, zero_sha))
     if missing:
         raise GuardrailViolation(
             f"Missing zero-shot metrics for seeds {', '.join(str(s) for s in missing)} in {context}"
+        )
+    if missing_digest:
+        raise GuardrailViolation(
+            "Missing zero-shot test CSV SHA256 for seeds "
+            f"{', '.join(str(s) for s in missing_digest)} in {context}"
+        )
+    if mismatched_digest:
+        details = ", ".join(
+            f"seed {seed}: expected {expected}, found {found}" for seed, expected, found in mismatched_digest
+        )
+        raise GuardrailViolation(
+            f"Zero-shot test CSV SHA mismatch in {context} ({details})"
         )
 
 
