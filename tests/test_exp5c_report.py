@@ -217,3 +217,38 @@ def test_build_cluster_set_prefers_center_then_sequence_then_case() -> None:
         frozenset({"neg_sequence_fallback_1", "neg_sequence_fallback_2"}),
         frozenset({"neg_case_fallback_1", "neg_case_fallback_2"}),
     }
+
+
+def test_compute_test_composition_errors_when_subset_seed_missing() -> None:
+    run = exp5c_report.FewShotRun(
+        model="ssl_colon",
+        seed=13,
+        budget=50,
+        tau=0.5,
+        sensitivity_tau=None,
+        primary_metrics={},
+        primary_counts={"n_pos": 1, "n_neg": 1},
+        sensitivity_metrics={},
+        sensitivity_counts={},
+        val_metrics={},
+        provenance={},
+        dataset={
+            "test_primary": {
+                "pack": "polypgen_fewshot_s50",
+                "csv_sha256": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            }
+        },
+        frames={},
+        zero_shot=None,
+        path=Path("dummy"),
+    )
+
+    runs_by_model = {"ssl_colon": {50: {13: run}}}
+
+    with pytest.raises(exp5c_report.GuardrailViolation) as excinfo:
+        exp5c_report._compute_test_composition(
+            runs_by_model,
+            expected_seeds=[13],
+        )
+
+    assert "Missing subset seed metadata" in str(excinfo.value)
