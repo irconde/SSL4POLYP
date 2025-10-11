@@ -47,7 +47,51 @@ PRIMARY_RETENTION_METRICS: Tuple[str, ...] = (
 )
 
 
+EXPECTED_PRIMARY_TAU_POLICY = "sun_val_frozen"
+
+
 REQUIRED_SEEDS: Tuple[int, ...] = (13, 29, 47)
+
+
+@dataclass(frozen=True)
+class PerturbationDefinition:
+    """Canonical definition of a perturbation severity for Experiment 5B."""
+
+    canonical_tag: str
+    raw_severity: float
+    display: str
+
+
+EXPERIMENT5B_REQUIRED_PERTURBATIONS: Dict[str, Tuple[PerturbationDefinition, ...]] = {
+    "blur": (
+        PerturbationDefinition("blur_sigma_0p5", 0.5, "σ=0.5"),
+        PerturbationDefinition("blur_sigma_1p0", 1.0, "σ=1.0"),
+        PerturbationDefinition("blur_sigma_1p5", 1.5, "σ=1.5"),
+        PerturbationDefinition("blur_sigma_2p0", 2.0, "σ=2.0"),
+    ),
+    "jpeg": (
+        PerturbationDefinition("jpeg_q_95", 5.0, "q=95"),
+        PerturbationDefinition("jpeg_q_75", 25.0, "q=75"),
+        PerturbationDefinition("jpeg_q_50", 50.0, "q=50"),
+        PerturbationDefinition("jpeg_q_30", 70.0, "q=30"),
+    ),
+    "brightness": (
+        PerturbationDefinition("brightness_0p8", 0.2, "factor=0.8"),
+        PerturbationDefinition("brightness_0p6", 0.4, "factor=0.6"),
+    ),
+    "contrast": (
+        PerturbationDefinition("contrast_0p8", 0.2, "factor=0.8"),
+        PerturbationDefinition("contrast_0p6", 0.4, "factor=0.6"),
+    ),
+    "occlusion": (
+        PerturbationDefinition("occ_a5p", 0.05, "area=5%"),
+        PerturbationDefinition("occ_a10p", 0.10, "area=10%"),
+        PerturbationDefinition("occ_a20p", 0.20, "area=20%"),
+    ),
+}
+
+
+PERTURBATION_SEVERITY_TOLERANCE = 1e-6
 
 
 INTEGER_METRIC_KEYS: Tuple[str, ...] = (
@@ -60,6 +104,10 @@ INTEGER_METRIC_KEYS: Tuple[str, ...] = (
     "n_total",
     "count",
 )
+
+
+class TauPolicyError(RuntimeError):
+    """Raised when Experiment 5B metrics report an unexpected τ policy."""
 
 
 @dataclass(frozen=True)
@@ -78,6 +126,7 @@ class RunPerturbationResult:
     model: str
     seed: int
     tau: Optional[float]
+    tau_policy: Optional[str]
     metrics: Dict[str, float]
     perturbations: Dict[str, Dict[str, float]]
     case_metrics: Dict[str, Dict[str, Dict[str, Any]]]
@@ -91,6 +140,7 @@ class FamilyBootstrapSeedData:
 
     seed: int
     case_ids: Tuple[str, ...]
+    cluster_ids: Tuple[str, ...]
     severity_tags: Tuple[str, ...]
     severity_levels: Tuple[float, ...]
     target_arrays: Dict[str, np.ndarray]
@@ -143,6 +193,16 @@ def _coerce_int_like(value: object) -> Optional[int]:
     if not math.isfinite(rounded):
         return None
     return rounded
+
+
+def _coerce_string(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    text = str(value).strip()
+    return text or None
 
 
 def _parse_fixed_point(value: str) -> float:
@@ -367,6 +427,45 @@ def _build_tag_catalog(runs: Mapping[str, Mapping[int, RunPerturbationResult]]) 
     return catalog
 
 
+def _validate_required_perturbations(tag_catalog: Mapping[str, TagInfo]) -> None:
+    missing_by_family: Dict[str, List[PerturbationDefinition]] = {}
+    observed_tags: DefaultDict[str, List[str]] = defaultdict(list)
+    observed_levels: DefaultDict[str, List[float]] = defaultdict(list)
+
+    for tag, info in tag_catalog.items():
+        family = info.family
+        if family in {"baseline", "aggregate", "unknown"}:
+            continue
+        observed_tags[family].append(tag)
+        if info.raw_severity is not None and math.isfinite(float(info.raw_severity)):
+            observed_levels[family].append(float(info.raw_severity))
+
+    for family, requirements in EXPERIMENT5B_REQUIRED_PERTURBATIONS.items():
+        present_levels = observed_levels.get(family, [])
+        for definition in requirements:
+            if any(abs(level - definition.raw_severity) <= PERTURBATION_SEVERITY_TOLERANCE for level in present_levels):
+                continue
+            missing_by_family.setdefault(family, []).append(definition)
+
+    if not missing_by_family:
+        return
+
+    issues: List[str] = []
+    for family in sorted(missing_by_family.keys()):
+        missing_descriptions = ", ".join(
+            f"{definition.display} (expected tag '{definition.canonical_tag}')"
+            for definition in missing_by_family[family]
+        )
+        observed = ", ".join(sorted(observed_tags.get(family, []))) or "none"
+        issues.append(
+            f"{family}: missing {missing_descriptions}; observed tags: {observed}"
+        )
+
+    raise ValueError(
+        "Experiment 5B metrics are missing required perturbation severities: " + "; ".join(issues)
+    )
+
+
 def _resolve_outputs_path(metrics_path: Path) -> Path:
     stem = metrics_path.stem
     base = stem[:-5] if stem.endswith("_last") else stem
@@ -378,6 +477,19 @@ def load_run(metrics_path: Path) -> RunPerturbationResult:
     provenance_raw = payload.get("provenance") or {}
     provenance: Dict[str, object] = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
     model_name = str(provenance.get("model") or metrics_path.stem.split("__", 1)[0])
+    tau_policy = _coerce_string(provenance.get("tau_policy"))
+    expected_tau_policy = _coerce_string(EXPECTED_PRIMARY_TAU_POLICY)
+    if expected_tau_policy:
+        if not tau_policy:
+            raise TauPolicyError(
+                f"Metrics file '{metrics_path}' is missing tau_policy; expected '{expected_tau_policy}'."
+            )
+        if tau_policy != expected_tau_policy:
+            raise TauPolicyError(
+                "Metrics file '{}' reports tau_policy '{}' but expected '{}'.".format(
+                    metrics_path, tau_policy, expected_tau_policy
+                )
+            )
     seed_value = _coerce_int(payload.get("seed"))
     if seed_value is None:
         seed_value = _coerce_int(provenance.get("train_seed"))
@@ -418,6 +530,7 @@ def load_run(metrics_path: Path) -> RunPerturbationResult:
         model=model_name,
         seed=int(seed_value),
         tau=tau_value,
+        tau_policy=tau_policy,
         metrics=metrics,
         perturbations=perturbations,
         case_metrics=case_metrics,
@@ -444,6 +557,8 @@ def discover_runs(
             raise RuntimeError(
                 f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
             ) from exc
+        except TauPolicyError:
+            raise
         except (OSError, ValueError):
             continue
         if model_filter and run.model not in model_filter:
@@ -727,8 +842,19 @@ def _collect_family_seed_data(
     family: str,
     metric: str,
     tag_catalog: Mapping[str, TagInfo],
+    *,
+    cluster_key: str,
 ) -> List[FamilyBootstrapSeedData]:
-    tag_data: Dict[str, Tuple[Dict[int, Dict[str, float]], Dict[int, Dict[str, float]], float]] = {}
+    tag_data: Dict[
+        str,
+        Tuple[
+            Dict[int, Dict[str, float]],
+            Dict[int, Dict[str, float]],
+            Dict[int, Dict[str, str]],
+            Dict[int, Dict[str, str]],
+            float,
+        ],
+    ] = {}
     for tag, info in tag_catalog.items():
         if info.family != family or tag == "clean":
             continue
@@ -739,14 +865,22 @@ def _collect_family_seed_data(
         baseline_cases = _get_case_retention_per_seed(baseline_entry, tag, metric)
         if not target_cases or not baseline_cases:
             continue
+        target_clusters = _get_case_clusters_per_seed(target_entry, tag)
+        baseline_clusters = _get_case_clusters_per_seed(baseline_entry, tag)
         shared_seeds = set(target_cases.keys()) & set(baseline_cases.keys())
         if not shared_seeds:
             continue
-        tag_data[tag] = (target_cases, baseline_cases, float(severity))
+        tag_data[tag] = (
+            target_cases,
+            baseline_cases,
+            target_clusters,
+            baseline_clusters,
+            float(severity),
+        )
     if not tag_data:
         return []
     shared_seed_ids: Optional[Set[int]] = None
-    for target_cases, baseline_cases, _ in tag_data.values():
+    for target_cases, baseline_cases, _, _, _ in tag_data.values():
         available = set(target_cases.keys()) & set(baseline_cases.keys())
         if shared_seed_ids is None:
             shared_seed_ids = set(int(seed) for seed in available)
@@ -758,7 +892,7 @@ def _collect_family_seed_data(
     seed_data: List[FamilyBootstrapSeedData] = []
     for seed in sorted(shared_seed_ids):
         case_candidates: Optional[Set[str]] = None
-        for tag, (target_cases, baseline_cases, _) in ordered_tags:
+        for tag, (target_cases, baseline_cases, _, _, _) in ordered_tags:
             target_map_raw = target_cases.get(seed)
             baseline_map_raw = baseline_cases.get(seed)
             if not target_map_raw or not baseline_map_raw:
@@ -783,28 +917,59 @@ def _collect_family_seed_data(
         baseline_arrays: Dict[str, np.ndarray] = {}
         severity_tags: List[str] = []
         severity_levels: List[float] = []
+        cluster_assignments: Dict[str, str] = {}
         skip_seed = False
-        for tag, (target_cases, baseline_cases, severity) in ordered_tags:
+        for tag, (
+            target_cases,
+            baseline_cases,
+            target_clusters,
+            baseline_clusters,
+            severity,
+        ) in ordered_tags:
             target_map = target_cases.get(seed)
             baseline_map = baseline_cases.get(seed)
             if not target_map or not baseline_map:
                 skip_seed = True
                 break
+            target_cluster_map = target_clusters.get(seed, {}) if cluster_key else {}
+            baseline_cluster_map = baseline_clusters.get(seed, {}) if cluster_key else {}
             target_values = np.array([float(target_map[cid]) for cid in case_ids], dtype=float)
             baseline_values = np.array([float(baseline_map[cid]) for cid in case_ids], dtype=float)
             if target_values.size == 0 or baseline_values.size == 0:
                 skip_seed = True
                 break
+            if cluster_key:
+                for case_id in case_ids:
+                    if case_id in cluster_assignments:
+                        continue
+                    cluster_value: Optional[str] = None
+                    if case_id in target_cluster_map:
+                        cluster_value = target_cluster_map[case_id]
+                    elif case_id in baseline_cluster_map:
+                        cluster_value = baseline_cluster_map[case_id]
+                    if cluster_value is None and cluster_key == "case_id":
+                        cluster_value = case_id
+                    if cluster_value is None:
+                        cluster_value = case_id
+                    cluster_assignments[case_id] = str(cluster_value)
             target_arrays[tag] = target_values
             baseline_arrays[tag] = baseline_values
             severity_tags.append(tag)
             severity_levels.append(float(severity))
         if skip_seed or not severity_tags:
             continue
+        if not cluster_assignments and cluster_key:
+            cluster_assignments = {case_id: case_id for case_id in case_ids}
+        cluster_ids: Tuple[str, ...]
+        if cluster_key:
+            cluster_ids = tuple(cluster_assignments.get(case_id, case_id) for case_id in case_ids)
+        else:
+            cluster_ids = case_ids
         seed_data.append(
             FamilyBootstrapSeedData(
                 seed=int(seed),
                 case_ids=case_ids,
+                cluster_ids=cluster_ids,
                 severity_tags=tuple(severity_tags),
                 severity_levels=tuple(severity_levels),
                 target_arrays=target_arrays,
@@ -824,8 +989,16 @@ def _bootstrap_family_delta(
     bootstrap: int,
     rng_seed: int,
     severity_lockstep: bool,
+    cluster_key: str,
 ) -> Optional[BootstrapDeltaResult]:
-    seed_data = _collect_family_seed_data(target_entry, baseline_entry, family, metric, tag_catalog)
+    seed_data = _collect_family_seed_data(
+        target_entry,
+        baseline_entry,
+        family,
+        metric,
+        tag_catalog,
+        cluster_key=cluster_key,
+    )
     if not seed_data:
         return None
     per_seed_delta: Dict[int, float] = {}
@@ -867,16 +1040,45 @@ def _bootstrap_family_delta(
                 n_cases = len(record.case_ids)
                 if n_cases == 0:
                     continue
-                indices = rng.choice(n_cases, size=n_cases, replace=True)
+                clusters = tuple(dict.fromkeys(record.cluster_ids))
+                cluster_to_indices = {
+                    cluster: np.array(
+                        [idx for idx, value in enumerate(record.cluster_ids) if value == cluster],
+                        dtype=int,
+                    )
+                    for cluster in clusters
+                }
+                if clusters:
+                    sampled_cluster_indices = rng.choice(
+                        len(clusters), size=len(clusters), replace=True
+                    )
+                    base_indices = np.concatenate(
+                        [cluster_to_indices[clusters[index]] for index in sampled_cluster_indices]
+                    )
+                else:
+                    base_indices = np.arange(n_cases, dtype=int)
                 resampled_target: List[Tuple[float, float]] = []
                 resampled_baseline: List[Tuple[float, float]] = []
                 for tag, severity in zip(record.severity_tags, record.severity_levels):
                     if not math.isfinite(severity):
                         continue
                     if severity_lockstep:
-                        sample_indices = indices
+                        sample_indices = base_indices
                     else:
-                        sample_indices = rng.choice(n_cases, size=n_cases, replace=True)
+                        if clusters:
+                            sampled_cluster_indices = rng.choice(
+                                len(clusters), size=len(clusters), replace=True
+                            )
+                            sample_indices = np.concatenate(
+                                [
+                                    cluster_to_indices[clusters[index]]
+                                    for index in sampled_cluster_indices
+                                ]
+                            )
+                        else:
+                            sample_indices = rng.choice(n_cases, size=n_cases, replace=True)
+                    if sample_indices.size == 0:
+                        continue
                     target_values = record.target_arrays[tag][sample_indices]
                     baseline_values = record.baseline_arrays[tag][sample_indices]
                     resampled_target.append((severity, float(np.mean(target_values))))
@@ -986,6 +1188,7 @@ def _build_t4_table(
     bootstrap: int,
     rng_seed: int,
     severity_lockstep: bool,
+    cluster_key: str,
 ) -> List[Dict[str, object]]:
     target_key = "ssl_colon"
     baselines = ("ssl_imnet", "sup_imnet")
@@ -1021,6 +1224,7 @@ def _build_t4_table(
                     bootstrap=bootstrap,
                     rng_seed=rng_seed,
                     severity_lockstep=severity_lockstep,
+                    cluster_key=cluster_key,
                 )
                 if bootstrap_result:
                     per_seed_delta = {
@@ -1184,6 +1388,7 @@ def _build_tables(
             bootstrap=bootstrap,
             rng_seed=rng_seed,
             severity_lockstep=severity_lockstep,
+            cluster_key=cluster_key,
         ),
         "t5_delta_retention_by_severity": _build_t5_table(
             models_summary,
@@ -1215,6 +1420,7 @@ def _build_provenance(
             seed_entries[int(seed)] = {
                 "metrics_path": str(run.path),
                 "tau": run.tau,
+                "tau_policy": run.tau_policy,
                 "provenance": run.provenance,
             }
         models_block[model] = {
@@ -1230,6 +1436,7 @@ def _build_provenance(
         "severity_lockstep": bool(severity_lockstep),
         "frozen_tau": bool(frozen_tau),
     }
+    provenance["expected_tau_policy"] = EXPECTED_PRIMARY_TAU_POLICY
     return provenance
 
 
@@ -1563,6 +1770,7 @@ def summarize_runs(
     severity_lockstep: bool = True,
 ) -> Dict[str, object]:
     tag_catalog = _build_tag_catalog(runs)
+    _validate_required_perturbations(tag_catalog)
     models_summary: Dict[str, Dict[str, object]] = {}
     severity_rows: List[Dict[str, object]] = []
     for model, seed_map in runs.items():
@@ -1755,7 +1963,9 @@ def write_tables(summary: Mapping[str, object], output_dir: Path) -> Dict[str, P
 
 __all__ = [
     "PRIMARY_RETENTION_METRICS",
+    "EXPECTED_PRIMARY_TAU_POLICY",
     "RunPerturbationResult",
+    "TauPolicyError",
     "discover_runs",
     "load_run",
     "summarize_runs",
