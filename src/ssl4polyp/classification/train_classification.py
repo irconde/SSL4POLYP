@@ -1796,21 +1796,54 @@ def _build_metrics_provenance(
     return dict(provenance)
 
 
+POLICY_LABELS: Mapping[str, str] = {
+    "f1_opt_on_val": "F1-optimal",
+    "youden_on_val": "Youden J",
+    "val_opt_youden": "Youden J (validation-optimal)",
+    "sun_val_frozen": "SUN validation τ (frozen)",
+    "f1-morph": "F1 (morphology)",
+    "f1": "F1",
+    "youden": "Youden J",
+}
+
+POLICY_IMPLIED_SPLITS: Mapping[str, str] = {
+    "f1_opt_on_val": "val",
+    "youden_on_val": "val",
+}
+
+
 def _parse_threshold_key(key: Optional[str]) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Return (dataset, split, policy) parsed from a threshold key."""
 
     if not key:
         return None, None, None
-    parts = [segment for segment in str(key).split("_") if segment]
-    if len(parts) < 3:
-        return str(key), None, None
-    policy = parts[-1]
-    split = parts[-2]
-    dataset = "_".join(parts[:-2])
-    dataset = dataset or None
-    split = split or None
-    policy = policy or None
-    return dataset, split, policy
+
+    text = str(key)
+    lowered = text.lower()
+    matched_policy: Optional[str] = None
+    for candidate in sorted(POLICY_LABELS, key=len, reverse=True):
+        if lowered.endswith(candidate):
+            matched_policy = candidate
+            break
+
+    if not matched_policy:
+        return None, None, text
+
+    prefix = lowered[: -len(matched_policy)] if matched_policy else lowered
+    prefix = prefix.rstrip("_")
+
+    dataset: Optional[str] = None
+    split: Optional[str] = None
+    if prefix:
+        dataset_part, sep, split_part = prefix.rpartition("_")
+        if sep:
+            dataset = dataset_part or None
+            split = split_part or None
+        else:
+            dataset = None
+            split = prefix or None
+
+    return dataset, split, matched_policy
 
 
 def _build_thresholds_block(
@@ -5405,14 +5438,41 @@ def train(rank, args):
     def describe_tau_source(key: Optional[str]) -> Optional[str]:
         if not key:
             return None
-        parts = [segment for segment in str(key).split("_") if segment]
-        if not parts:
+
+        dataset_name, split_name, policy_key = _parse_threshold_key(key)
+        if not policy_key:
             return None
-        policy_raw = parts[-1]
-        split_raw = parts[-2] if len(parts) >= 2 else (args.val_split or "val")
-        policy_map = {"youden": "Youden J", "f1-morph": "F1 morph"}
-        policy_label = policy_map.get(policy_raw, policy_raw.replace("_", " ").title())
-        return f"{policy_label} on {split_raw}"
+
+        implied_split = POLICY_IMPLIED_SPLITS.get(policy_key)
+        split_value = split_name or implied_split
+
+        policy_label = POLICY_LABELS.get(
+            policy_key,
+            policy_key.replace("_", " ").title(),
+        )
+
+        split_labels = {
+            "val": "validation",
+            "valid": "validation",
+            "validation": "validation",
+            "test": "test",
+            "train": "training",
+        }
+
+        dataset_label = None
+        if dataset_name:
+            dataset_label = dataset_name.replace("_", " ").strip().title()
+
+        split_label = None
+        if split_value:
+            split_label = split_labels.get(split_value, split_value.replace("_", " ").strip())
+
+        location_parts = [part for part in (dataset_label, split_label) if part]
+        if location_parts:
+            location = " ".join(location_parts)
+            return f"{policy_label} on {location}"
+
+        return policy_label
 
     if rank == 0:
         tb_dir = getattr(args, "tensorboard_dir", None)
