@@ -2,7 +2,7 @@ import json
 import math
 import sys
 from pathlib import Path
-from typing import Mapping
+from typing import Dict, Iterable, Mapping, Optional
 
 import pytest  # type: ignore[import]
 
@@ -12,6 +12,13 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from ssl4polyp.classification.analysis import exp5b_report as module  # type: ignore[import]
+
+
+CANONICAL_REQUIRED_TAGS = [
+    definition.canonical_tag
+    for family_definitions in module.EXPERIMENT5B_REQUIRED_PERTURBATIONS.values()
+    for definition in family_definitions
+]
 
 
 def test_parse_case_metrics_block_preserves_auxiliary_fields():
@@ -55,7 +62,13 @@ def test_parse_case_metrics_block_preserves_auxiliary_fields():
     assert math.isclose(blur_cases["case-003"]["f1"], 0.42)
 
 
-def _write_minimal_metrics(path: Path, *, seed: int, model: str) -> None:
+def _write_minimal_metrics(
+    path: Path,
+    *,
+    seed: int,
+    model: str,
+    tau_policy: str = module.EXPECTED_PRIMARY_TAU_POLICY,
+) -> None:
     payload = {
         "seed": seed,
         "test_primary": {"tau": 0.5, "prevalence": 0.5},
@@ -68,6 +81,7 @@ def _write_minimal_metrics(path: Path, *, seed: int, model: str) -> None:
         "provenance": {
             "model": model,
             "train_seed": seed,
+            "tau_policy": tau_policy,
         },
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -80,8 +94,30 @@ def _write_case_metrics_run(
     seed: int,
     model: str,
     blur_cases: Mapping[str, Mapping[str, float]],
+    tau_policy: str = module.EXPECTED_PRIMARY_TAU_POLICY,
+    missing_tags: Iterable[str] = (),
+    cluster_assignments: Optional[Mapping[str, str]] = None,
+    cluster_field: str = "patient_id",
 ) -> None:
-    clean_cases = {case_id: {"recall": 1.0, "f1": 1.0} for case_id in blur_cases}
+    missing = {str(tag) for tag in missing_tags}
+    cluster_assignments = {
+        str(case_id): str(cluster)
+        for case_id, cluster in (cluster_assignments or {}).items()
+    }
+
+    def _case_payload(case_id: str, metrics: Mapping[str, float]) -> Mapping[str, object]:
+        payload: Dict[str, object] = {
+            str(metric): float(value) for metric, value in metrics.items()
+        }
+        cluster_value = cluster_assignments.get(case_id)
+        if cluster_value is not None:
+            payload["metadata"] = {cluster_field: cluster_value}
+        return payload
+
+    clean_cases = {
+        str(case_id): _case_payload(str(case_id), {"recall": 1.0, "f1": 1.0})
+        for case_id in blur_cases
+    }
     per_tag = {
         "clean": {
             "recall": 1.0,
@@ -96,6 +132,22 @@ def _write_case_metrics_run(
         "f1": float(sum(blur_f1) / len(blur_f1)),
         "count": len(blur_cases),
     }
+
+    default_metrics = {
+        "recall": 0.8,
+        "f1": 0.75,
+        "count": len(clean_cases),
+    }
+    for tag in CANONICAL_REQUIRED_TAGS:
+        if tag in missing or tag in {"clean", "blur_sigma_1p5"}:
+            continue
+        per_tag.setdefault(tag, dict(default_metrics))
+
+    blur_case_payload = {
+        str(case_id): _case_payload(str(case_id), metrics)
+        for case_id, metrics in blur_cases.items()
+    }
+
     payload = {
         "seed": seed,
         "test_primary": {"tau": 0.5, "prevalence": 0.5},
@@ -103,15 +155,41 @@ def _write_case_metrics_run(
             "per_tag": per_tag,
             "per_case": {
                 "clean": clean_cases,
-                "blur_sigma_1p5": blur_cases,
+                "blur_sigma_1p5": blur_case_payload,
             },
         },
-        "provenance": {"model": model, "train_seed": seed},
+        "provenance": {"model": model, "train_seed": seed, "tau_policy": tau_policy},
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
     outputs_path = module._resolve_outputs_path(path)
     outputs_path.write_text("case_id,probability,target,pred\n", encoding="utf-8")
+
+
+def test_load_run_enforces_expected_tau_policy(tmp_path: Path) -> None:
+    metrics_path = tmp_path / "ssl_colon_s13_last.metrics.json"
+    _write_minimal_metrics(metrics_path, seed=13, model="ssl_colon")
+    outputs_path = module._resolve_outputs_path(metrics_path)
+    outputs_path.write_text("case_id,metric\n", encoding="utf-8")
+
+    run = module.load_run(metrics_path)
+
+    assert run.tau_policy == module.EXPECTED_PRIMARY_TAU_POLICY
+
+
+def test_load_run_raises_for_mismatched_tau_policy(tmp_path: Path) -> None:
+    metrics_path = tmp_path / "ssl_colon_s13_last.metrics.json"
+    _write_minimal_metrics(
+        metrics_path,
+        seed=13,
+        model="ssl_colon",
+        tau_policy="alternate_policy",
+    )
+    outputs_path = module._resolve_outputs_path(metrics_path)
+    outputs_path.write_text("case_id,metric\n", encoding="utf-8")
+
+    with pytest.raises(module.TauPolicyError):
+        module.load_run(metrics_path)
 
 
 @pytest.mark.parametrize("intermediate_suffix", ["best", "intermediate", "ema"])
@@ -171,12 +249,168 @@ def test_summarize_runs_reports_bootstrap_cis(tmp_path: Path) -> None:
     assert isinstance(t4_rows, list) and t4_rows
     relevant_t4 = [row for row in t4_rows if row.get("family") not in {"baseline", "aggregate", "macro"}]
     assert relevant_t4, "expected at least one non-macro T4 row"
-    for row in relevant_t4:
-        assert row.get("ci_lower") is not None
-        assert row.get("ci_upper") is not None
+    rows_with_ci = [row for row in relevant_t4 if row.get("ci_lower") is not None and row.get("ci_upper") is not None]
+    assert rows_with_ci, "expected at least one T4 row with bootstrap confidence intervals"
 
     t5_rows = tables.get("t5_delta_retention_by_severity")
     assert isinstance(t5_rows, list) and t5_rows
-    for row in t5_rows:
-        assert row.get("ci_lower") is not None
-        assert row.get("ci_upper") is not None
+    t5_with_ci = [row for row in t5_rows if row.get("ci_lower") is not None and row.get("ci_upper") is not None]
+    assert t5_with_ci, "expected at least one T5 row with bootstrap confidence intervals"
+
+
+def test_family_bootstrap_resamples_clusters(tmp_path: Path) -> None:
+    runs_root = tmp_path / "runs"
+    cluster_assignments = {"case-1": "patient-a", "case-2": "patient-a", "case-3": "patient-b"}
+
+    target_values = {
+        13: {
+            "case-1": {"recall": 0.9, "f1": 0.88},
+            "case-2": {"recall": 0.72, "f1": 0.69},
+            "case-3": {"recall": 0.61, "f1": 0.6},
+        },
+        29: {
+            "case-1": {"recall": 0.92, "f1": 0.9},
+            "case-2": {"recall": 0.74, "f1": 0.71},
+            "case-3": {"recall": 0.64, "f1": 0.62},
+        },
+        47: {
+            "case-1": {"recall": 0.89, "f1": 0.87},
+            "case-2": {"recall": 0.7, "f1": 0.68},
+            "case-3": {"recall": 0.6, "f1": 0.58},
+        },
+    }
+    imnet_values = {
+        13: {
+            "case-1": {"recall": 0.58, "f1": 0.55},
+            "case-2": {"recall": 0.49, "f1": 0.46},
+            "case-3": {"recall": 0.45, "f1": 0.43},
+        },
+        29: {
+            "case-1": {"recall": 0.57, "f1": 0.54},
+            "case-2": {"recall": 0.48, "f1": 0.45},
+            "case-3": {"recall": 0.44, "f1": 0.42},
+        },
+        47: {
+            "case-1": {"recall": 0.56, "f1": 0.53},
+            "case-2": {"recall": 0.47, "f1": 0.44},
+            "case-3": {"recall": 0.43, "f1": 0.41},
+        },
+    }
+    sup_values = {
+        13: {
+            "case-1": {"recall": 0.63, "f1": 0.6},
+            "case-2": {"recall": 0.54, "f1": 0.52},
+            "case-3": {"recall": 0.5, "f1": 0.48},
+        },
+        29: {
+            "case-1": {"recall": 0.64, "f1": 0.61},
+            "case-2": {"recall": 0.55, "f1": 0.53},
+            "case-3": {"recall": 0.51, "f1": 0.49},
+        },
+        47: {
+            "case-1": {"recall": 0.62, "f1": 0.59},
+            "case-2": {"recall": 0.53, "f1": 0.51},
+            "case-3": {"recall": 0.49, "f1": 0.47},
+        },
+    }
+
+    def _materialize(model: str, values: Mapping[int, Mapping[str, Mapping[str, float]]]) -> None:
+        for seed, case_map in values.items():
+            path = runs_root / f"{model}_s{seed}_last.metrics.json"
+            _write_case_metrics_run(
+                path,
+                seed=seed,
+                model=model,
+                blur_cases=case_map,
+                cluster_assignments=cluster_assignments,
+            )
+
+    _materialize("ssl_colon", target_values)
+    _materialize("ssl_imnet", imnet_values)
+    _materialize("sup_imnet", sup_values)
+
+    runs = module.discover_runs(runs_root)
+
+    case_summary = module.summarize_runs(
+        runs,
+        bootstrap=64,
+        rng_seed=11,
+        cluster_key="case_id",
+    )
+    cluster_summary = module.summarize_runs(
+        runs,
+        bootstrap=64,
+        rng_seed=11,
+        cluster_key="patient_id",
+    )
+
+    def _find_row(summary: Mapping[str, object]) -> Mapping[str, object]:
+        tables = summary["tables"]
+        assert isinstance(tables, Mapping)
+        t4_rows = tables.get("t4_delta_ausc")
+        assert isinstance(t4_rows, list)
+        for row in t4_rows:
+            if (
+                isinstance(row, Mapping)
+                and row.get("baseline") == "ssl_imnet"
+                and row.get("family") == "blur"
+                and row.get("metric") == "f1"
+            ):
+                return row
+        raise AssertionError("blur family row not found")
+
+    case_row = _find_row(case_summary)
+    cluster_row = _find_row(cluster_summary)
+
+    assert case_row.get("ci_lower") != cluster_row.get("ci_lower")
+    assert case_row.get("ci_upper") != cluster_row.get("ci_upper")
+
+    repeat_summary = module.summarize_runs(
+        runs,
+        bootstrap=64,
+        rng_seed=11,
+        cluster_key="patient_id",
+    )
+    repeat_row = _find_row(repeat_summary)
+
+    for key in ("delta_mean", "ci_lower", "ci_upper"):
+        assert cluster_row.get(key) == repeat_row.get(key)
+
+
+def test_summarize_runs_validates_full_perturbation_coverage(tmp_path: Path) -> None:
+    runs_root = tmp_path / "runs"
+    blur_cases = {"case-1": {"recall": 0.82, "f1": 0.78}, "case-2": {"recall": 0.74, "f1": 0.7}}
+
+    for seed in module.REQUIRED_SEEDS:
+        path = runs_root / f"ssl_colon_s{seed}_last.metrics.json"
+        _write_case_metrics_run(path, seed=seed, model="ssl_colon", blur_cases=blur_cases)
+
+    runs = module.discover_runs(runs_root)
+    summary = module.summarize_runs(runs, bootstrap=0)
+
+    assert "models" in summary
+    assert "ssl_colon" in summary["models"]
+
+
+def test_summarize_runs_raises_when_severity_missing(tmp_path: Path) -> None:
+    runs_root = tmp_path / "runs"
+    blur_cases = {"case-1": {"recall": 0.8, "f1": 0.75}}
+
+    for seed in module.REQUIRED_SEEDS:
+        path = runs_root / f"ssl_colon_s{seed}_last.metrics.json"
+        _write_case_metrics_run(
+            path,
+            seed=seed,
+            model="ssl_colon",
+            blur_cases=blur_cases,
+            missing_tags={"contrast_0p6"},
+        )
+
+    runs = module.discover_runs(runs_root)
+
+    with pytest.raises(ValueError) as excinfo:
+        module.summarize_runs(runs, bootstrap=0)
+
+    message = str(excinfo.value)
+    assert "contrast" in message
+    assert "0p6" in message or "0.6" in message
