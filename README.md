@@ -242,6 +242,56 @@ The paper’s experiments map to manifests in `config/exp/`.  Launch them with
 `ssl_colon`).  Outputs default to
 `checkpoints/classification/<exp>_seed<seed>/`.
 
+#### Reproducing the full study: training → reporting → manifests
+
+1. **Environment & data.** Create a fresh virtualenv, install the pinned
+  dependencies (`pip install -r requirements.txt && pip install --no-deps -e .`),
+  and export `CUBLAS_WORKSPACE_CONFIG=:4096:8`.  Populate
+  `data/roots.json` with absolute paths to SUN, PolypGen, etc.  The helper
+  `scripts/check_paths.py` validates that each pack resolves correctly.
+2. **Run the training/evaluation manifests.** Each experiment has a thin shell
+  wrapper that iterates over the seed trio `[13, 29, 47]` and writes metrics to
+  `results/<exp>/` (plus checkpoints/logs under `outputs/`).
+
+  ```bash
+  bash scripts/run_exp1.sh
+  bash scripts/run_exp2.sh
+  bash scripts/run_exp3.sh
+  bash scripts/run_exp4.sh
+  bash scripts/run_exp5a.sh
+  bash scripts/run_exp5b.sh
+  bash scripts/run_exp5c.sh
+  ```
+
+  These scripts call `python -m ssl4polyp.classification.train_classification` with
+  the layered configs in `config/exp/`, ensuring dataset packs, model weights
+  and hyperparameters match the paper.
+3. **Aggregate + guardrail reports.** After each run completes, execute the
+  corresponding analysis CLI to bootstrap metrics, enforce provenance checks
+  and write the manifest JSON.  This step is mandatory for **all** experiments,
+  not just the morphology study.
+
+  ```bash
+  python scripts/exp1_report.py  --runs-root results/exp1  --manifest results/exp1/manifest.json
+  python scripts/exp2_report.py  --runs-root results/exp2  --manifest results/exp2/manifest.json
+  python scripts/exp3_report.py  --runs-root results/exp3  --manifest results/exp3/manifest.json
+  python scripts/exp4_report.py  --runs-root results/exp4  --manifest results/exp4/manifest.json
+  python scripts/exp5a_report.py --runs-root results/exp5a --manifest results/exp5a/manifest.json
+  python scripts/exp5b_report.py --runs-root results/exp5b --manifest results/exp5b/manifest.json \
+     --output-json results/exp5b/summary.json --output-dir results/exp5b/tables
+  python scripts/exp5c_report.py --runs-root results/exp5c --manifest results/exp5c/manifest.json
+  ```
+
+  Each reporter emits Markdown/CSV summaries, records bootstrap settings, and
+  captures threshold provenance (`source_split`, `source_checkpoint`, etc.) so
+  downstream consumers can rely on a single manifest per experiment.
+4. **Optional aggregation.** To mirror the tables in the manuscript, combine the
+  manifest outputs using `python scripts/aggregate_metrics.py --results-root results`.
+
+With the manifests and reports in place, the `results/` directory contains
+seed-by-seed JSON metrics, summary tables, and provenance records ready for
+archival or publication.
+
 #### Seed protocol
 
 - Unless explicitly noted, every training run repeats across the seed trio
