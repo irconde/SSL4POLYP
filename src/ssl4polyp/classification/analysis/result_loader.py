@@ -183,7 +183,25 @@ class ResultLoader:
 
     @staticmethod
     def normalise_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
-        return {str(key): value for key, value in dict(payload).items()}
+        return ResultLoader._strip_debug_sections(
+            {str(key): value for key, value in dict(payload).items()}
+        )
+
+    @staticmethod
+    def _strip_debug_sections(obj: Any) -> Any:
+        if isinstance(obj, Mapping):
+            cleaned: Dict[str, Any] = {}
+            for key, value in obj.items():
+                key_str = str(key)
+                if key_str.startswith("debug"):
+                    continue
+                cleaned[key_str] = ResultLoader._strip_debug_sections(value)
+            return cleaned
+        if isinstance(obj, list):
+            return [ResultLoader._strip_debug_sections(item) for item in obj]
+        if isinstance(obj, tuple):
+            return tuple(ResultLoader._strip_debug_sections(item) for item in obj)
+        return obj
 
     def _normalize_blocks(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
         bad = [key for key in payload.keys() if isinstance(key, str) and key.startswith("eval_")]
@@ -384,6 +402,12 @@ class ResultLoader:
                     f"Metrics file '{metrics_path}' contains non-integer confusion entries in {block_name}"
                 )
             return
+        tp = int(tp)  # type: ignore[arg-type]
+        fp = int(fp)  # type: ignore[arg-type]
+        tn = int(tn)  # type: ignore[arg-type]
+        fn = int(fn)  # type: ignore[arg-type]
+        n_pos = int(n_pos)  # type: ignore[arg-type]
+        n_neg = int(n_neg)  # type: ignore[arg-type]
         prevalence_value = block.get("prevalence")
         prevalence = _as_float(prevalence_value)
         if prevalence is None:

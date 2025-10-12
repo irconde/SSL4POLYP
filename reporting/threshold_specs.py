@@ -1,4 +1,9 @@
-"""Experiment-specific threshold policies for report validation."""
+"""Experiment-specific threshold policies for report validation.
+
+Authoritative τ-based validation metrics live only in ``policy_record['metrics_at_tau']``
+entries (mirrored into ``metrics_at_threshold`` in the saved threshold file). Any content
+under ``debug/*`` is non-canonical and may correspond to a different τ.
+"""
 
 from __future__ import annotations
 

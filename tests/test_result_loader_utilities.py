@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+# pyright: reportMissingImports=false
+
 import json
 from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
-import pytest
+import pytest  # type: ignore[import-not-found]
 
-from ssl4polyp.classification.analysis.result_loader import (
+from ssl4polyp.classification.analysis.result_loader import (  # type: ignore[import-not-found]
     CurveMetadata,
     GuardrailViolation,
     LoadedResult,
@@ -21,7 +24,7 @@ def _write_curve(tmp_path: Path) -> Path:
     return curve_path
 
 
-def _make_payload(curve_path: Path) -> dict[str, object]:
+def _make_payload(curve_path: Path) -> Dict[str, Any]:
     val_path = "sun_full/val.csv"
     curve_digest = compute_file_sha256(curve_path)
     return {
@@ -92,6 +95,29 @@ def test_result_loader_extracts_metrics_and_curves(tmp_path: Path) -> None:
     assert isinstance(curve_meta, CurveMetadata)
     assert curve_meta.path == curve_path.resolve()
     assert curve_meta.sha256 == compute_file_sha256(curve_path)
+
+
+def test_result_loader_ignores_debug_sections(tmp_path: Path) -> None:
+    curve_path = _write_curve(tmp_path)
+    payload = _make_payload(curve_path)
+    payload.setdefault("debug", {})["notes"] = {"info": "legacy"}
+    payload["thresholds"]["primary"]["debug"] = {
+        "val_snapshot_prev": {
+            "epoch": 3,
+            "tau_used": 0.37,
+            "averaging": "macro",
+            "metrics": {"recall_macro": 0.7},
+        }
+    }
+    metrics_path = tmp_path / "metrics.json"
+    metrics_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loader = ResultLoader(exp_id="exp1")
+    result = loader.load(metrics_path)
+
+    assert "debug" not in result.payload
+    primary_block = result.payload["thresholds"]["primary"]
+    assert "debug" not in primary_block
 
 
 def test_result_loader_normalises_legacy_blocks() -> None:

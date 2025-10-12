@@ -2940,6 +2940,8 @@ def _build_threshold_payload(
     model_tag: Optional[str] = None,
     subdir: Optional[str] = None,
     policy_record: Optional[Mapping[str, Any]] = None,
+    snapshot_epoch: Optional[int] = None,
+    snapshot_tau: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Create a structured payload capturing threshold metadata."""
 
@@ -2956,6 +2958,9 @@ def _build_threshold_payload(
         "selected_threshold": float(tau),
         "split_used": getattr(args, "val_split", None) or "val",
         "seed": int(getattr(args, "seed", 0)),
+        # Authoritative τ-based validation metrics live only in policy_record.metrics_at_tau
+        # (mirrored below to metrics_at_threshold). The debug/* block is non-canonical and may
+        # reflect a different τ; downstream consumers must ignore it for headline results.
         "metrics_at_threshold": metrics_at_tau,
         "auc_val": float(val_perf),
         "auc_test": float(test_perf) if test_perf is not None else None,
@@ -2966,13 +2971,71 @@ def _build_threshold_payload(
     }
     if threshold_key:
         payload["threshold_key"] = threshold_key
-    snapshot: Dict[str, Dict[str, float]] = {}
-    if val_metrics:
-        snapshot["val"] = val_metrics
-    if test_metrics:
-        snapshot["test"] = test_metrics
-    if snapshot:
-        payload["metrics_snapshot"] = snapshot
+
+    def _build_debug_snapshot(
+        metrics: Mapping[str, float], _label: str
+    ) -> Optional[Dict[str, Any]]:
+        if not metrics:
+            return None
+        scalar_metrics: Dict[str, float] = {}
+        macro_keys = {
+            "recall",
+            "precision",
+            "f1",
+            "balanced_accuracy",
+            "auprc",
+            "auroc",
+        }
+        for key in macro_keys:
+            value = metrics.get(key)
+            if isinstance(value, (int, float, np.integer, np.floating)) and math.isfinite(
+                float(value)
+            ):
+                scalar_metrics[f"{key}_macro"] = float(value)
+
+        extra_keys = {
+            "loss",
+        }
+        for key in extra_keys:
+            value = metrics.get(key)
+            if isinstance(value, (int, float, np.integer, np.floating)) and math.isfinite(
+                float(value)
+            ):
+                scalar_metrics[key] = float(value)
+
+        if not scalar_metrics:
+            return None
+
+        snapshot_block: Dict[str, Any] = {
+            "averaging": "macro",
+            "metrics": scalar_metrics,
+        }
+        if snapshot_epoch is not None:
+            snapshot_block["epoch"] = int(snapshot_epoch)
+
+        tau_value: Optional[float] = None
+        if snapshot_tau is not None and math.isfinite(float(snapshot_tau)):
+            tau_value = float(snapshot_tau)
+        else:
+            fallback_tau = metrics.get("tau") if isinstance(metrics, Mapping) else None
+            if isinstance(fallback_tau, (int, float, np.integer, np.floating)) and math.isfinite(
+                float(fallback_tau)
+            ):
+                tau_value = float(fallback_tau)
+        if tau_value is not None:
+            snapshot_block["tau_used"] = tau_value
+
+        return snapshot_block
+
+    debug_payload: Dict[str, Any] = {}
+    val_snapshot = _build_debug_snapshot(val_metrics, "val")
+    if val_snapshot:
+        debug_payload["val_snapshot_prev"] = val_snapshot
+    test_snapshot = _build_debug_snapshot(test_metrics, "test")
+    if test_snapshot:
+        debug_payload["test_snapshot_prev"] = test_snapshot
+    if debug_payload:
+        payload.setdefault("debug", {}).update(debug_payload)
     if threshold_key:
         payload["thresholds"] = {threshold_key: float(tau)}
     if model_tag:
@@ -6205,6 +6268,8 @@ def train(rank, args):
                             model_tag=model_tag,
                             subdir=subdir,
                             policy_record=threshold_record,
+                            snapshot_epoch=int(epoch),
+                            snapshot_tau=previous_tau,
                         )
                         with threshold_file.open("w", encoding="utf-8") as handle:
                             json.dump(threshold_record_payload, handle, indent=2)
