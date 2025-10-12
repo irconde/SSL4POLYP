@@ -1383,6 +1383,8 @@ PRIMARY_METRIC_KEYS: Tuple[str, ...] = (
     "precision",
     "f1",
     "balanced_accuracy",
+    "tpr",
+    "tnr",
     "mcc",
     "loss",
     "tp",
@@ -1404,6 +1406,8 @@ RETENTION_METRIC_KEYS: Tuple[str, ...] = (
     "precision",
     "f1",
     "balanced_accuracy",
+    "tpr",
+    "tnr",
 )
 
 
