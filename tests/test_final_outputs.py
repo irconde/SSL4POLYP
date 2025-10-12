@@ -175,6 +175,8 @@ def test_prepare_metric_export_includes_counts_and_confusion():
             "fn": 2,
             "prevalence": 0.6,
             "mcc": 0.25,
+            "tpr": 5 / 7,
+            "tnr": 3 / 4,
         },
     }
 
@@ -189,6 +191,8 @@ def test_prepare_metric_export_includes_counts_and_confusion():
     assert export["n_total"] == 10
     assert export["prevalence"] == pytest.approx(0.6)
     assert export["mcc"] == pytest.approx(0.25)
+    assert export["tpr"] == pytest.approx(5 / 7)
+    assert export["tnr"] == pytest.approx(3 / 4)
 
 
 def test_build_metric_block_selects_primary_metrics():
