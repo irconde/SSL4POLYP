@@ -18,7 +18,7 @@ import warnings
 from pathlib import Path
 from collections import Counter, OrderedDict
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 import yaml
 
@@ -1078,16 +1078,30 @@ def _compute_optimizer_steps(global_step: int, grad_accum_steps: int) -> int:
     return int(global_step) // int(grad_accum_steps)
 
 
+def _append_log_lines(log_path: Union[str, Path], lines: Sequence[str]) -> None:
+    """Append ``lines`` to ``log_path`` with robust error handling."""
+
+    if not log_path:
+        return
+    path_obj = Path(log_path)
+    try:
+        with path_obj.open("a") as handle:
+            for line in lines:
+                handle.write(line)
+                handle.write("\n")
+    except OSError as exc:  # pragma: no cover - depends on filesystem state
+        warnings.warn(
+            f"Failed to append to log file {path_obj}: {exc}",
+            RuntimeWarning,
+        )
+
+
 def _log_lines(log_path: Path, lines: Sequence[str]) -> None:
     """Print ``lines`` and append them to ``log_path``."""
 
     for line in lines:
         print(line)
-    if log_path:
-        with open(log_path, "a") as handle:
-            for line in lines:
-                handle.write(line)
-                handle.write("\n")
+    _append_log_lines(log_path, lines)
 
 
 def _format_eta(seconds: Optional[float]) -> str:
@@ -4036,9 +4050,7 @@ def train_epoch(
                     elapsed_time=elapsed,
                 )
                 print("\r" + printout)
-                with open(log_path, "a") as f:
-                    f.write(printout)
-                    f.write("\n")
+                _append_log_lines(log_path, [printout])
         if distributed:
             dist.barrier()
         global_step += 1
@@ -4139,8 +4151,7 @@ def test(
         f"{split_name} prediction mode: {prediction_mode} [{tau_breadcrumb}]"
     )
     print(breadcrumb_text)
-    with open(log_path_obj, "a") as f:
-        f.write(breadcrumb_text + "\n")
+    _append_log_lines(log_path_obj, [breadcrumb_text])
 
     for batch_idx, batch in enumerate(test_loader):
         if batches_processed >= hard_batch_limit:
@@ -4344,8 +4355,7 @@ def test(
                 time.time() - t,
             )
             print("\r" + printout)
-            with open(log_path_obj, "a") as f:
-                f.write(printout + "\n")
+            _append_log_lines(log_path_obj, [printout])
             break
     probs = _prepare_binary_probabilities(logits)
     n_classes = probs.size(1) if probs.ndim == 2 else 1
@@ -4885,9 +4895,7 @@ def test(
 
     for line in output_lines:
         print(line)
-    with open(log_path_obj, "a") as f:
-        for line in output_lines:
-            f.write(line + "\n")
+    _append_log_lines(log_path_obj, output_lines)
 
     if return_outputs:
         results["logits"] = logits
@@ -5545,9 +5553,7 @@ def train(rank, args):
         tb_dir = getattr(args, "tensorboard_dir", None)
         tb_path = str(tb_dir) if tb_dir else os.path.join(args.output_dir, "tb")
         tb_logger = TensorboardLogger.create(tb_path)
-        with open(log_path, "a") as f:
-            f.write(str(args))
-            f.write("\n")
+        _append_log_lines(log_path, [str(args)])
     else:
         tb_logger = TensorboardLogger.create(None)
     if distributed:
@@ -6117,8 +6123,7 @@ def train(rank, args):
                     f", auroc={_format_epoch_metric(val_metrics.get('auroc'))}"
                 )
                 print(summary_line)
-                with open(log_path, "a") as f:
-                    f.write(summary_line + "\n")
+                _append_log_lines(log_path, [summary_line])
                 last_epoch = int(epoch)
                 last_loss = float(loss)
                 last_val_perf = float(val_perf)
@@ -6183,9 +6188,7 @@ def train(rank, args):
                     ]
                     _log_lines(log_path, checkpoint_lines)
                 print("Saving...")
-                with open(log_path, "a") as f:
-                    f.write("Saving...")
-                    f.write("\n")
+                _append_log_lines(log_path, ["Saving..."])
                 dataset_label = args.dataset or "dataset"
                 val_split_label = args.val_split or "val"
                 updated_thresholds = dict(thresholds_map)
@@ -6513,9 +6516,7 @@ def train(rank, args):
                 f"Patience tracker: best={best_display} | patience={patience_display} | {checkpoint_note}"
             )
             print(patience_line)
-            with open(log_path, "a") as f:
-                f.write(patience_line)
-                f.write("\n")
+            _append_log_lines(log_path, [patience_line])
 
         if early_patience > 0:
             if distributed:
