@@ -216,8 +216,12 @@ class ResultLoader:
         payload: Mapping[str, Any],
         *,
         expected_val_paths: Sequence[str] = (),
-    ) -> str:
-        for key in ("thresholds", "data", "val", "test_primary"):
+    ) -> Optional[str]:
+        eval_only = bool(payload.get("eval_only"))
+        required_blocks = ["thresholds", "data", "test_primary"]
+        if not eval_only:
+            required_blocks.append("val")
+        for key in required_blocks:
             if key not in payload:
                 raise GuardrailViolation(
                     f"Metrics file '{metrics_path}' is missing required block '{key}'"
@@ -227,9 +231,11 @@ class ResultLoader:
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' data block must be a mapping"
             )
-        required_splits = ("train", "val", "test")
-        for split in required_splits:
+        present_splits: Dict[str, Mapping[str, Any]] = {}
+        for split in ("train", "val", "test"):
             entry = data_block.get(split)
+            if entry is None:
+                continue
             if not isinstance(entry, Mapping):
                 raise GuardrailViolation(
                     f"Metrics file '{metrics_path}' data.{split} must be a mapping"
@@ -244,42 +250,68 @@ class ResultLoader:
                 raise GuardrailViolation(
                     f"Metrics file '{metrics_path}' data.{split}.sha256 is required"
                 )
-        val_info = data_block["val"]
-        val_path_raw = val_info.get("path")
-        if not isinstance(val_path_raw, str) or not val_path_raw.strip():
+            present_splits[split] = entry
+        if not present_splits:
             raise GuardrailViolation(
-                f"Metrics file '{metrics_path}' data.val.path is required"
+                f"Metrics file '{metrics_path}' data block did not include any recognised splits"
             )
-        val_path = val_path_raw.strip()
-        normalised_val_path = self._normalise_manifest_path(val_path)
-        if expected_val_paths:
-            allowed = {
-                self._normalise_manifest_path(candidate)
-                for candidate in expected_val_paths
-            }
-            if normalised_val_path not in allowed:
-                options = ", ".join(sorted(allowed)) or "<unknown>"
+        if eval_only:
+            if "test" not in present_splits:
                 raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' data.val.path must reference one of "
-                    f"[{options}] (found {val_path!r})"
+                    f"Metrics file '{metrics_path}' must provide data.test when eval_only is true"
                 )
+        else:
+            missing = [split for split in ("train", "val", "test") if split not in present_splits]
+            if missing:
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' is missing required data splits: {missing}"
+                )
+        val_path: Optional[str] = None
+        if "val" in present_splits:
+            val_info = present_splits["val"]
+            val_path_raw = val_info.get("path")
+            if not isinstance(val_path_raw, str) or not val_path_raw.strip():
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' data.val.path is required"
+                )
+            val_path = val_path_raw.strip()
+            normalised_val_path = self._normalise_manifest_path(val_path)
+            if expected_val_paths:
+                allowed = {
+                    self._normalise_manifest_path(candidate)
+                    for candidate in expected_val_paths
+                }
+                if normalised_val_path not in allowed:
+                    options = ", ".join(sorted(allowed)) or "<unknown>"
+                    raise GuardrailViolation(
+                        f"Metrics file '{metrics_path}' data.val.path must reference one of "
+                        f"[{options}] (found {val_path!r})"
+                    )
+        elif expected_val_paths:
+            options = ", ".join(
+                sorted(self._normalise_manifest_path(candidate) for candidate in expected_val_paths)
+            ) or "<unknown>"
+            raise GuardrailViolation(
+                f"Metrics file '{metrics_path}' is missing data.val.path but expected one of [{options}]"
+            )
         test_primary = payload.get("test_primary")
         if not isinstance(test_primary, Mapping):
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' test_primary block must be a mapping"
             )
         val_block = payload.get("val")
-        if not isinstance(val_block, Mapping):
-            raise GuardrailViolation(
-                f"Metrics file '{metrics_path}' val block must be a mapping"
-            )
+        if val_block is not None or not eval_only:
+            if not isinstance(val_block, Mapping):
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' val block must be a mapping"
+                )
         return val_path
 
     def _validate_thresholds(
         self,
         metrics_path: Path,
         payload: Mapping[str, Any],
-        val_path: str,
+        val_path: Optional[str],
         spec: Mapping[str, Any],
     ) -> None:
         thresholds = payload.get("thresholds")
@@ -316,6 +348,10 @@ class ResultLoader:
                     f"thresholds.{slot}.epoch must be an integer"
                 )
             if "split" in slot_spec:
+                if not val_path:
+                    raise GuardrailViolation(
+                        f"thresholds.{slot}.split declared but data.val.path is unavailable"
+                    )
                 expected = slot_spec["split"].replace("${val_path}", val_path)
                 actual = block.get("split")
                 if actual != expected:
