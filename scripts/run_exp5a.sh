@@ -15,9 +15,9 @@ MODELS=${MODELS:-${DEFAULT_MODELS}}
 
 # Canonical SUN fine-tuning checkpoints must exist prior to running this script.
 # With the default experiment launchers, the expected layout is:
-#   ${PARENT_ROOT}/exp1_sup_imnet_seed{seed}/sun_baselines/sup_imnet__SUNFull_s{seed}.pth
-#   ${PARENT_ROOT}/exp1_ssl_imnet_seed{seed}/sun_baselines/ssl_imnet__SUNFull_s{seed}.pth
-#   ${PARENT_ROOT}/exp2_ssl_colon_seed{seed}/sun_baselines/ssl_colon__SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/exp1_sup_imnet_seed{seed}/sun_baselines/SUPImNet__SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/exp1_ssl_imnet_seed{seed}/sun_baselines/SSLImNet__SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/exp2_ssl_colon_seed{seed}/sun_baselines/SSLColon__SUNFull_s{seed}.pth
 # for every seed you plan to reuse. Adjust PARENT_ROOT or the mappings below if
 # your checkpoints live elsewhere.
 
@@ -38,25 +38,42 @@ for seed in ${SEEDS}; do
     out_dir="${OUTPUT_ROOT}/exp5a_${model}_seed${seed}"
     case "${model}" in
       sup_imnet)
-        parent_rel="exp1_sup_imnet_seed${seed}/sun_baselines/sup_imnet__SUNFull_s${seed}.pth"
+        experiment_dir="exp1_${model}_seed${seed}"
         ;;
       ssl_imnet)
-        parent_rel="exp1_ssl_imnet_seed${seed}/sun_baselines/ssl_imnet__SUNFull_s${seed}.pth"
+        experiment_dir="exp1_${model}_seed${seed}"
         ;;
       ssl_colon)
-        parent_rel="exp2_ssl_colon_seed${seed}/sun_baselines/ssl_colon__SUNFull_s${seed}.pth"
+        experiment_dir="exp2_${model}_seed${seed}"
         ;;
       *)
         echo "Unknown model '${model}' requested; cannot resolve parent checkpoint." >&2
         exit 1
         ;;
     esac
+    parent_rel=$(MODEL="${model}" SEED="${seed}" EXPERIMENT_DIR="${experiment_dir}" python - <<'PY'
+import os
+from pathlib import Path
+
+from ssl4polyp.classification.train_classification import (
+    _canonicalize_tag,
+    _compose_stem,
+)
+
+model = os.environ["MODEL"]
+seed = int(os.environ["SEED"])
+experiment_dir = os.environ["EXPERIMENT_DIR"]
+model_tag = _canonicalize_tag(model)
+stem = _compose_stem(model_tag, "SUNFull", (), seed)
+print(Path(experiment_dir) / "sun_baselines" / f"{stem}.pth")
+PY
+)
     parent_ckpt="${PARENT_ROOT}/${parent_rel}"
     if [[ ! -f "${parent_ckpt}" ]]; then
       cat >&2 <<EOF
 Error: expected parent checkpoint '${parent_ckpt}' not found.
 Each SUN checkpoint should follow the layout:
-  \${PARENT_ROOT}/exp{N}_<model>_seed{seed}/sun_baselines/<model>__SUNFull_s{seed}.pth
+  \${PARENT_ROOT}/exp{N}_<model>_seed{seed}/sun_baselines/<ModelTag>__SUNFull_s{seed}.pth
 Ensure the dataset-specific directory exists and contains the required files before rerunning.
 EOF
       exit 1

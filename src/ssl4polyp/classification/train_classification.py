@@ -3298,6 +3298,26 @@ def _resolve_lineage_qualifiers(
     return qualifiers
 
 
+_CANONICAL_SUN_PARENT_EXPERIMENTS: Mapping[str, str] = {
+    "sup_imnet": "exp1_sup_imnet_seed{seed}",
+    "ssl_imnet": "exp1_ssl_imnet_seed{seed}",
+    "ssl_colon": "exp2_ssl_colon_seed{seed}",
+}
+
+_CANONICAL_SUN_PARENT_DATA_TAG = "SUNFull"
+_CANONICAL_SUN_PARENT_SEGMENT = "sun_baselines"
+
+
+def _infer_classification_root(output_dir: Optional[str]) -> Path:
+    if not output_dir:
+        return Path("checkpoints") / "classification"
+    candidate = Path(str(output_dir)).expanduser()
+    for current in (candidate, *candidate.parents):
+        if current.name == "classification":
+            return current
+    return Path("checkpoints") / "classification"
+
+
 def _compose_stem(
     model_tag: str, data_tag: str, qualifiers: Iterable[str], seed: int
 ) -> str:
@@ -3305,6 +3325,23 @@ def _compose_stem(
     qualifier_list = [q for q in qualifiers if q]
     qualifier_part = f"_{'_'.join(qualifier_list)}" if qualifier_list else ""
     return f"{model_tag}__{data_tag}{qualifier_part}_s{seed_value}"
+
+
+def _resolve_canonical_sun_parent_checkpoint(
+    args,
+    selected_model: Optional[Dict[str, Any]],
+    model_key: Any,
+    seed: int,
+) -> Path:
+    model_key_lower = str(model_key).lower()
+    template = _CANONICAL_SUN_PARENT_EXPERIMENTS[model_key_lower]
+    experiment_dir = template.format(seed=seed)
+    model_tag = _resolve_model_tag(args, selected_model)
+    stem = _compose_stem(
+        model_tag, _CANONICAL_SUN_PARENT_DATA_TAG, (), _as_int(seed) or 0
+    )
+    root = _infer_classification_root(getattr(args, "output_dir", None))
+    return root / experiment_dir / _CANONICAL_SUN_PARENT_SEGMENT / f"{stem}.pth"
 
 
 def _resolve_run_layout(
@@ -3853,20 +3890,15 @@ def apply_experiment_config(
                 raise ValueError(
                     "Seed must be an integer to resolve canonical SUN checkpoints."
                 ) from exc
-            model_key_lower = str(model_key).lower()
-            checkpoint_templates = {
-                "sup_imnet": "exp1_sup_imnet_seed{seed}/sup_imnet__SUNFull_s{seed}.pth",
-                "ssl_imnet": "exp1_ssl_imnet_seed{seed}/ssl_imnet__SUNFull_s{seed}.pth",
-                "ssl_colon": "exp2_ssl_colon_seed{seed}/ssl_colon__SUNFull_s{seed}.pth",
-            }
-            template = checkpoint_templates.get(model_key_lower)
-            if template is None:
+            try:
+                parent_path = _resolve_canonical_sun_parent_checkpoint(
+                    args, selected_model, model_key, seed_int
+                )
+            except KeyError as exc:
                 raise ValueError(
                     f"Unsupported model '{model_key}' for canonical SUN initialisation."
-                )
-            relative_path = template.format(seed=seed_int)
-            canonical_root = Path("checkpoints") / "classification"
-            args.parent_checkpoint = str(canonical_root / relative_path)
+                ) from exc
+            args.parent_checkpoint = str(parent_path)
 
     init_key_lower = str(protocol_cfg.get("init_from", "")).strip().lower()
     dataset_name_lower = str(dataset_cfg.get("name", "")).strip().lower()
