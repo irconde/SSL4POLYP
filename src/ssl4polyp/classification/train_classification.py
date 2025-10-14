@@ -1290,13 +1290,21 @@ def _normalize_seeds(raw: Any) -> list[int]:
 def _resolve_active_seed(args) -> int:
     """Determine the seed that should drive the current run."""
 
+    cli_seed = getattr(args, "seed", None)
+    if getattr(args, "_seed_explicit", False) and cli_seed is not None:
+        return int(cli_seed)
+
     seeds = getattr(args, "seeds", None) or []
     if seeds:
         return int(seeds[0])
+
     config_seed = getattr(args, "config_seed", None)
     if config_seed is not None:
         return int(config_seed)
-    return int(getattr(args, "seed", 0))
+
+    if cli_seed is not None:
+        return int(cli_seed)
+    return 0
 
 
 def _get_active_seed(args) -> int:
@@ -3638,6 +3646,15 @@ def apply_experiment_config(
         resolved_training_seeds = protocol_training_seeds
     else:
         resolved_training_seeds = config_training_seeds
+
+    cli_seed_value = getattr(args, "seed", None)
+    if getattr(args, "_seed_explicit", False) and cli_seed_value is not None:
+        cli_seed_int = int(cli_seed_value)
+        if resolved_training_seeds:
+            remaining = [seed for seed in resolved_training_seeds if seed != cli_seed_int]
+            resolved_training_seeds = [cli_seed_int, *remaining]
+        else:
+            resolved_training_seeds = [cli_seed_int]
     args.training_seeds = resolved_training_seeds
     if resolved_training_seeds:
         args.seeds = resolved_training_seeds
@@ -7175,7 +7192,12 @@ def get_args():
         help="Collection of seeds to evaluate; the first seed is used for the current run",
     )
 
-    return parser.parse_args()
+    seed_flag_present = any(
+        entry == "--seed" or entry.startswith("--seed=") for entry in sys.argv[1:]
+    )
+    parsed = parser.parse_args()
+    setattr(parsed, "_seed_explicit", bool(seed_flag_present))
+    return parsed
 
 
 def main():
