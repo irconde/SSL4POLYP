@@ -3266,12 +3266,13 @@ def _extract_parent_metadata(reference: str) -> tuple[Optional[str], Optional[in
     stem = Path(reference).stem
     seed_match = re.search(r"_s(\d+)$", stem)
     seed = int(seed_match.group(1)) if seed_match else None
-    data_match = re.search(r"__(.+)_s\d+$", stem)
-    if data_match:
-        data_segment = data_match.group(1)
-        data_tag = data_segment.split("_")[0]
-        return data_tag, seed
-    return None, seed
+    if seed_match:
+        stem = stem[: seed_match.start()]
+    segments = [segment for segment in stem.split("_") if segment]
+    data_tag: Optional[str] = None
+    if len(segments) >= 2:
+        data_tag = segments[1]
+    return data_tag, seed
 
 
 def _resolve_lineage_qualifiers(
