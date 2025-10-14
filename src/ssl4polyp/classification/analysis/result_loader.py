@@ -348,16 +348,29 @@ class ResultLoader:
                     f"thresholds.{slot}.epoch must be an integer"
                 )
             if "split" in slot_spec:
-                if not val_path:
-                    raise GuardrailViolation(
-                        f"thresholds.{slot}.split declared but data.val.path is unavailable"
-                    )
-                expected = slot_spec["split"].replace("${val_path}", val_path)
+                expected_template = slot_spec["split"]
                 actual = block.get("split")
-                if actual != expected:
-                    raise GuardrailViolation(
-                        f"thresholds.{slot}.split != data.val.path ({actual!r} vs {expected!r})"
-                    )
+                if isinstance(actual, str):
+                    actual_value = actual.strip()
+                else:
+                    actual_value = None
+                if "${val_path}" in expected_template:
+                    if val_path:
+                        expected = expected_template.replace("${val_path}", val_path)
+                        if actual_value != expected:
+                            raise GuardrailViolation(
+                                f"thresholds.{slot}.split != data.val.path ({actual!r} vs {expected!r})"
+                            )
+                    else:
+                        if not actual_value:
+                            raise GuardrailViolation(
+                                f"thresholds.{slot}.split must be a non-empty string when data.val.path is omitted"
+                            )
+                else:
+                    if actual_value != expected_template:
+                        raise GuardrailViolation(
+                            f"thresholds.{slot}.split must be {expected_template!r} (found {actual!r})"
+                        )
             if block.get("policy") == "sun_val_frozen":
                 source_split_expected = slot_spec.get("source_split")
                 if block.get("source_split") != source_split_expected:
