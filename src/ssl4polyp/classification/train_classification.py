@@ -3324,7 +3324,7 @@ def _compose_stem(
     seed_value = _as_int(seed) or 0
     qualifier_list = [q for q in qualifiers if q]
     qualifier_part = f"_{'_'.join(qualifier_list)}" if qualifier_list else ""
-    return f"{model_tag}__{data_tag}{qualifier_part}_s{seed_value}"
+    return f"{model_tag}_{data_tag}{qualifier_part}_s{seed_value}"
 
 
 def _resolve_canonical_sun_parent_checkpoint(
@@ -6303,7 +6303,7 @@ def train(rank, args):
                             stem = getattr(args, "run_stem", None)
                             if not stem:
                                 stem = Path(ckpt_path).with_suffix("").name
-                            model_tag = stem.split("__", 1)[0] if "__" in stem else stem
+                            model_tag = stem.split("_", 1)[0]
                         model_tag = _sanitize_path_segment(model_tag, default="model")
                         threshold_dir = thresholds_root_path / subdir
                         threshold_dir.mkdir(parents=True, exist_ok=True)

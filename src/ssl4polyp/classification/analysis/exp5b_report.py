@@ -476,7 +476,7 @@ def load_run(metrics_path: Path) -> RunPerturbationResult:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
     provenance_raw = payload.get("provenance") or {}
     provenance: Dict[str, object] = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
-    model_name = str(provenance.get("model") or metrics_path.stem.split("__", 1)[0])
+    model_name = str(provenance.get("model") or metrics_path.stem.split("_", 1)[0])
     tau_policy = _coerce_string(provenance.get("tau_policy"))
     expected_tau_policy = _coerce_string(EXPECTED_PRIMARY_TAU_POLICY)
     if expected_tau_policy:
