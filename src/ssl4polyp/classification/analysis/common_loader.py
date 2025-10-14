@@ -152,7 +152,7 @@ def _infer_model_from_filename(metrics_path: Path) -> str:
     stem = metrics_path.stem
     if stem.endswith("_last"):
         stem = stem[:-5]
-    model = stem.split("__", 1)[0]
+    model = stem.split("_", 1)[0]
     return model
 
 

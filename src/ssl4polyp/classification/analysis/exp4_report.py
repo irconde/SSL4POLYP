@@ -182,7 +182,7 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ru
     if not model_name:
         stem = metrics_path.stem
         base = stem[:-5] if stem.endswith("_last") else stem
-        model_name = base.split("__", 1)[0]
+        model_name = base.split("_", 1)[0]
     percent_value = _coerce_float(provenance.get("subset_percent"))
     if percent_value is None:
         percent_value = _infer_percent_from_name(metrics_path)

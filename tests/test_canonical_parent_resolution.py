@@ -13,9 +13,9 @@ from ssl4polyp.classification.train_classification import (
 @pytest.mark.parametrize(
     "model_key, seed, expected_stem",
     [
-        ("sup_imnet", 13, "SUPImNet__SUNFull_s13.pth"),
-        ("ssl_imnet", 29, "SSLImNet__SUNFull_s29.pth"),
-        ("ssl_colon", 47, "SSLColon__SUNFull_s47.pth"),
+        ("sup_imnet", 13, "SUPImNet_SUNFull_s13.pth"),
+        ("ssl_imnet", 29, "SSLImNet_SUNFull_s29.pth"),
+        ("ssl_colon", 47, "SSLColon_SUNFull_s47.pth"),
     ],
 )
 def test_resolve_canonical_parent_checkpoint(tmp_path: Path, model_key: str, seed: int, expected_stem: str) -> None:

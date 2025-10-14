@@ -15,9 +15,9 @@ MODELS=${MODELS:-${DEFAULT_MODELS}}
 
 # Canonical SUN fine-tuning checkpoints must exist prior to running this script.
 # With the default experiment launchers, the expected layout is:
-#   ${PARENT_ROOT}/exp1_sup_imnet_seed{seed}/sun_baselines/SUPImNet__SUNFull_s{seed}.pth
-#   ${PARENT_ROOT}/exp1_ssl_imnet_seed{seed}/sun_baselines/SSLImNet__SUNFull_s{seed}.pth
-#   ${PARENT_ROOT}/exp2_ssl_colon_seed{seed}/sun_baselines/SSLColon__SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/exp1_sup_imnet_seed{seed}/sun_baselines/SUPImNet_SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/exp1_ssl_imnet_seed{seed}/sun_baselines/SSLImNet_SUNFull_s{seed}.pth
+#   ${PARENT_ROOT}/exp2_ssl_colon_seed{seed}/sun_baselines/SSLColon_SUNFull_s{seed}.pth
 # for every seed you plan to reuse. Adjust PARENT_ROOT or the mappings below if
 # your checkpoints live elsewhere.
 
@@ -73,7 +73,7 @@ PY
       cat >&2 <<EOF
 Error: expected parent checkpoint '${parent_ckpt}' not found.
 Each SUN checkpoint should follow the layout:
-  \${PARENT_ROOT}/exp{N}_<model>_seed{seed}/sun_baselines/<ModelTag>__SUNFull_s{seed}.pth
+  \${PARENT_ROOT}/exp{N}_<model>_seed{seed}/sun_baselines/<ModelTag>_SUNFull_s{seed}.pth
 Ensure the dataset-specific directory exists and contains the required files before rerunning.
 EOF
       exit 1

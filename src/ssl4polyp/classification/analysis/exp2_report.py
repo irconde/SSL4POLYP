@@ -325,7 +325,7 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ex
     model_name = _clean_text(provenance.get("model"))
     if not model_name:
         stem = metrics_path.stem
-        model_name = stem.split("__", 1)[0]
+        model_name = stem.split("_", 1)[0]
     model = str(model_name).lower()
 
     seed_value = _coerce_int(payload.get("seed"))
