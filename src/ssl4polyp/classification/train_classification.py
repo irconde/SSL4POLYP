@@ -897,6 +897,8 @@ def _build_result_loader_data_block(
     data_block: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
     for split in ("train", "val", "test"):
         summary = dataset_summary.get(split)
+        if summary is None:
+            continue
         if not isinstance(summary, Mapping):
             raise RuntimeError(
                 f"Dataset summary missing mapping for split '{split}'"
@@ -919,12 +921,8 @@ def _build_result_loader_data_block(
             entry["summary"] = _convert_json_compatible(extra_summary)
         data_block[split] = dict(entry)
 
-    if len(data_block) != 3:
-        missing = sorted({"train", "val", "test"} - set(data_block))
-        raise RuntimeError(
-            "Dataset summary missing required splits for ResultLoader data block: "
-            + ", ".join(missing)
-        )
+    if not data_block:
+        raise RuntimeError("Dataset summary did not provide any recognised splits")
 
     return dict(data_block)
 
