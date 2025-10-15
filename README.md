@@ -266,6 +266,16 @@ The paper’s experiments map to manifests in `config/exp/`.  Launch them with
   These scripts call `python -m ssl4polyp.classification.train_classification` with
   the layered configs in `config/exp/`, ensuring dataset packs, model weights
   and hyperparameters match the paper.
+
+  ⚠️ **Exp‑5 dependency on SUN baselines.** Experiments 5A–5C reuse the
+  decision thresholds computed on the SUN validation split during the canonical
+  Exp‑1/Exp‑2 runs. The training CLI enforces this by requiring a "parent"
+  checkpoint whose metrics JSON exposes the stored SUN thresholds when the
+  `sun_val_frozen` policy is active; otherwise it raises
+  `ValueError: Policy 'sun_val_frozen' requires a parent run providing stored
+  thresholds.` Run `scripts/run_exp1.sh` and `scripts/run_exp2.sh` (or place
+  the published checkpoints *together with* their `.metrics.json` sidecars) so
+  that Exp‑5 shells can locate the frozen SUN τ before launching.
 3. **Aggregate + guardrail reports.** After each run completes, execute the
   corresponding analysis CLI to bootstrap metrics, enforce provenance checks
   and write the manifest JSON.  This step is mandatory for **all** experiments,
