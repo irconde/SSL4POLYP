@@ -30,7 +30,7 @@ def test_schedule_runtime_applies_stage_modes_and_lrs():
     schedule_cfg = [
         {"mode": "none", "epochs": 3, "head_lr": 1e-3},
         {
-            "mode": "full",
+            "mode": "head+2",
             "epochs": 47,
             "head_lr": 5e-4,
             "backbone_lr": 2e-5,
@@ -64,8 +64,12 @@ def test_schedule_runtime_applies_stage_modes_and_lrs():
     assert pytest.approx(_group_lr(optimizer, "backbone"), rel=1e-6) == 0.0
 
     stage2 = runtime.apply_if_needed(model, optimizer, epoch=4, rank=0)
-    assert stage2 is not None and stage2.mode == "full"
-    for block in model.blocks:
-        assert all(param.requires_grad for param in block.parameters())
+    assert stage2 is not None and stage2.mode == "head+2"
+    for idx, block in enumerate(model.blocks):
+        params = list(block.parameters())
+        if idx < len(model.blocks) - 2:
+            assert all(not param.requires_grad for param in params)
+        else:
+            assert all(param.requires_grad for param in params)
     assert pytest.approx(_group_lr(optimizer, "head"), rel=1e-6) == 5e-4
     assert pytest.approx(_group_lr(optimizer, "backbone"), rel=1e-6) == 2e-5
