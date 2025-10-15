@@ -320,19 +320,26 @@ def create_classification_dataloaders(
         dataset = datasets.get(actual_split)
         if dataset is None:
             return
-        dataset_size = len(dataset)
-        train_drop_last = drop_last if split_alias == "train" else False
-        if split_alias == "train" and drop_last:
-            replicas = world_size if world_size > 1 else 1
-            required_examples = batch_size * replicas
-            if dataset_size < required_examples:
+        dataset_len = len(dataset)
+        train_drop_last_flag = bool(drop_last) if split_alias == "train" else False
+        if split_alias == "train" and train_drop_last_flag:
+            disable_reason: Optional[str] = None
+            if dataset_len < batch_size:
+                disable_reason = f"{dataset_len} samples < batch_size {batch_size}"
+            elif world_size > 1:
+                per_replica_samples = dataset_len // world_size
+                if per_replica_samples < batch_size:
+                    disable_reason = (
+                        f"{per_replica_samples} samples per replica < batch_size {batch_size} "
+                        f"(total={dataset_len}, world_size={world_size})"
+                    )
+            if disable_reason:
                 logger.debug(
-                    "Disabling drop_last for train split '%s': %d samples < required %d",
+                    "Disabling drop_last for train split '%s': %s",
                     actual_split,
-                    dataset_size,
-                    required_examples,
+                    disable_reason,
                 )
-                train_drop_last = False
+                train_drop_last_flag = False
         sampler: Optional[DistributedSampler] = None
         shuffle = False
         dataset_len = len(dataset)
