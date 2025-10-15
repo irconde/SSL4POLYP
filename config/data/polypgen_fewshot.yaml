@@ -5,6 +5,7 @@ dataset:
   seeds: [13]
   splits:
     train: train
+    val: val
     test: test
   manifest_pattern: polypgen_fewshot/polypgen_fewshot_s{size}/manifest.yaml
   reference_eval_pack: polypgen_clean_test
