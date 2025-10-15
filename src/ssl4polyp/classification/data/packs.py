@@ -1,6 +1,7 @@
 """Pack-centric dataset and dataloader utilities for classification experiments."""
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 import hashlib
@@ -15,6 +16,9 @@ from ssl4polyp.configs import data_packs_root
 from ssl4polyp.configs.manifests import load_pack
 
 from .transforms import ClassificationTransforms, DEFAULT_HMAC_KEY
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -315,6 +319,19 @@ def create_classification_dataloaders(
         dataset = datasets.get(actual_split)
         if dataset is None:
             return
+        dataset_size = len(dataset)
+        train_drop_last = drop_last if split_alias == "train" else False
+        if split_alias == "train" and drop_last:
+            replicas = world_size if world_size > 1 else 1
+            required_examples = batch_size * replicas
+            if dataset_size < required_examples:
+                logger.debug(
+                    "Disabling drop_last for train split '%s': %d samples < required %d",
+                    actual_split,
+                    dataset_size,
+                    required_examples,
+                )
+                train_drop_last = False
         sampler: Optional[DistributedSampler] = None
         shuffle = False
         if split_alias == "train":
@@ -324,7 +341,7 @@ def create_classification_dataloaders(
                     rank=rank,
                     num_replicas=world_size,
                     shuffle=True,
-                    drop_last=drop_last,
+                    drop_last=train_drop_last,
                 )
             else:
                 shuffle = True
@@ -335,7 +352,7 @@ def create_classification_dataloaders(
             "sampler": sampler,
             "num_workers": num_workers,
             "pin_memory": pin_memory,
-            "drop_last": drop_last if split_alias == "train" else False,
+            "drop_last": train_drop_last if split_alias == "train" else False,
             "collate_fn": pack_collate,
         }
         if num_workers > 0:
