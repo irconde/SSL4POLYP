@@ -288,6 +288,7 @@ def create_classification_dataloaders(
     hmac_key: bytes = DEFAULT_HMAC_KEY,
     transform_overrides: Optional[Mapping[str, ClassificationTransforms]] = None,
     snapshot_dir: Optional[Path] = None,
+    train_drop_last: Optional[bool] = None,
 ) -> Tuple[Dict[str, DataLoader], Dict[str, PackDataset], Dict[str, Optional[DistributedSampler]]]:
     alias_to_split: Dict[str, str] = {}
     spec_per_split: Dict[str, str | Path] = {}
@@ -334,6 +335,17 @@ def create_classification_dataloaders(
                 train_drop_last = False
         sampler: Optional[DistributedSampler] = None
         shuffle = False
+        dataset_len = len(dataset)
+        if split_alias == "train":
+            train_drop_last_flag = drop_last
+            if dataset_len < batch_size:
+                train_drop_last_flag = False
+            elif world_size > 1 and train_drop_last_flag:
+                per_replica_samples = dataset_len // world_size
+                if per_replica_samples < batch_size:
+                    train_drop_last_flag = False
+        else:
+            train_drop_last_flag = False
         if split_alias == "train":
             if world_size > 1:
                 sampler = DistributedSampler(
@@ -341,7 +353,7 @@ def create_classification_dataloaders(
                     rank=rank,
                     num_replicas=world_size,
                     shuffle=True,
-                    drop_last=train_drop_last,
+                    drop_last=train_drop_last_flag,
                 )
             else:
                 shuffle = True
@@ -352,7 +364,7 @@ def create_classification_dataloaders(
             "sampler": sampler,
             "num_workers": num_workers,
             "pin_memory": pin_memory,
-            "drop_last": train_drop_last if split_alias == "train" else False,
+            "drop_last": train_drop_last_flag if split_alias == "train" else False,
             "collate_fn": pack_collate,
         }
         if num_workers > 0:
@@ -361,11 +373,18 @@ def create_classification_dataloaders(
         else:
             loader_kwargs["persistent_workers"] = False
         loader = DataLoader(**loader_kwargs)
+        if split_alias == "train" and len(loader) == 0:
+            raise RuntimeError(
+                "Training dataloader constructed zero batches; reduce batch_size or disable drop_last. "
+                f"Samples available={dataset_len}, batch_size={batch_size}, world_size={world_size}."
+            )
         loaders[split_alias] = loader
         samplers[split_alias] = sampler
 
+    train_drop_last_pref = True if train_drop_last is None else bool(train_drop_last)
     for alias, split_name in alias_to_split.items():
-        _build_loader(alias, split_name, drop_last=True)
+        drop_last_pref = train_drop_last_pref if alias == "train" else False
+        _build_loader(alias, split_name, drop_last_pref)
 
     return loaders, datasets, samplers
 

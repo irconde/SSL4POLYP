@@ -3223,6 +3223,28 @@ def _resolve_dataset_layout(
     }
 
 
+def _recommend_fewshot_batch_size(dataset_layout: Mapping[str, Any]) -> Optional[int]:
+    """Return a per-rank batch size tailored for PolypGen few-shot packs."""
+
+    dataset_name = str(dataset_layout.get("name") or "").lower()
+    if dataset_name != "polypgen_fewshot":
+        return None
+    size_value = dataset_layout.get("size")
+    try:
+        size_int = int(size_value) if size_value is not None else None
+    except (TypeError, ValueError):  # pragma: no cover - defensive casting
+        size_int = None
+    if size_int is None:
+        return None
+    if size_int <= 50:
+        return 4
+    if size_int <= 100:
+        return 8
+    if size_int <= 200:
+        return 16
+    return 32
+
+
 def _resolve_model_tag(args, selected_model: Optional[Dict[str, Any]]) -> str:
     raw: Optional[str] = None
     if selected_model:
@@ -4957,6 +4979,21 @@ def build(args, rank, device: torch.device, distributed: bool):
     pack_root = Path(args.pack_root).expanduser() if args.pack_root else None
     val_spec = args.val_pack or args.train_pack
     test_spec = args.test_pack or val_spec
+    dataset_layout = getattr(args, "dataset_layout", {}) or {}
+    world_size = max(1, int(getattr(args, "world_size", 1)))
+    per_rank_batch = max(1, int(args.batch_size) // world_size)
+    recommended_batch = _recommend_fewshot_batch_size(dataset_layout)
+    force_train_drop_last: Optional[bool] = None
+    if recommended_batch is not None:
+        if recommended_batch != per_rank_batch and rank == 0:
+            size_hint = dataset_layout.get("size")
+            print(
+                "Adapting per-rank batch size for PolypGen few-shot pack: "
+                f"size={size_hint}, batch_size={per_rank_batch}→{recommended_batch}."
+            )
+        per_rank_batch = recommended_batch
+        args.batch_size = per_rank_batch * world_size
+        force_train_drop_last = False
 
     loaders, datasets, samplers = create_classification_dataloaders(
         train_spec=args.train_pack,
@@ -4965,7 +5002,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         train_split=args.train_split,
         val_split=args.val_split,
         test_split=args.test_split,
-        batch_size=args.batch_size // args.world_size,
+        batch_size=per_rank_batch,
         num_workers=args.workers,
         rank=rank,
         world_size=args.world_size,
@@ -4978,6 +5015,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         perturbation_splits=args.perturbation_splits,
         hmac_key=args.perturbation_key.encode("utf-8"),
         snapshot_dir=Path(args.output_dir) if rank == 0 else None,
+        train_drop_last=force_train_drop_last,
     )
 
     dataset_summaries: Dict[str, Dict[str, Any]] = {}
