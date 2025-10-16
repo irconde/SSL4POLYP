@@ -5186,6 +5186,22 @@ def build(args, rank, device: torch.device, distributed: bool):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch(exist_ok=True)
         parent_run_reference = _resolve_parent_reference(parent_path)
+        # ``sun_val_frozen`` thresholds rely on metadata stored alongside the
+        # parent run.  Some canonical checkpoints only ship the raw checkpoint
+        # while the thresholds are serialized inside the checkpoint payload.  In
+        # those cases ``metrics_payload`` is ``None`` and downstream policy
+        # resolution fails despite the thresholds being available.  Seed the
+        # parent reference with the thresholds we already loaded so that the
+        # policy can resolve without requiring an external metrics JSON.
+        if isinstance(parent_run_reference, ParentRunReference):
+            payload = (
+                dict(parent_run_reference.metrics_payload)
+                if parent_run_reference.metrics_payload
+                else {}
+            )
+            if thresholds_map and not payload.get("thresholds"):
+                payload["thresholds"] = dict(thresholds_map)
+            parent_run_reference.metrics_payload = payload or None
     else:
         start_epoch = 1
         best_val_perf = None
