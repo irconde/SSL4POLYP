@@ -5200,7 +5200,91 @@ def build(args, rank, device: torch.device, distributed: bool):
                 else {}
             )
             if thresholds_map and not payload.get("thresholds"):
-                payload["thresholds"] = dict(thresholds_map)
+                selected_key_raw: Optional[Any] = None
+                selected_key_text: Optional[str] = None
+                # Prefer the canonical SUN frozen policy entry when available.
+                for candidate_key in thresholds_map.keys():
+                    _, _, policy_name = _parse_threshold_key(candidate_key)
+                    if policy_name and policy_name.strip().lower() == "sun_val_frozen":
+                        selected_key_raw = candidate_key
+                        selected_key_text = str(candidate_key)
+                        break
+                if selected_key_raw is None and thresholds_map:
+                    first_key = next(iter(thresholds_map.keys()), None)
+                    if first_key is not None:
+                        selected_key_raw = first_key
+                        selected_key_text = str(first_key)
+
+                primary_record: Optional[Dict[str, Any]] = None
+                if selected_key_text is not None and threshold_record_cache:
+                    record_candidate = threshold_record_cache.get(selected_key_text)
+                    if not isinstance(record_candidate, Mapping):
+                        lowered = selected_key_text.lower()
+                        for stored_key, stored_record in threshold_record_cache.items():
+                            if (
+                                isinstance(stored_record, Mapping)
+                                and str(stored_key).lower() == lowered
+                            ):
+                                record_candidate = stored_record
+                                break
+                    if isinstance(record_candidate, Mapping):
+                        primary_record = dict(_convert_json_compatible(record_candidate))
+
+                if selected_key_raw is not None and primary_record is None:
+                    tau_value = thresholds_map.get(selected_key_raw)
+                    dataset_name, split_name, policy_name = _parse_threshold_key(
+                        selected_key_text
+                    )
+                    primary_record = {
+                        "tau": float(tau_value) if tau_value is not None else None,
+                        "source_key": selected_key_text,
+                    }
+                    if policy_name:
+                        primary_record["policy"] = policy_name
+                    if split_name:
+                        primary_record["split"] = (
+                            f"{dataset_name}/{split_name}"
+                            if dataset_name
+                            else str(split_name)
+                        )
+
+                if selected_key_raw is not None and primary_record is not None:
+                    tau_value = thresholds_map.get(selected_key_raw)
+                    if tau_value is not None and math.isfinite(float(tau_value)):
+                        primary_record.setdefault("tau", float(tau_value))
+                    if selected_key_text is not None:
+                        primary_record.setdefault("source_key", selected_key_text)
+                    dataset_name, split_name, policy_name = _parse_threshold_key(
+                        selected_key_text
+                    )
+                    if policy_name and not primary_record.get("policy"):
+                        primary_record["policy"] = policy_name
+                    if split_name and not primary_record.get("split"):
+                        primary_record["split"] = (
+                            f"{dataset_name}/{split_name}"
+                            if dataset_name
+                            else str(split_name)
+                        )
+                    primary_json = _convert_json_compatible(primary_record)
+                    policy_value = (
+                        str(primary_json.get("policy")).strip().lower()
+                        if isinstance(primary_json, Mapping)
+                        else None
+                    )
+                    thresholds_block = _build_thresholds_block(
+                        thresholds_map,
+                        policy=policy_value,
+                        primary=primary_json if isinstance(primary_json, Mapping) else None,
+                    )
+                    if thresholds_block:
+                        payload["thresholds"] = thresholds_block
+                        if (
+                            isinstance(primary_json, Mapping)
+                            and selected_key_text is not None
+                        ):
+                            payload.setdefault("threshold_records", {})[
+                                selected_key_text
+                            ] = primary_json
             parent_run_reference.metrics_payload = payload or None
     else:
         start_epoch = 1
