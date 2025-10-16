@@ -2036,16 +2036,6 @@ def _resolve_thresholds_subdir(args) -> str:
     """Determine the sub-directory used to persist threshold metadata."""
 
     dataset_layout = getattr(args, "dataset_layout", {}) or {}
-    val_pack = getattr(args, "val_pack", None)
-    if not val_pack:
-        resolved = getattr(args, "dataset_resolved", {}) or {}
-        val_pack = resolved.get("val_pack")
-    if not val_pack:
-        val_pack = getattr(args, "train_pack", None)
-    if val_pack:
-        segment = _sanitize_path_segment(val_pack)
-        if segment and segment != "default":
-            return segment
 
     dataset_name = dataset_layout.get("name") or getattr(args, "dataset", None)
     dataset_name = "sun" if dataset_name == "sun_full" else dataset_name
@@ -2054,17 +2044,41 @@ def _resolve_thresholds_subdir(args) -> str:
     size = dataset_layout.get("size")
     percent = dataset_layout.get("percent")
 
-    parts: list[str] = [dataset_name]
+    slug_parts: list[str] = [dataset_name]
     if dataset_name.startswith("polypgen_fewshot") and size:
-        parts.append(f"c{int(size)}")
+        slug_parts.append(f"c{int(size)}")
     elif dataset_name.startswith("sun_subsets") and percent:
-        parts.append(f"p{int(percent)}")
+        slug_parts.append(f"p{int(percent)}")
     if dataset_seed is not None:
-        parts.append(f"s{int(dataset_seed)}")
-    if len(parts) == 1:
+        slug_parts.append(f"s{int(dataset_seed)}")
+    if len(slug_parts) == 1:
         split = getattr(args, "val_split", None) or "val"
-        parts.append(_sanitize_path_segment(split, default="val"))
-    return "_".join(parts)
+        slug_parts.append(_sanitize_path_segment(split, default="val"))
+    dataset_slug = "_".join(slug_parts)
+    slug_segment = _sanitize_path_segment(dataset_slug, default="dataset")
+
+    val_pack = getattr(args, "val_pack", None)
+    if not val_pack:
+        resolved = getattr(args, "dataset_resolved", {}) or {}
+        val_pack = resolved.get("val_pack")
+    if not val_pack:
+        val_pack = getattr(args, "train_pack", None)
+    val_segment: Optional[str] = None
+    if val_pack:
+        candidate = _sanitize_path_segment(val_pack)
+        if candidate and candidate != "default":
+            val_segment = candidate
+
+    placeholder_slug = slug_segment in {None, "", "default", "dataset"}
+    if not placeholder_slug and slug_segment is not None:
+        if val_segment and slug_segment in val_segment:
+            return val_segment
+        return slug_segment
+
+    if val_segment:
+        return val_segment
+
+    return slug_segment or "dataset"
 
 
 def _compute_threshold_statistics(
