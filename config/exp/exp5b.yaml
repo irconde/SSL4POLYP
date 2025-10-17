@@ -13,4 +13,5 @@ protocol:
     policy: manifest_defined
   thresholds:
     primary: sun_val_frozen
+    sensitivity: sun_val_frozen
 threshold_policy: sun_val_frozen
