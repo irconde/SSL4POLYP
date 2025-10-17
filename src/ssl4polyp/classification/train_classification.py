@@ -5592,6 +5592,9 @@ def train(rank, args):
     eval_only = train_dataloader is None
     use_amp = args.precision == "amp" and device.type == "cuda"
 
+    dataset_name = str(getattr(args, "dataset", None) or "dataset")
+    val_split = str(getattr(args, "val_split", None) or "val")
+
     sensitivity_policy = getattr(args, "sensitivity_threshold_policy", None)
     compute_sensitivity_threshold = (
         sensitivity_policy in {"f1_opt_on_val", "youden_on_val", "val_opt_youden"}
