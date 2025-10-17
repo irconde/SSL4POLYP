@@ -2055,6 +2055,73 @@ def _resolve_thresholds_subdir(args) -> str:
     return "_".join(parts)
 
 
+def _resolve_threshold_train_pack_segment(args) -> Optional[str]:
+    """Return a sanitized identifier for the active training pack."""
+
+    candidates = [getattr(args, "train_pack", None)]
+    resolved = getattr(args, "dataset_resolved", {}) or {}
+    candidates.append(resolved.get("train_pack"))
+    for candidate in candidates:
+        if not candidate:
+            continue
+        segment = _sanitize_path_segment(candidate, default="")
+        if segment and segment != "default":
+            return segment
+
+    layout = getattr(args, "dataset_layout", {}) or {}
+    dataset_name = str(layout.get("name") or getattr(args, "dataset", "") or "").lower()
+    if dataset_name == "sun_full":
+        return "sun_full"
+    if dataset_name == "sun_morphology":
+        return "sun_morphology"
+    if dataset_name == "sun_subsets":
+        percent = _as_int(layout.get("percent"))
+        if percent is None:
+            percent = _as_int(resolved.get("percent"))
+        if percent is not None:
+            return f"sun_p{int(percent):02d}"
+    if dataset_name == "polypgen_fewshot":
+        size = _as_int(layout.get("size"))
+        if size is None:
+            size = _as_int(resolved.get("size"))
+        if size is not None:
+            return f"polypgen_fewshot_s{int(size)}"
+    return None
+
+
+def _resolve_threshold_subset_segment(args) -> Optional[str]:
+    """Return a sanitized subset descriptor for threshold storage."""
+
+    layout = getattr(args, "dataset_layout", {}) or {}
+    resolved = getattr(args, "dataset_resolved", {}) or {}
+    dataset_name = str(layout.get("name") or getattr(args, "dataset", "") or "").lower()
+    percent = _as_int(layout.get("percent"))
+    if percent is None:
+        percent = _as_int(resolved.get("percent"))
+    dataset_seed = _as_int(layout.get("dataset_seed"))
+    if dataset_seed is None:
+        dataset_seed = _as_int(resolved.get("seed"))
+    size = _as_int(layout.get("size"))
+    if size is None:
+        size = _as_int(resolved.get("size"))
+
+    tokens: list[str] = []
+    if dataset_name == "sun_subsets":
+        if percent is not None:
+            tokens.append(f"p{int(percent):02d}")
+        if dataset_seed is not None:
+            tokens.append(f"s{int(dataset_seed)}")
+    elif dataset_name == "polypgen_fewshot":
+        if size is not None:
+            tokens.append(f"c{int(size)}")
+        if dataset_seed is not None:
+            tokens.append(f"s{int(dataset_seed)}")
+
+    if not tokens:
+        return None
+    return "_".join(tokens)
+
+
 def _compute_threshold_statistics(
     logits: Optional[torch.Tensor], targets: Optional[torch.Tensor], tau: float
 ) -> Dict[str, Optional[float]]:
@@ -6332,12 +6399,16 @@ def train(rank, args):
                                 stem = Path(ckpt_path).with_suffix("").name
                             model_tag = stem.split("_", 1)[0]
                         model_tag = _sanitize_path_segment(model_tag, default="model")
+                        train_pack_segment = _resolve_threshold_train_pack_segment(args)
+                        subset_segment = _resolve_threshold_subset_segment(args)
                         threshold_file = canonical_threshold_path(
                             thresholds_root_path,
                             val_pack=subdir,
                             model_tag=model_tag,
                             arch=getattr(args, "arch", None),
                             pretraining=getattr(args, "pretraining", None),
+                            train_pack=train_pack_segment,
+                            subset=subset_segment,
                             seed=_get_active_seed(args),
                             policy=getattr(args, "threshold_policy", None),
                         )

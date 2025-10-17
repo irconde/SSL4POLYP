@@ -295,6 +295,75 @@ def _resolve_thresholds_subdir(args, checkpoint: CheckpointCandidate) -> str:
     return "_".join(parts)
 
 
+def _infer_dataset_kind(checkpoint: CheckpointCandidate) -> Optional[str]:
+    if not checkpoint.relative_dir:
+        return None
+    first_segment = str(checkpoint.relative_dir[0]).strip().lower()
+    mapping = {
+        "sun_baselines": "sun_full",
+        "sun_morphology": "sun_morphology",
+        "sun_subsets": "sun_subsets",
+        "polypgen_fewshot": "polypgen_fewshot",
+    }
+    return mapping.get(first_segment)
+
+
+def _collect_candidate_tokens(args, checkpoint: CheckpointCandidate) -> Tuple[str, ...]:
+    raw_values = list(checkpoint.relative_dir) + [
+        checkpoint.data_tag,
+        getattr(args, "threshold_pack", None),
+        getattr(args, "test_pack", None),
+    ]
+    return tuple(str(value) for value in raw_values if value)
+
+
+def _resolve_train_pack_segment(args, checkpoint: CheckpointCandidate) -> Optional[str]:
+    for candidate in (getattr(args, "train_pack", None), getattr(args, "threshold_pack", None)):
+        segment = _sanitize_path_segment(candidate, default="")
+        if segment and segment != "default":
+            return segment
+
+    dataset_kind = _infer_dataset_kind(checkpoint)
+    tokens = _collect_candidate_tokens(args, checkpoint)
+    if dataset_kind == "sun_subsets":
+        percent = _search_int(r"p(\d+)", *tokens)
+        if percent is not None:
+            return f"sun_p{int(percent):02d}"
+    elif dataset_kind == "polypgen_fewshot":
+        size = _search_int(r"s(\d+)", *tokens)
+        if size is not None:
+            return f"polypgen_fewshot_s{int(size)}"
+    elif dataset_kind == "sun_morphology":
+        return "sun_morphology"
+    elif dataset_kind == "sun_full":
+        return "sun_full"
+    return None
+
+
+def _resolve_subset_segment(args, checkpoint: CheckpointCandidate) -> Optional[str]:
+    dataset_kind = _infer_dataset_kind(checkpoint)
+    tokens = _collect_candidate_tokens(args, checkpoint)
+    percent = _search_int(r"p(\d+)", *tokens)
+    dataset_seed = _search_int(r"seed(\d+)", *tokens)
+    size = _search_int(r"s(\d+)", *tokens)
+
+    parts: List[str] = []
+    if dataset_kind == "sun_subsets":
+        if percent is not None:
+            parts.append(f"p{int(percent):02d}")
+        if dataset_seed is not None:
+            parts.append(f"s{int(dataset_seed)}")
+    elif dataset_kind == "polypgen_fewshot":
+        if size is not None:
+            parts.append(f"c{int(size)}")
+        if dataset_seed is not None:
+            parts.append(f"s{int(dataset_seed)}")
+
+    if not parts:
+        return None
+    return "_".join(parts)
+
+
 def _load_threshold_metadata(path: Path) -> Dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
@@ -435,6 +504,8 @@ def _resolve_threshold_metadata(
         model_tag=checkpoint.model_tag,
         arch=arch,
         pretraining=pretraining,
+        train_pack=_resolve_train_pack_segment(args, checkpoint),
+        subset=_resolve_subset_segment(args, checkpoint),
         seed=seed,
     )
     if canonical_dir.exists():
