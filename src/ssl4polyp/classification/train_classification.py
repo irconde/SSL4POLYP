@@ -33,6 +33,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from ssl4polyp.utils.tensorboard import SummaryWriter
 
 from ssl4polyp import utils
+from ssl4polyp.classification.threshold_store import (
+    canonical_threshold_path,
+    sanitize_path_segment as _sanitize_path_segment,
+)
 from ssl4polyp.classification.data import (
     PackDataset,
     create_classification_dataloaders,
@@ -2016,22 +2020,6 @@ def _compute_domain_shift_delta(
         result["sun_tau"] = float(sun_tau)
     return result
 
-
-def _sanitize_path_segment(raw: Any, *, default: str = "default") -> str:
-    """Return a filesystem-friendly representation of ``raw``."""
-
-    if raw is None:
-        return default
-    text = str(raw).strip()
-    if not text:
-        return default
-    text = text.strip("/ ")
-    if "/" in text:
-        text = text.split("/")[-1]
-    cleaned = re.sub(r"[^0-9A-Za-z._-]+", "_", text).strip("._-")
-    return cleaned.lower() if cleaned else default
-
-
 def _resolve_thresholds_subdir(args) -> str:
     """Determine the sub-directory used to persist threshold metadata."""
 
@@ -2962,6 +2950,7 @@ def _build_threshold_payload(
     policy_record: Optional[Mapping[str, Any]] = None,
     snapshot_epoch: Optional[int] = None,
     snapshot_tau: Optional[float] = None,
+    storage_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a structured payload capturing threshold metadata."""
 
@@ -3062,6 +3051,8 @@ def _build_threshold_payload(
         payload["model_tag"] = model_tag
     if subdir:
         payload["directory"] = subdir
+    if storage_path:
+        payload["storage_path"] = storage_path
     if policy_record:
         payload["policy_record"] = json.loads(
             json.dumps(policy_record, default=str)
@@ -6341,9 +6332,23 @@ def train(rank, args):
                                 stem = Path(ckpt_path).with_suffix("").name
                             model_tag = stem.split("_", 1)[0]
                         model_tag = _sanitize_path_segment(model_tag, default="model")
-                        threshold_dir = thresholds_root_path / subdir
+                        threshold_file = canonical_threshold_path(
+                            thresholds_root_path,
+                            val_pack=subdir,
+                            model_tag=model_tag,
+                            arch=getattr(args, "arch", None),
+                            pretraining=getattr(args, "pretraining", None),
+                            seed=_get_active_seed(args),
+                            policy=getattr(args, "threshold_policy", None),
+                        )
+                        threshold_dir = threshold_file.parent
                         threshold_dir.mkdir(parents=True, exist_ok=True)
-                        threshold_file = threshold_dir / f"{model_tag}.json"
+                        try:
+                            storage_relpath = str(
+                                threshold_file.relative_to(thresholds_root_path)
+                            )
+                        except ValueError:
+                            storage_relpath = str(threshold_file)
                         threshold_record_payload = _build_threshold_payload(
                             args,
                             threshold_key=threshold_key,
@@ -6358,6 +6363,7 @@ def train(rank, args):
                             policy_record=threshold_record,
                             snapshot_epoch=int(epoch),
                             snapshot_tau=previous_tau,
+                            storage_path=storage_relpath,
                         )
                         with threshold_file.open("w", encoding="utf-8") as handle:
                             json.dump(threshold_record_payload, handle, indent=2)

@@ -12,6 +12,10 @@ import torch
 from ssl4polyp import utils
 from ssl4polyp.classification.data import create_classification_dataloaders
 from ssl4polyp.classification.metrics import performance, thresholds as threshold_utils
+from ssl4polyp.classification.threshold_store import (
+    canonical_threshold_directory,
+    sanitize_path_segment as _sanitize_path_segment,
+)
 from ssl4polyp.configs import data_packs_root
 
 
@@ -226,17 +230,6 @@ def _compose_legacy_checkpoint_path(args, checkpoint_dir: Path) -> Path:
     return checkpoint_dir / ckpt_name
 
 
-def _sanitize_path_segment(raw: Any, *, default: str = "default") -> str:
-    text = str(raw).strip() if raw is not None else ""
-    if not text:
-        return default
-    text = text.strip("/ ")
-    if "/" in text:
-        text = text.split("/")[-1]
-    cleaned = re.sub(r"[^0-9A-Za-z._-]+", "_", text).strip("._-")
-    return cleaned.lower() if cleaned else default
-
-
 def _search_int(pattern: str, *candidates: Optional[str]) -> Optional[int]:
     for text in candidates:
         if not text:
@@ -375,7 +368,11 @@ def _find_threshold_metadata(
     pack_filters: set[str],
 ) -> List[Dict[str, Any]]:
     root = Path(root).expanduser()
-    pattern = f"{model_tag}.json"
+    if expected_directory:
+        root = root / expected_directory
+    if not root.exists():
+        return []
+    pattern = "*.json"
     matches: List[Dict[str, Any]] = []
     for path in sorted(root.rglob(pattern)):
         try:
@@ -427,12 +424,73 @@ def _resolve_threshold_metadata(
         thresholds_root = candidates[0]
 
     expected_subdir = _resolve_thresholds_subdir(args, checkpoint)
-    candidate_path = thresholds_root / expected_subdir / f"{checkpoint.model_tag}.json"
-
     metadata: Optional[Dict[str, Any]] = None
-    if candidate_path.exists():
-        metadata = _load_threshold_metadata(candidate_path)
-    else:
+
+    arch = getattr(args, "arch", None)
+    pretraining = getattr(args, "pretraining", None)
+    seed = checkpoint.seed
+    canonical_dir = canonical_threshold_directory(
+        thresholds_root,
+        val_pack=expected_subdir,
+        model_tag=checkpoint.model_tag,
+        arch=arch,
+        pretraining=pretraining,
+        seed=seed,
+    )
+    if canonical_dir.exists():
+        metadata_candidates: List[Tuple[Path, Dict[str, Any]]] = []
+        for path in sorted(canonical_dir.glob("*.json")):
+            try:
+                payload = _load_threshold_metadata(path)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Failed to load threshold metadata from {path}: {exc}"
+                ) from exc
+            metadata_candidates.append((path, payload))
+
+        if metadata_candidates:
+            raw_policy = getattr(args, "threshold_policy", None)
+            policy_preferences: List[str] = []
+            if raw_policy and raw_policy not in {"auto", "none"}:
+                policy_preferences.append(raw_policy)
+            else:
+                policy_preferences.extend(["youden_on_val", "youden"])
+            normalised_preferences = [
+                _normalise_path_segment(policy) for policy in policy_preferences
+            ]
+
+            for path, payload in metadata_candidates:
+                policy_value = payload.get("policy")
+                if normalised_preferences and policy_value:
+                    policy_normalised = _normalise_path_segment(policy_value)
+                    if policy_normalised in normalised_preferences:
+                        metadata = payload
+                        break
+                elif not normalised_preferences:
+                    metadata = payload
+                    break
+
+            if metadata is None:
+                if len(metadata_candidates) == 1:
+                    metadata = metadata_candidates[0][1]
+                else:
+                    options = ", ".join(
+                        f"{path} ({payload.get('policy') or 'unknown'})"
+                        for path, payload in metadata_candidates
+                    )
+                    raise RuntimeError(
+                        "Multiple threshold metadata files matched for canonical path "
+                        f"{canonical_dir}: {options}."
+                    )
+
+    if metadata is None:
+        candidate_path = (
+            thresholds_root / expected_subdir / f"{checkpoint.model_tag}.json"
+        )
+        if candidate_path.exists():
+            metadata = _load_threshold_metadata(candidate_path)
+
+    if metadata is None:
         pack_filters = _normalise_pack_to_segments(getattr(args, "threshold_pack", None))
         matches = _find_threshold_metadata(
             thresholds_root,
