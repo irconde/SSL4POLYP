@@ -42,16 +42,27 @@ def canonical_threshold_directory(
     model_tag: Optional[str],
     arch: Optional[str],
     pretraining: Optional[str],
+    train_pack: Optional[str] = None,
+    subset: Optional[str] = None,
     seed: Optional[int],
 ) -> Path:
     """Return the canonical directory for storing threshold artifacts."""
 
     root = Path(root).expanduser()
+    val_segment = sanitize_path_segment(val_pack, default="dataset")
+    model_segment = sanitize_path_segment(model_tag, default="model")
+    arch_segment = sanitize_path_segment(arch, default="unknown")
+    pretraining_segment = sanitize_path_segment(pretraining, default="unknown")
+    train_pack_segment = sanitize_path_segment(train_pack, default="full")
+    subset_segment = sanitize_path_segment(subset, default="full")
+
     segments = [
-        sanitize_path_segment(val_pack, default="dataset"),
-        sanitize_path_segment(model_tag, default="model"),
-        sanitize_path_segment(arch, default="arch"),
-        sanitize_path_segment(pretraining, default="pretraining"),
+        val_segment,
+        model_segment,
+        f"arch-{arch_segment}",
+        f"pretrain-{pretraining_segment}",
+        f"trainpack-{train_pack_segment}",
+        f"subset-{subset_segment}",
         _format_seed(seed),
     ]
     return root.joinpath(*segments)
@@ -60,7 +71,8 @@ def canonical_threshold_directory(
 def canonical_threshold_filename(policy: Optional[str]) -> str:
     """Return the canonical filename for a stored threshold policy."""
 
-    return f"{sanitize_path_segment(policy, default="policy")}.json"
+    policy_segment = sanitize_path_segment(policy, default="policy")
+    return f"policy-{policy_segment}.json"
 
 
 def canonical_threshold_path(
@@ -70,6 +82,8 @@ def canonical_threshold_path(
     model_tag: Optional[str],
     arch: Optional[str],
     pretraining: Optional[str],
+    train_pack: Optional[str] = None,
+    subset: Optional[str] = None,
     seed: Optional[int],
     policy: Optional[str],
 ) -> Path:
@@ -81,6 +95,8 @@ def canonical_threshold_path(
         model_tag=model_tag,
         arch=arch,
         pretraining=pretraining,
+        train_pack=train_pack,
+        subset=subset,
         seed=seed,
     )
     return directory / canonical_threshold_filename(policy)
