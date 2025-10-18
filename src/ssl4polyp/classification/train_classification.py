@@ -2055,6 +2055,26 @@ def _resolve_thresholds_subdir(args) -> str:
     return "_".join(parts)
 
 
+def _resolve_threshold_dataset_token(args) -> str:
+    """Return the canonical dataset token used for threshold provenance."""
+
+    dataset_layout = getattr(args, "dataset_layout", {}) or {}
+
+    candidates = (
+        getattr(args, "val_pack", None),
+        dataset_layout.get("val_pack"),
+        (getattr(args, "dataset_resolved", {}) or {}).get("val_pack"),
+        getattr(args, "train_pack", None),
+    )
+    for candidate in candidates:
+        segment = _sanitize_path_segment(candidate, default="")
+        if segment and segment != "default":
+            return segment
+
+    dataset_name = dataset_layout.get("name") or getattr(args, "dataset", None)
+    return _sanitize_path_segment(dataset_name, default="dataset")
+
+
 def _resolve_threshold_train_pack_segment(args) -> Optional[str]:
     """Return a sanitized identifier for the active training pack."""
 
@@ -5321,6 +5341,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         )
 
     dataset_name = args.dataset or "dataset"
+    threshold_dataset_token = _resolve_threshold_dataset_token(args)
     dataset_name_lower = dataset_name.lower()
     val_split = args.val_split or "val"
     binary_task = len(class_weights) == 2
@@ -5375,7 +5396,7 @@ def build(args, rank, device: torch.device, distributed: bool):
             checkpoint_path=parent_ref.checkpoint_path,
         )
         threshold_key = thresholds.format_threshold_key(
-            dataset_name, val_split, resolved_policy
+            threshold_dataset_token, val_split, resolved_policy
         )
         thresholds_map.setdefault(threshold_key, float(tau))
         args.frozen_threshold_record = dict(record)
@@ -5420,7 +5441,7 @@ def build(args, rank, device: torch.device, distributed: bool):
 
     if sensitivity_policy:
         sensitivity_threshold_key = thresholds.format_threshold_key(
-            dataset_name, val_split, sensitivity_policy
+            threshold_dataset_token, val_split, sensitivity_policy
         )
 
     expected_sensitivity_raw = getattr(args, "expected_sensitivity_threshold_policy", None)
@@ -5480,7 +5501,7 @@ def build(args, rank, device: torch.device, distributed: bool):
     )
     if compute_threshold or resolved_policy == "sun_val_frozen":
         threshold_key = thresholds.format_threshold_key(
-            dataset_name, val_split, resolved_policy
+            threshold_dataset_token, val_split, resolved_policy
         )
     if sensitivity_policy == "sun_val_frozen" and sensitivity_threshold_key not in thresholds_map:
         parent_ref = getattr(args, "parent_reference", None)
