@@ -155,13 +155,37 @@ def _get_loader(*, strict: bool = True) -> ResultLoader:
     return ResultLoader(exp_id="exp1", required_curve_keys=(), strict=strict)
 
 def _resolve_outputs_path(metrics_path: Path) -> Tuple[Path, ...]:
-    stem = metrics_path.stem
-    base = stem[:-5] if stem.endswith("_last") else stem
-    candidates = [metrics_path.with_name(f"{base}_test_outputs.csv")]
+    """Return candidate CSV paths for per-frame outputs.
+
+    Legacy metrics files in this project often use compound suffixes such as
+    ``*_last.metrics.json``.  ``Path.stem`` only strips the final suffix, so naively
+    appending ``_test_outputs.csv`` to the stem can yield names like
+    ``*_last.metrics_test_outputs.csv`` which do not exist on disk.  We therefore
+    normalise the stem by progressively removing both the ``_last`` sentinel and
+    the ``.metrics`` fragment before constructing candidate paths.
+    """
+
+    name = metrics_path.name
+    # Strip the known metrics suffix first to recover the logical base name.
+    if name.endswith(".metrics.json"):
+        base = name[: -len(".metrics.json")]
+    else:
+        base = metrics_path.stem
+
+    candidates: List[Path] = []
+    seen: set[str] = set()
+
+    def _push(candidate: str) -> None:
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            candidates.append(metrics_path.with_name(f"{candidate}_test_outputs.csv"))
+
+    _push(base)
+    if base.endswith("_last"):
+        _push(base[: -len("_last")])
     if base.endswith(".metrics"):
-        trimmed = base[:-8]
-        if trimmed:
-            candidates.append(metrics_path.with_name(f"{trimmed}_test_outputs.csv"))
+        _push(base[: -len(".metrics")])
+
     return tuple(candidates)
 
 
