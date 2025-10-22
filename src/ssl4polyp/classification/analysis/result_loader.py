@@ -66,6 +66,30 @@ def _as_int(value: object) -> Optional[int]:
     return int(rounded)
 
 
+_INTEGER_METRIC_KEYS: frozenset[str] = frozenset(
+    {
+        "tp",
+        "fp",
+        "tn",
+        "fn",
+        "n_pos",
+        "n_neg",
+        "n_total",
+        "count",
+    }
+)
+_INTEGER_METRIC_PREFIXES: Tuple[str, ...] = ("n_",)
+
+
+def _is_integer_metric_key(key: str) -> bool:
+    """Return ``True`` when ``key`` corresponds to an integral metric."""
+
+    normalised = key.strip().lower()
+    if normalised in _INTEGER_METRIC_KEYS:
+        return True
+    return any(normalised.startswith(prefix) for prefix in _INTEGER_METRIC_PREFIXES)
+
+
 @dataclass(frozen=True)
 class CurveMetadata:
     """Normalised description of a curve export entry."""
@@ -612,10 +636,17 @@ class ResultLoader:
             return {}
         metrics: Dict[str, float] = {}
         for key, value in block.items():
+            key_text = str(key)
+            if _is_integer_metric_key(key_text):
+                numeric_int = _as_int(value)
+                if numeric_int is None:
+                    continue
+                metrics[key_text] = int(numeric_int)
+                continue
             numeric = _as_float(value)
             if numeric is None:
                 continue
-            metrics[str(key)] = float(numeric)
+            metrics[key_text] = float(numeric)
         return metrics
 
 
