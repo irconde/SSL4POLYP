@@ -5,6 +5,7 @@ import json
 import math
 import sys
 from pathlib import Path
+from typing import Sequence
 
 import pytest
 
@@ -88,46 +89,116 @@ def _write_metrics(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def _make_run(*, seed: int, primary: float, baseline: bool = False) -> exp1_report.Exp1Run:
-    return exp1_report.Exp1Run(
+def _make_run(
+    *,
+    seed: int,
+    pos_probs: Sequence[float],
+    neg_probs: Sequence[float],
+    baseline: bool = False,
+    tau_primary: float = 0.5,
+    tau_sensitivity: float = 0.4,
+) -> exp1_report.Exp1Run:
+    frames: list[exp1_report.EvalFrame] = []
+    cases: dict[str, list[exp1_report.EvalFrame]] = {}
+
+    for index, prob in enumerate(pos_probs):
+        case_id = f"case_pos_{index}"
+        frame = exp1_report.EvalFrame(
+            frame_id=f"frame_pos_{seed}_{index}",
+            case_id=case_id,
+            prob=float(prob),
+            label=1,
+        )
+        frames.append(frame)
+        cases.setdefault(case_id, []).append(frame)
+
+    for index, prob in enumerate(neg_probs):
+        case_id = f"case_neg_{index}"
+        frame = exp1_report.EvalFrame(
+            frame_id=f"frame_neg_{seed}_{index}",
+            case_id=case_id,
+            prob=float(prob),
+            label=0,
+        )
+        frames.append(frame)
+        cases.setdefault(case_id, []).append(frame)
+
+    frame_tuple = tuple(frames)
+    case_map = {case: tuple(items) for case, items in cases.items()}
+    primary_metrics = exp1_report._metrics_from_frames(frame_tuple, tau_primary)
+    sensitivity_metrics = exp1_report._metrics_from_frames(frame_tuple, tau_sensitivity)
+
+    run = exp1_report.Exp1Run(
         model="ssl_imnet" if not baseline else "sup_imnet",
         seed=seed,
-        primary_metrics={"f1": primary},
-        sensitivity_metrics={"f1": primary},
-        tau_primary=0.5,
-        tau_sensitivity=0.4,
-        frames=tuple(),
-        cases={},
+        primary_metrics=dict(primary_metrics),
+        sensitivity_metrics=dict(sensitivity_metrics),
+        tau_primary=float(tau_primary),
+        tau_sensitivity=float(tau_sensitivity),
+        frames=frame_tuple,
+        cases=case_map,
         metrics_path=Path(f"seed{seed}.metrics.json"),
         curves={},
         provenance={},
     )
+    return run
 
 
 def test_compute_delta_summaries_reports_sample_std() -> None:
     treatment_runs = {
-        13: _make_run(seed=13, primary=0.8),
-        29: _make_run(seed=29, primary=0.7),
+        13: _make_run(seed=13, pos_probs=[0.9], neg_probs=[0.1]),
+        29: _make_run(seed=29, pos_probs=[0.4], neg_probs=[0.6]),
     }
     baseline_runs = {
-        13: _make_run(seed=13, primary=0.5, baseline=True),
-        29: _make_run(seed=29, primary=0.6, baseline=True),
+        13: _make_run(seed=13, pos_probs=[0.4], neg_probs=[0.6], baseline=True),
+        29: _make_run(seed=29, pos_probs=[0.4], neg_probs=[0.6], baseline=True),
     }
 
     summaries = exp1_report._compute_delta_summaries(
         treatment_runs,
         baseline_runs,
-        metrics=("f1",),
+        metrics=("recall",),
         bootstrap=0,
         rng_seed=None,
         block="primary",
     )
 
-    summary = summaries.get("f1")
+    summary = summaries.get("recall")
     assert summary is not None
     assert math.isfinite(summary.std)
-    expected_std = math.sqrt(0.02)
+    expected_std = math.sqrt(0.5)
     assert summary.std == pytest.approx(expected_std)
+
+
+def test_compute_delta_summaries_ignores_serialised_metrics() -> None:
+    treatment_runs = {
+        13: _make_run(seed=13, pos_probs=[0.9], neg_probs=[0.1]),
+        29: _make_run(seed=29, pos_probs=[0.9], neg_probs=[0.1]),
+    }
+    baseline_runs = {
+        13: _make_run(seed=13, pos_probs=[0.4], neg_probs=[0.6], baseline=True),
+        29: _make_run(seed=29, pos_probs=[0.4], neg_probs=[0.6], baseline=True),
+    }
+
+    # Corrupt the stored metrics to ensure the recomputed deltas drive the summary.
+    for run in treatment_runs.values():
+        run.primary_metrics["recall"] = 0.0
+    for run in baseline_runs.values():
+        run.primary_metrics["recall"] = 1.0
+
+    summaries = exp1_report._compute_delta_summaries(
+        treatment_runs,
+        baseline_runs,
+        metrics=("recall",),
+        bootstrap=0,
+        rng_seed=None,
+        block="primary",
+    )
+
+    summary = summaries.get("recall")
+    assert summary is not None
+    # All treatment runs achieve recall 1 while baselines sit at 0.
+    assert summary.mean == pytest.approx(1.0)
 
 
 def test_discover_runs_supports_last_metrics_outputs(tmp_path: Path) -> None:

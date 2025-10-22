@@ -539,11 +539,21 @@ def _compute_delta_summaries(
     for seed in seeds:
         treatment = treatment_runs[seed]
         baseline = baseline_runs[seed]
+        tau_treatment = (
+            treatment.tau_primary
+            if block == "primary"
+            else (treatment.tau_sensitivity or treatment.tau_primary)
+        )
+        tau_baseline = (
+            baseline.tau_primary
+            if block == "primary"
+            else (baseline.tau_sensitivity or baseline.tau_primary)
+        )
+        metrics_treatment = _metrics_from_frames(treatment.frames, tau_treatment)
+        metrics_baseline = _metrics_from_frames(baseline.frames, tau_baseline)
         for metric in metrics:
-            source_treatment = treatment.primary_metrics if block == "primary" else treatment.sensitivity_metrics
-            source_baseline = baseline.primary_metrics if block == "primary" else baseline.sensitivity_metrics
-            value_a = source_treatment.get(metric)
-            value_b = source_baseline.get(metric)
+            value_a = metrics_treatment.get(metric)
+            value_b = metrics_baseline.get(metric)
             if value_a is None or value_b is None:
                 continue
             if not (math.isfinite(float(value_a)) and math.isfinite(float(value_b))):
