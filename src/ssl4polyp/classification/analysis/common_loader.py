@@ -12,7 +12,7 @@ from typing import Any, DefaultDict, Dict, Iterable, Mapping, MutableMapping, Op
 
 import numpy as np
 
-from .result_loader import ResultLoader
+from .result_loader import ResultLoader, _is_integer_metric_key
 
 __all__ = [
     "CommonFrame",
@@ -136,9 +136,16 @@ def _extract_metrics(block: Optional[Mapping[str, Any]]) -> Dict[str, float]:
         return {}
     metrics: Dict[str, float] = {}
     for key, value in block.items():
+        key_text = str(key)
+        if _is_integer_metric_key(key_text):
+            numeric_int = _coerce_int(value)
+            if numeric_int is None:
+                continue
+            metrics[key_text] = int(numeric_int)
+            continue
         numeric = _coerce_float(value)
         if numeric is not None:
-            metrics[str(key)] = float(numeric)
+            metrics[key_text] = float(numeric)
     return metrics
 
 
