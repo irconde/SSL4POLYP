@@ -368,13 +368,18 @@ def _find_threshold_metadata(
     pack_filters: set[str],
 ) -> List[Dict[str, Any]]:
     root = Path(root).expanduser()
-    if expected_directory:
-        root = root / expected_directory
     if not root.exists():
         return []
+    search_root = root
+    enforce_directory_match = False
+    if expected_directory:
+        candidate_root = root / expected_directory
+        if candidate_root.exists():
+            search_root = candidate_root
+            enforce_directory_match = True
     pattern = "*.json"
     matches: List[Dict[str, Any]] = []
-    for path in sorted(root.rglob(pattern)):
+    for path in sorted(search_root.rglob(pattern)):
         try:
             metadata = _load_threshold_metadata(path)
         except ValueError as exc:
@@ -388,7 +393,7 @@ def _find_threshold_metadata(
             continue
 
         directory = metadata.get("directory")
-        if expected_directory and directory:
+        if enforce_directory_match and directory:
             if _normalise_path_segment(directory) != _normalise_path_segment(
                 expected_directory
             ):
