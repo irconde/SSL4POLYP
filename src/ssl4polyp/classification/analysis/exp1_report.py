@@ -33,7 +33,11 @@ from .common_metrics import (
     compute_binary_metrics,
 )
 from .display import PLACEHOLDER, format_ci, format_mean_std, format_scalar, format_signed
-from .exp2_report import DeltaSummary, MetricAggregate
+from .exp2_report import (
+    DeltaSummary,
+    MetricAggregate,
+    compute_t_confidence_interval,
+)
 from .result_loader import (
     CurveMetadata,
     GuardrailViolation,
@@ -63,136 +67,6 @@ METRIC_LABELS: Dict[str, str] = {
 CI_LEVEL = 0.95
 DEFAULT_BOOTSTRAP = 2000
 DEFAULT_RNG_SEED = 20240521
-
-# Two-sided critical values for Student's t distribution at the 95% level.
-# Index ``i`` stores the value for ``df = i`` (``df = 0`` is unused and filled
-# with ``NaN`` for convenience).  These constants were generated with
-# ``scipy.stats.t.ppf(0.975, df)`` for ``df`` in ``[1, 120]``.
-_T_CRITICAL_975: Tuple[float, ...] = (
-    float("nan"),
-    12.706204736432095,
-    4.302652729911275,
-    3.182446305284263,
-    2.776445105197799,
-    2.570581836614739,
-    2.446911848791681,
-    2.364624251010299,
-    2.30600413503337,
-    2.262157162740992,
-    2.228138851964939,
-    2.200985160082949,
-    2.178812829663418,
-    2.160368656461013,
-    2.144786687916927,
-    2.131449545559323,
-    2.119905299221011,
-    2.109815577833181,
-    2.10092204024096,
-    2.093024054408263,
-    2.085963447265836,
-    2.079613844727662,
-    2.073873067904015,
-    2.068657610419041,
-    2.063898561628021,
-    2.059538552753294,
-    2.055529438642871,
-    2.051830516480283,
-    2.048407141795244,
-    2.045229642132703,
-    2.042272456301237,
-    2.039513446396408,
-    2.036933343460101,
-    2.034515297449338,
-    2.032244509317718,
-    2.030107928250342,
-    2.02809400098045,
-    2.026192463029109,
-    2.024394164575136,
-    2.022690911734728,
-    2.021075382995337,
-    2.019540963982894,
-    2.018081697095881,
-    2.016692194142813,
-    2.015367569912941,
-    2.014103384833292,
-    2.012895595294589,
-    2.011740510475755,
-    2.010634754696445,
-    2.009575234489209,
-    2.008559109715206,
-    2.007583768155882,
-    2.006646803102211,
-    2.00574599353695,
-    2.004879286566523,
-    2.004044781810181,
-    2.003240717496698,
-    2.002465458054599,
-    2.001717483012092,
-    2.00099537704821,
-    2.000297821058262,
-    1.999623584114978,
-    1.998971516222311,
-    1.998340541772196,
-    1.997729653625973,
-    1.997137907752012,
-    1.996564418359474,
-    1.996008353475506,
-    1.995468930919402,
-    1.994945414632814,
-    1.994437111329773,
-    1.993943367434504,
-    1.993463566278583,
-    1.992997125532166,
-    1.99254349484682,
-    1.992102153689865,
-    1.991672609352349,
-    1.991254395114604,
-    1.990847068555052,
-    1.99045020998936,
-    1.990063421028384,
-    1.989686323244483,
-    1.989318556936819,
-    1.988959779987179,
-    1.988609666798673,
-    1.988267907310378,
-    1.987934206081672,
-    1.987608281440577,
-    1.987289864690938,
-    1.986978699373768,
-    1.986674540578468,
-    1.986377154300065,
-    1.986086316838893,
-    1.985801814239503,
-    1.98552344176583,
-    1.985251003409926,
-    1.984984311431769,
-    1.984723185927883,
-    1.984467454426692,
-    1.984216951508683,
-    1.983971518449633,
-    1.983731002885281,
-    1.98349525849594,
-    1.98326414470971,
-    1.98303752642299,
-    1.982815273737154,
-    1.982597261710291,
-    1.982383370123017,
-    1.982173483257451,
-    1.981967489688474,
-    1.98176528208651,
-    1.981566757031071,
-    1.9813718148344,
-    1.98118035937458,
-    1.980992297937506,
-    1.9808075410672,
-    1.980626002423937,
-    1.980447598649729,
-    1.980272249240706,
-    1.980099876426006,
-    1.979930405052777,
-)
-
-
 @dataclass(frozen=True)
 class EvalFrame:
     frame_id: str
@@ -351,55 +225,6 @@ def _aggregate(values: Iterable[float]) -> Optional[MetricAggregate]:
     mean = float(np.mean(array))
     std = float(np.std(array, ddof=1)) if array.size > 1 else 0.0
     return MetricAggregate(mean=mean, std=std, n=int(array.size), values=tuple(clean))
-
-
-def _t_critical_value(df: int, level: float) -> Optional[float]:
-    """Return the two-sided critical value for Student's t distribution."""
-
-    if df <= 0 or not math.isfinite(level) or not (0.0 < level < 1.0):
-        return None
-
-    if math.isclose(level, CI_LEVEL, rel_tol=1e-9, abs_tol=1e-12):
-        if df < len(_T_CRITICAL_975):
-            value = _T_CRITICAL_975[df]
-            if math.isfinite(value):
-                return float(value)
-        # For large degrees of freedom fall back to the normal approximation.
-        return 1.959963984540054
-
-    try:  # pragma: no cover - optional SciPy dependency for non-default levels
-        from scipy import stats as scipy_stats  # type: ignore[import]
-    except ImportError:  # pragma: no cover - SciPy not installed
-        return None
-
-    upper_tail = 0.5 + (level / 2.0)
-    return float(scipy_stats.t.ppf(upper_tail, df))
-
-
-def _t_confidence_interval(
-    mean: float,
-    std: float,
-    n: int,
-    *,
-    level: float = CI_LEVEL,
-) -> Optional[Tuple[float, float]]:
-    """Compute a two-sided confidence interval for the sample mean."""
-
-    if n <= 0 or not math.isfinite(mean):
-        return None
-    if n < 2 or not math.isfinite(std):
-        return None
-    if std <= 0.0:
-        value = float(mean)
-        return value, value
-    df = n - 1
-    t_value = _t_critical_value(df, level)
-    if t_value is None:
-        return None
-    margin = float(t_value) * float(std) / math.sqrt(float(n))
-    lower = float(mean) - margin
-    upper = float(mean) + margin
-    return lower, upper
 
 
 def _collect_curves(payload: Mapping[str, Any], metrics_path: Path) -> Dict[str, CurveMetadata]:
@@ -716,7 +541,7 @@ def _compute_delta_summaries(
         mean_delta = float(np.mean(array))
         std_delta = float(np.std(array, ddof=1)) if n > 1 else 0.0
         samples = replicates.get(metric, [])
-        ci = _t_confidence_interval(mean_delta, std_delta, n, level=CI_LEVEL)
+        ci = compute_t_confidence_interval(mean_delta, std_delta, n, level=CI_LEVEL)
         summaries[metric] = DeltaSummary(
             per_seed=dict(sorted(per_seed_map.items())),
             mean=mean_delta,

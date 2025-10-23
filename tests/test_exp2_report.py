@@ -2,22 +2,34 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from pathlib import Path
 from typing import Iterable, cast
 
+import numpy as np  # type: ignore[import]
 import pytest  # type: ignore[import]
+
+SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from ssl4polyp.classification.analysis.exp2_report import (  # type: ignore[import]
     ALL_METRICS,
     EXPECTED_MODELS,
     EXPECTED_SEEDS,
     EvalFrame,
+    Exp2Run,
+    compute_t_confidence_interval,
     collect_summary,
     discover_runs,
     load_run,
     render_markdown,
     summarize_runs,
     write_csv_tables,
+    _compute_delta_summaries,
     _metrics_from_frames,
 )
 
@@ -251,6 +263,63 @@ def test_collect_summary_and_outputs(tmp_path: Path) -> None:
     assert expected_keys.issubset(tables.keys())
     for path in tables.values():
         assert path.exists()
+
+
+def test_paired_delta_uses_paired_t_interval() -> None:
+    def _make_run(model: str, seed: int, metric_value: float) -> Exp2Run:
+        return Exp2Run(
+            model=model,
+            seed=seed,
+            tau_primary=0.5,
+            tau_sensitivity=0.4,
+            primary_metrics={"auprc": metric_value},
+            sensitivity_metrics={"auprc": metric_value},
+            frames=tuple(),
+            cases={},
+            provenance={},
+            metrics_path=Path(f"{model}_{seed}.json"),
+        )
+
+    baseline_values = {13: 0.71, 29: 0.64, 47: 0.58}
+    treatment_values = {13: 0.80, 29: 0.70, 47: 0.62}
+
+    baseline_runs = {
+        seed: _make_run("ssl_imnet", seed, value) for seed, value in baseline_values.items()
+    }
+    treatment_runs = {
+        seed: _make_run("ssl_colon", seed, treatment_values[seed]) for seed in treatment_values
+    }
+
+    summaries = _compute_delta_summaries(
+        treatment_runs,
+        baseline_runs,
+        metrics=["auprc"],
+        block="primary",
+        bootstrap=0,
+        rng_seed=None,
+    )
+    summary = summaries.get("auprc")
+    assert summary is not None
+
+    per_seed_deltas = np.array(
+        [treatment_values[seed] - baseline_values[seed] for seed in sorted(baseline_values)],
+        dtype=float,
+    )
+    expected_mean = float(np.mean(per_seed_deltas))
+    expected_std = float(np.std(per_seed_deltas, ddof=1))
+    expected_ci = compute_t_confidence_interval(
+        expected_mean,
+        expected_std,
+        per_seed_deltas.size,
+    )
+    assert expected_ci is not None
+
+    assert summary.mean == pytest.approx(expected_mean)
+    assert summary.std == pytest.approx(expected_std)
+    assert summary.ci_lower == pytest.approx(expected_ci[0])
+    assert summary.ci_upper == pytest.approx(expected_ci[1])
+    for idx, seed in enumerate(sorted(baseline_values)):
+        assert summary.per_seed[seed] == pytest.approx(per_seed_deltas[idx])
 
 
 def test_discover_runs_csv_guardrail(tmp_path: Path) -> None:
