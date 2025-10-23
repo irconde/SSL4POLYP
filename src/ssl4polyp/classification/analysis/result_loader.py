@@ -424,6 +424,11 @@ class ResultLoader:
         text = text.replace("\\", "/")
         while text.startswith("./"):
             text = text[2:]
+        text = text.lstrip("/")
+        if "/data_packs/" in text:
+            text = text.split("/data_packs/", 1)[1]
+        if text.startswith("data_packs/"):
+            text = text[len("data_packs/") :]
         if text.endswith(".csv"):
             text = text[:-4]
         return text
