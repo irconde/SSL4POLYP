@@ -64,6 +64,19 @@ _POLICY_LABELS = {
     "sun_val_frozen": "τ_SUN(val-frozen)",
 }
 
+_KNOWN_THRESHOLD_POLICIES = tuple(
+    sorted(
+        {
+            "f1_opt_on_val",
+            "youden_on_val",
+            "sun_val_frozen",
+            "val_opt_youden",
+        },
+        key=len,
+        reverse=True,
+    )
+)
+
 _APPENDIX_TITLES = {
     "youden_on_val": "Sensitivity operating point",
     "sun_val_frozen": "SUN-frozen operating point",
@@ -127,6 +140,18 @@ def _canonical_policy(value: Optional[object]) -> Optional[str]:
         return None
     text = str(value).strip().lower()
     return text or None
+
+
+def _policy_from_source_key(key: Optional[object]) -> Optional[str]:
+    if key is None:
+        return None
+    text = str(key).strip().lower()
+    if not text:
+        return None
+    for candidate in _KNOWN_THRESHOLD_POLICIES:
+        if text.endswith(candidate):
+            return candidate
+    return None
 
 
 def _coerce_float(value: Optional[object]) -> Optional[float]:
@@ -269,8 +294,16 @@ def load_run(
     primary_policy = "f1_opt_on_val"
     thresholds: Dict[str, float] = {primary_policy: float(base_run.tau)}
 
-    def _register_policy(policy: Optional[str], tau_value: Optional[float]) -> None:
+    def _register_policy(
+        policy: Optional[str],
+        tau_value: Optional[float],
+        *,
+        source_key: Optional[object] = None,
+    ) -> None:
         canonical = _canonical_policy(policy)
+        if canonical is None:
+            derived = _policy_from_source_key(source_key)
+            canonical = _canonical_policy(derived)
         numeric = _coerce_float(tau_value)
         if canonical and numeric is not None:
             thresholds[canonical] = float(numeric)
@@ -289,17 +322,25 @@ def load_run(
         sensitivity_block = payload.get("test_sensitivity")
         if isinstance(sensitivity_block, Mapping):
             sensitivity_tau = _coerce_float(sensitivity_block.get("tau"))
-    _register_policy(sensitivity_policy, sensitivity_tau)
+    _register_policy(sensitivity_policy, sensitivity_tau, source_key="sensitivity")
 
     if isinstance(thresholds_payload, Mapping):
         for key, value in thresholds_payload.items():
             if key in {"primary", "sensitivity"}:
                 continue
+            if key == "values" and isinstance(value, Mapping):
+                for inner_key, inner_value in value.items():
+                    _register_policy(
+                        _canonical_policy(inner_key),
+                        inner_value,
+                        source_key=inner_key,
+                    )
+                continue
             if not isinstance(value, Mapping):
                 continue
             policy_name = _canonical_policy(value.get("policy")) or _canonical_policy(key)
             tau_candidate = _coerce_float(value.get("tau"))
-            _register_policy(policy_name, tau_candidate)
+            _register_policy(policy_name, tau_candidate, source_key=key)
 
     return RunDataset(
         model=base_run.model,
