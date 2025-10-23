@@ -157,6 +157,23 @@ def test_exp3_loader_rejects_prefixed_val_path() -> None:
         loader.validate(Path("metrics.json"), payload)
 
 
+@pytest.mark.parametrize(
+    "absolute_path",
+    (
+        "/abs/path/to/data_packs/sun_morphology/val.csv",
+        "C:/abs/path/to/data_packs/sun_morphology/val.csv",
+    ),
+)
+def test_exp3_loader_accepts_absolute_val_path(absolute_path: str) -> None:
+    loader = ResultLoader(exp_id="exp3b")
+    payload = _base_payload("exp3b")
+    payload["data"]["val"]["path"] = absolute_path  # type: ignore[index]
+    payload["thresholds"]["primary"]["split"] = absolute_path  # type: ignore[index]
+    payload["thresholds"]["sensitivity"]["split"] = absolute_path  # type: ignore[index]
+    validated = loader.validate(Path("metrics.json"), payload)
+    assert validated["data"]["val"]["path"] == absolute_path
+
+
 @pytest.mark.parametrize("exp_id", ["exp5a", "exp5b", "exp5c"])
 def test_loader_requires_frozen_sources(exp_id: str) -> None:
     loader = ResultLoader(exp_id=exp_id)
