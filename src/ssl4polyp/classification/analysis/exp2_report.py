@@ -24,6 +24,7 @@ from typing import (
 
 import numpy as np
 
+from .common_loader import candidate_outputs_csv_paths
 from .common_metrics import (
     DEFAULT_BINARY_METRIC_KEYS,
     _clean_text,
@@ -230,15 +231,7 @@ def _normalise_frame_id(raw: Optional[object], fallback_index: int) -> str:
 
 
 def _output_candidates(metrics_path: Path) -> List[Path]:
-    candidates: List[Path] = []
-    stem = metrics_path.stem
-    base = stem[:-5] if stem.endswith("_last") else stem
-    candidates.append(metrics_path.with_name(f"{base}_test_outputs.csv"))
-    if base.endswith(".metrics"):
-        trimmed = base[:-8]
-        if trimmed:
-            candidates.append(metrics_path.with_name(f"{trimmed}_test_outputs.csv"))
-    return candidates
+    return list(candidate_outputs_csv_paths(metrics_path))
 
 
 def _read_outputs(metrics_path: Path) -> Tuple[Tuple[EvalFrame, ...], Dict[str, Tuple[EvalFrame, ...]]]:

@@ -13,6 +13,7 @@ from types import MappingProxyType
 
 import numpy as np
 
+from .common_loader import resolve_outputs_csv
 from .exp3_report import FrameRecord, compute_strata_metrics
 from .result_loader import ResultLoader, GuardrailViolation
 from .common_metrics import _coerce_float, _coerce_int
@@ -96,9 +97,7 @@ def _normalise_morphology(raw: Optional[str]) -> str:
 
 
 def _resolve_outputs_path(metrics_path: Path) -> Path:
-    stem = metrics_path.stem
-    base = stem[:-5] if stem.endswith("_last") else stem
-    return metrics_path.with_name(f"{base}_test_outputs.csv")
+    return resolve_outputs_csv(metrics_path)
 
 
 def _infer_percent_from_name(metrics_path: Path) -> float:
