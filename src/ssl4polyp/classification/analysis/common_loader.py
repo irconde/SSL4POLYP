@@ -20,6 +20,8 @@ __all__ = [
     "get_default_loader",
     "load_common_run",
     "load_outputs_csv",
+    "resolve_outputs_csv",
+    "candidate_outputs_csv_paths",
 ]
 
 
@@ -78,7 +80,7 @@ def load_common_run(
     tau_value = primary_metrics.get("tau")
     if tau_value is None:
         raise ValueError(f"Metrics file '{metrics_path}' is missing test_primary.tau")
-    outputs_path = _resolve_outputs_path(metrics_path)
+    outputs_path = resolve_outputs_csv(metrics_path)
     frames, cases = load_outputs_csv(outputs_path, tau=float(tau_value))
     return CommonRun(
         model=model_name,
@@ -149,10 +151,54 @@ def _extract_metrics(block: Optional[Mapping[str, Any]]) -> Dict[str, float]:
     return metrics
 
 
-def _resolve_outputs_path(metrics_path: Path) -> Path:
-    stem = metrics_path.stem
-    base = stem[:-5] if stem.endswith("_last") else stem
-    return metrics_path.with_name(f"{base}_test_outputs.csv")
+def candidate_outputs_csv_paths(metrics_path: Path) -> Tuple[Path, ...]:
+    """Return candidate per-frame CSV paths for a metrics file.
+
+    Metrics artifacts in this project historically include compound suffixes
+    such as ``*_last.metrics.json``.  ``Path.stem`` only strips the final
+    suffix, so naively appending ``_test_outputs.csv`` can yield names like
+    ``*_last.metrics_test_outputs.csv`` that are not present on disk.  This
+    helper generates a normalised list of candidate paths by progressively
+    removing the ``.json`` extension as well as the ``.metrics`` and
+    ``_last`` fragments from the base name.
+    """
+
+    name = metrics_path.name
+    if name.endswith(".json"):
+        base = name[: -len(".json")]
+    else:
+        base = metrics_path.stem
+
+    bases: list[str] = []
+    queue: list[str] = [base]
+    seen: set[str] = set()
+
+    while queue:
+        current = queue.pop(0)
+        if not current or current in seen:
+            continue
+        seen.add(current)
+        bases.append(current)
+        if current.endswith("_last"):
+            queue.append(current[: -len("_last")])
+        if current.endswith(".metrics"):
+            queue.append(current[: -len(".metrics")])
+
+    if not bases:
+        fallback = metrics_path.stem or metrics_path.name
+        bases = [fallback]
+
+    return tuple(metrics_path.with_name(f"{base}_test_outputs.csv") for base in bases)
+
+
+def resolve_outputs_csv(metrics_path: Path) -> Path:
+    """Return the most plausible per-frame CSV path for ``metrics_path``."""
+
+    candidates = candidate_outputs_csv_paths(metrics_path)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _infer_model_from_filename(metrics_path: Path) -> str:

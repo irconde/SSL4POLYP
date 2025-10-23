@@ -25,6 +25,7 @@ from typing import (
 
 import numpy as np
 
+from .common_loader import resolve_outputs_csv
 # Local bootstrap utilities for paired deltas.
 from .bootstrapper import BootstrapDeltaResult, Bootstrapper
 
@@ -467,9 +468,7 @@ def _validate_required_perturbations(tag_catalog: Mapping[str, TagInfo]) -> None
 
 
 def _resolve_outputs_path(metrics_path: Path) -> Path:
-    stem = metrics_path.stem
-    base = stem[:-5] if stem.endswith("_last") else stem
-    return metrics_path.with_name(f"{base}_test_outputs.csv")
+    return resolve_outputs_csv(metrics_path)
 
 
 def load_run(metrics_path: Path) -> RunPerturbationResult:
