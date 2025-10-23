@@ -50,6 +50,7 @@ EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 CI_LEVEL = 0.95
 DEFAULT_BOOTSTRAP = 2000
 DEFAULT_RNG_SEED = 20240521
+_PAIRED_T_CRITICAL_DF2 = 4.302652729911275
 MODEL_LABELS: Dict[str, str] = {
     "ssl_imnet": "SSL-ImNet",
     "ssl_colon": "SSL-Colon",
@@ -290,19 +291,6 @@ def _ensure_loss(metrics: MutableMapping[str, float], frames: Sequence[EvalFrame
     for key in ("n_pos", "n_neg", "prevalence", "tp", "fp", "tn", "fn"):
         if key not in metrics and key in computed:
             metrics[key] = computed[key]
-
-
-def _ci_bounds(values: Sequence[float], *, level: float = CI_LEVEL) -> Optional[Tuple[float, float]]:
-    if not values:
-        return None
-    array = np.array(values, dtype=float)
-    if array.size == 0:
-        return None
-    lower_pct = (1.0 - level) / 2.0 * 100.0
-    upper_pct = (1.0 + level) / 2.0 * 100.0
-    lower = float(np.percentile(array, lower_pct))
-    upper = float(np.percentile(array, upper_pct))
-    return lower, upper
 
 
 def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Exp2Run:
@@ -601,10 +589,21 @@ def _compute_delta_summaries(
         if not values:
             continue
         array = np.array(values, dtype=float)
+        n = int(array.size)
         mean_delta = float(np.mean(array))
-        std_delta = float(np.std(array, ddof=1)) if array.size > 1 else 0.0
+        std_delta = float(np.std(array, ddof=1)) if n > 1 else 0.0
         samples = replicates.get(metric, [])
-        ci = _ci_bounds(samples, level=CI_LEVEL) if samples else None
+        ci: Optional[Tuple[float, float]] = None
+        if n > 1 and math.isfinite(std_delta):
+            if std_delta <= 0.0:
+                point = float(mean_delta)
+                ci = (point, point)
+            else:
+                std_error = std_delta / math.sqrt(float(n))
+                margin = _PAIRED_T_CRITICAL_DF2 * std_error
+                lower = float(mean_delta) - margin
+                upper = float(mean_delta) + margin
+                ci = (lower, upper)
         summaries[metric] = DeltaSummary(
             per_seed=dict(sorted(per_seed_map.items())),
             mean=mean_delta,
