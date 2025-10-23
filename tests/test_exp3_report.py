@@ -93,6 +93,26 @@ def test_load_run_rejects_unexpected_positive_morphology(tmp_path: Path) -> None
         load_run(metrics_path)
 
 
+def test_load_run_uses_distinct_sensitivity_tau(tmp_path: Path) -> None:
+    rows = [
+        {"case_id": "a", "prob": 0.72, "label": 1, "pred": 1, "morphology": "polypoid"},
+        {"case_id": "b", "prob": 0.41, "label": 0, "pred": 0, "morphology": "unknown"},
+    ]
+    seed = 47
+    _write_run(
+        tmp_path,
+        "ssl_colon",
+        seed=seed,
+        rows=rows,
+        tau=0.5,
+        sensitivity_tau=0.35,
+    )
+    metrics_path = tmp_path / f"ssl_colon__sun_morphology_s{seed}_last.metrics.json"
+    run = load_run(metrics_path)
+    assert run.tau_for_policy("f1_opt_on_val") == pytest.approx(0.5)
+    assert run.tau_for_policy("youden_on_val") == pytest.approx(0.35)
+
+
 def test_generate_report_requires_all_deltas(tmp_path: Path) -> None:
     rows = [
         {"case_id": "a", "prob": 0.75, "label": 1, "pred": 1, "morphology": "polypoid"},
@@ -105,9 +125,19 @@ def test_generate_report_requires_all_deltas(tmp_path: Path) -> None:
         generate_report(tmp_path, bootstrap=0, rng_seed=19)
 
 
-def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]], tau: float = 0.5) -> None:
+def _write_run(
+    root: Path,
+    model: str,
+    seed: int,
+    rows: list[dict[str, object]],
+    *,
+    tau: float = 0.5,
+    sensitivity_tau: float | None = None,
+) -> None:
     run_prefix = f"{model}__sun_morphology_s{seed}"
     metrics_path = root / f"{run_prefix}_last.metrics.json"
+    if sensitivity_tau is None:
+        sensitivity_tau = tau
     tp = fp = tn = fn = 0
     n_pos = n_neg = 0
     for row in rows:
@@ -141,7 +171,7 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
             "prevalence": float(n_pos) / float(total) if total else 0.0,
         },
         "test_sensitivity": {
-            "tau": tau,
+            "tau": sensitivity_tau,
             "tp": tp,
             "fp": fp,
             "tn": tn,
@@ -159,9 +189,13 @@ def _write_run(root: Path, model: str, seed: int, rows: list[dict[str, object]],
             },
             "sensitivity": {
                 "policy": "youden_on_val",
-                "tau": tau,
+                "tau": sensitivity_tau,
                 "split": _VAL_PATH,
                 "epoch": 1,
+            },
+            "values": {
+                "sun_morphology_val_f1_opt_on_val": tau,
+                "sun_morphology_val_youden_on_val": sensitivity_tau,
             },
         },
         "provenance": {
