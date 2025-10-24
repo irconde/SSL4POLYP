@@ -58,6 +58,7 @@ def _write_run(
             "precision": 0.6,
             "recall": 0.6,
             "balanced_accuracy": 0.6,
+            "mcc": 0.55,
             "loss": 0.3,
             "tp": 2,
             "fp": 0,
@@ -78,6 +79,7 @@ def _write_run(
             "precision": 0.6,
             "balanced_accuracy": 0.6,
             "tau": 0.4,
+            "mcc": 0.50,
             "loss": 0.32,
             "n_pos": 2,
             "n_neg": 2,
@@ -156,6 +158,8 @@ def test_exp4_summary_pipeline(tmp_path: Path, bootstrap: int) -> None:
         if entry["model"] == "ssl_colon" and entry["percent"] == 50.0 and entry["metric"] == "auprc"
     )
     assert colon_entry["mean"] == pytest.approx(0.70)
+    assert colon_entry["n"] == pytest.approx(len(EXPECTED_SEEDS))
+    assert colon_entry["expected_n"] == pytest.approx(len(EXPECTED_SEEDS))
 
     curves = primary["curves"]
     colon_50 = curves["auprc"]["ssl_colon"][50.0]["mean"]
@@ -173,6 +177,7 @@ def test_exp4_summary_pipeline(tmp_path: Path, bootstrap: int) -> None:
     assert s_at_target["auprc"]["ssl_imnet"] == pytest.approx(100.0)
 
     assert summary["validated_seeds"] == list(EXPECTED_SEEDS)
+    assert summary["seed_shortfalls"] == []
     pairwise_sup = primary["pairwise"]["auprc"]["sup_imnet"][50.0]
     assert pairwise_sup["delta"] == pytest.approx(0.70 - 0.55)
     assert pairwise_sup["replicates"] == []
@@ -191,3 +196,49 @@ def test_exp4_csv_digest_guardrail(tmp_path: Path) -> None:
     _write_run(tmp_path, model="ssl_colon", percent=50.0, seed=29, auprc=0.70, f1_score=0.65, csv_digest="ccccdddd")
     with pytest.raises(RuntimeError):
         exp4_report.discover_runs(tmp_path)
+
+
+def test_exp4_handles_seed_shortfall(tmp_path: Path) -> None:
+    runs_root = tmp_path
+    percent = 50.0
+    for seed in EXPECTED_SEEDS:
+        _write_run(
+            runs_root,
+            model="ssl_imnet",
+            percent=percent,
+            seed=seed,
+            auprc=0.6 + seed * 1e-4,
+            f1_score=0.55 + seed * 1e-4,
+        )
+    missing_seed = EXPECTED_SEEDS[-1]
+    metrics_path = runs_root / f"ssl_imnet_p{int(percent):02d}_s{missing_seed}_last.metrics.json"
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    payload["test_primary"]["mcc"] = None
+    payload["test_sensitivity"]["mcc"] = None
+    metrics_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    runs = exp4_report.discover_runs(runs_root)
+    summary = exp4_report.summarize_runs(runs, bootstrap=0, rng_seed=0)
+
+    primary_table = summary["primary"]["learning_table"]
+    mcc_entry = next(
+        entry
+        for entry in primary_table
+        if entry["model"] == "ssl_imnet" and entry["percent"] == percent and entry["metric"] == "mcc"
+    )
+    assert mcc_entry["n"] == pytest.approx(len(EXPECTED_SEEDS) - 1)
+    assert mcc_entry["expected_n"] == pytest.approx(len(EXPECTED_SEEDS))
+
+    shortfalls = summary["seed_shortfalls"]
+    assert any(
+        record.get("model") == "ssl_imnet"
+        and record.get("metric") == "mcc"
+        and record.get("source") == "metrics"
+        and record.get("observed") == len(EXPECTED_SEEDS) - 1
+        for record in shortfalls
+    )
+
+    report = exp4_report.render_report(summary)
+    assert "Notes — Missing metrics seeds" in report
+    assert "SSL-ImNet" in report
+    assert "2/3" in report

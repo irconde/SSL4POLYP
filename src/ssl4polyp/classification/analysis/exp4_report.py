@@ -312,6 +312,7 @@ def compute_learning_curves(
     metrics: Sequence[str] = PRIMARY_METRICS,
     source: str = "metrics",
     expected_count: Optional[int] = None,
+    shortfalls: Optional[List[Dict[str, object]]] = None,
 ) -> Dict[str, Dict[str, Dict[float, Dict[str, float]]]]:
     curves: Dict[str, DefaultDict[str, Dict[float, Dict[str, float]]]] = {
         metric: defaultdict(dict) for metric in metrics
@@ -327,17 +328,28 @@ def compute_learning_curves(
                     values.append(value)
                 if not values:
                     continue
-                if expected_count is not None and len(values) != expected_count:
-                    raise ValueError(
-                        f"Missing seeds for {model}@p{percent:g} metric '{metric}' ({len(values)}/{expected_count})"
-                    )
+                observed = len(values)
+                stats: Dict[str, float] = {}
+                if expected_count is not None:
+                    stats["expected_n"] = float(expected_count)
+                    if observed < expected_count and shortfalls is not None:
+                        shortfalls.append(
+                            {
+                                "model": model,
+                                "percent": float(percent),
+                                "metric": metric,
+                                "source": source,
+                                "observed": observed,
+                                "expected": expected_count,
+                                "context": "curves",
+                            }
+                        )
                 mean = float(np.mean(values))
                 std = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
-                curves[metric][model][percent] = {
-                    "mean": mean,
-                    "std": std,
-                    "n": len(values),
-                }
+                stats["mean"] = mean
+                stats["std"] = std
+                stats["n"] = float(observed)
+                curves[metric][model][percent] = stats
     result: Dict[str, Dict[str, Dict[float, Dict[str, float]]]] = {}
     for metric, model_map in curves.items():
         result[metric] = {
@@ -352,6 +364,7 @@ def compute_learning_table(
     metrics: Sequence[str] = LEARNING_TABLE_METRICS,
     source: str = "metrics",
     expected_count: Optional[int] = None,
+    shortfalls: Optional[List[Dict[str, object]]] = None,
 ) -> List[Dict[str, object]]:
     rows: List[Dict[str, object]] = []
     for model, per_percent in runs_by_model.items():
@@ -365,10 +378,20 @@ def compute_learning_table(
                     values.append(value)
                 if not values:
                     continue
-                if expected_count is not None and len(values) != expected_count:
-                    raise ValueError(
-                        f"Missing seeds for {model}@p{percent:g} metric '{metric}' ({len(values)}/{expected_count})"
-                    )
+                observed = len(values)
+                if expected_count is not None:
+                    if observed < expected_count and shortfalls is not None:
+                        shortfalls.append(
+                            {
+                                "model": model,
+                                "percent": float(percent),
+                                "metric": metric,
+                                "source": source,
+                                "observed": observed,
+                                "expected": expected_count,
+                                "context": "table",
+                            }
+                        )
                 mean = float(np.mean(values))
                 std = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
                 rows.append(
@@ -378,6 +401,8 @@ def compute_learning_table(
                         "metric": str(metric),
                         "mean": mean,
                         "std": std,
+                        "n": float(observed),
+                        "expected_n": float(expected_count) if expected_count is not None else None,
                     }
                 )
     rows.sort(key=lambda entry: (
@@ -874,6 +899,7 @@ def summarize_runs(
     else:
         seed_validation = SeedValidationResult((), MappingProxyType({}))
     expected_count = len(seed_validation.expected_seeds) or None
+    shortfalls: List[Dict[str, object]] = []
     test_composition = compute_test_composition(runs_by_model)
 
     primary_curves = compute_learning_curves(
@@ -881,12 +907,14 @@ def summarize_runs(
         metrics=PRIMARY_METRICS,
         source="metrics",
         expected_count=expected_count,
+        shortfalls=shortfalls,
     )
     primary_learning_table = compute_learning_table(
         runs_by_model,
         metrics=LEARNING_TABLE_METRICS,
         source="metrics",
         expected_count=expected_count,
+        shortfalls=shortfalls,
     )
     primary_slopes = compute_slopes(primary_curves)
     primary_aulc = compute_aulc(primary_curves)
@@ -922,12 +950,14 @@ def summarize_runs(
         metrics=PRIMARY_METRICS,
         source="sensitivity",
         expected_count=expected_count,
+        shortfalls=shortfalls,
     )
     sensitivity_learning_table = compute_learning_table(
         runs_by_model,
         metrics=LEARNING_TABLE_METRICS,
         source="sensitivity",
         expected_count=expected_count,
+        shortfalls=shortfalls,
     )
     sensitivity_slopes = compute_slopes(sensitivity_curves)
     sensitivity_aulc = compute_aulc(sensitivity_curves)
@@ -990,6 +1020,7 @@ def summarize_runs(
         "seed_groups": {
             key: list(values) for key, values in seed_validation.observed_seeds.items()
         },
+        "seed_shortfalls": shortfalls,
     }
 
 
@@ -1073,6 +1104,19 @@ def render_report(summary: Mapping[str, object]) -> str:
     lines.extend(_render_s_at_target_table(primary_targets, primary_s_at_target))
     lines.append("")
 
+    shortfall_records = summary.get("seed_shortfalls")
+    shortfall_entries = (
+        shortfall_records
+        if isinstance(shortfall_records, Sequence)
+        and not isinstance(shortfall_records, (str, bytes))
+        else []
+    )
+    shortfall_rows = _render_seed_shortfalls(shortfall_entries)
+    if shortfall_rows:
+        lines.append("## Notes — Missing metrics seeds")
+        lines.extend(shortfall_rows)
+        lines.append("")
+
     sensitivity_obj = summary.get("sensitivity")
     sensitivity = sensitivity_obj if isinstance(sensitivity_obj, Mapping) else {}
     sensitivity_learning_obj = sensitivity.get("learning_table")
@@ -1132,6 +1176,20 @@ def _render_composition_table(composition: Mapping[str, object]) -> List[str]:
     return rows
 
 
+def _format_sample_size(n_value: object, expected_value: object) -> str:
+    try:
+        observed = int(round(float(n_value)))
+    except (TypeError, ValueError):
+        return "—"
+    try:
+        expected = int(round(float(expected_value)))
+    except (TypeError, ValueError):
+        expected = None
+    if expected is None or observed == expected:
+        return str(observed)
+    return f"{observed}/{expected}"
+
+
 def _render_learning_long_table(entries: Sequence[Mapping[str, object]]) -> List[str]:
     if not entries:
         return ["No aggregated metrics available."]
@@ -1147,8 +1205,8 @@ def _render_learning_long_table(entries: Sequence[Mapping[str, object]]) -> List
         return model_rank, percent_value, metric_rank, metric_name
 
     sorted_entries = sorted(entries, key=sort_key)
-    header = "| Model | Percent | Metric | Mean | SD |"
-    separator = "| --- | --- | --- | --- | --- |"
+    header = "| Model | Percent | Metric | Mean | SD | N |"
+    separator = "| --- | --- | --- | --- | --- | --- |"
     rows = [header, separator]
     for entry in sorted_entries:
         model = str(entry.get("model", ""))
@@ -1156,6 +1214,8 @@ def _render_learning_long_table(entries: Sequence[Mapping[str, object]]) -> List
         metric = str(entry.get("metric", ""))
         mean = entry.get("mean")
         std = entry.get("std")
+        n_value = entry.get("n")
+        expected = entry.get("expected_n")
         rows.append(
             "| "
             + " | ".join(
@@ -1165,6 +1225,7 @@ def _render_learning_long_table(entries: Sequence[Mapping[str, object]]) -> List
                     METRIC_LABELS.get(metric, metric.upper()),
                     format_scalar(mean),
                     format_scalar(std),
+                    _format_sample_size(n_value, expected),
                 ]
             )
             + " |"
@@ -1213,6 +1274,69 @@ def _render_pairwise_sections(
     return lines
 
 
+def _render_seed_shortfalls(records: Sequence[Mapping[str, object]]) -> List[str]:
+    if not records:
+        return []
+    model_order = {model: index for index, model in enumerate(PREFERRED_MODELS)}
+    source_order = {"metrics": 0, "sensitivity": 1}
+    seen: set[Tuple[str, float, str, str]] = set()
+    entries: List[Tuple[int, int, float, int, str, str, str, str]] = []
+    for record in records:
+        if not isinstance(record, Mapping):
+            continue
+        model = str(record.get("model", ""))
+        try:
+            percent = float(record.get("percent"))
+        except (TypeError, ValueError):
+            continue
+        metric = str(record.get("metric", ""))
+        source = str(record.get("source", ""))
+        key = (model, percent, metric, source)
+        if key in seen:
+            continue
+        seen.add(key)
+        observed = record.get("observed")
+        expected = record.get("expected")
+        seed_text = _format_sample_size(observed, expected)
+        if seed_text == "—":
+            continue
+        entries.append(
+            (
+                source_order.get(source, 99),
+                model_order.get(model, len(model_order) + 1),
+                percent,
+                LEARNING_TABLE_METRICS.index(metric)
+                if metric in LEARNING_TABLE_METRICS
+                else len(LEARNING_TABLE_METRICS) + 1,
+                MODEL_LABELS.get(model, model),
+                METRIC_LABELS.get(metric, metric.upper()),
+                seed_text,
+                "primary" if source == "metrics" else ("sensitivity" if source == "sensitivity" else source),
+            )
+        )
+    if not entries:
+        return []
+    entries.sort()
+    header = "| Model | Percent | Metric | τ | Seeds |"
+    separator = "| --- | --- | --- | --- | --- |"
+    rows = [header, separator]
+    for (_, _, percent, _, model_label, metric_label, seed_text, tau_label) in entries:
+        rows.append(
+            "| "
+            + " | ".join(
+                [
+                    model_label,
+                    _format_percent(percent),
+                    metric_label,
+                    tau_label,
+                    seed_text,
+                ]
+            )
+            + " |"
+        )
+    return rows
+
+
 def _render_learning_table(curves: Mapping[str, Dict[float, Mapping[str, float]]]) -> List[str]:
     models = list(curves.keys())
     if not models:
@@ -1229,7 +1353,11 @@ def _render_learning_table(curves: Mapping[str, Dict[float, Mapping[str, float]]
             if not stats:
                 row_values.append("—")
             else:
-                row_values.append(format_mean_std(stats.get("mean"), stats.get("std")))
+                mean_std = format_mean_std(stats.get("mean"), stats.get("std"))
+                n_text = _format_sample_size(stats.get("n"), stats.get("expected_n"))
+                if n_text != "—":
+                    mean_std = f"{mean_std} (n={n_text})"
+                row_values.append(mean_std)
         rows.append("| " + " | ".join(row_values) + " |")
     return rows
 
