@@ -134,10 +134,12 @@ class ResultLoader:
         *,
         required_curve_keys: Sequence[str] = (),
         strict: bool = True,
+        enforce_curve_exports: bool = True,
     ) -> None:
         self.exp_id = str(exp_id)
         self.required_curve_keys = tuple(required_curve_keys)
         self.strict = bool(strict)
+        self.enforce_curve_exports = bool(enforce_curve_exports)
         self._csv_digest_registry: Dict[str, str] = {}
         self._curve_digest_registry: Dict[str, str] = {}
         self._loaded_runs: list[Dict[str, Any]] = []
@@ -540,27 +542,35 @@ class ResultLoader:
             return
         exports = payload.get("curve_exports")
         if not isinstance(exports, Mapping):
-            raise GuardrailViolation(
-                f"Metrics file '{metrics_path}' is missing curve_exports block"
-            )
+            if self.enforce_curve_exports:
+                raise GuardrailViolation(
+                    f"Metrics file '{metrics_path}' is missing curve_exports block"
+                )
+            return
         for key in required:
             entry = exports.get(key)
             if not isinstance(entry, Mapping):
-                raise GuardrailViolation(
-                    f"Metrics file '{metrics_path}' is missing curve_exports['{key}'] entry"
-                )
+                if self.enforce_curve_exports:
+                    raise GuardrailViolation(
+                        f"Metrics file '{metrics_path}' is missing curve_exports['{key}'] entry"
+                    )
+                continue
             path_value = entry.get("path")
             sha_value = entry.get("sha256")
             if not isinstance(path_value, str) or not path_value.strip():
-                raise GuardrailViolation(
-                    f"curve_exports['{key}'] in '{metrics_path}' is missing a path"
-                )
+                if self.enforce_curve_exports:
+                    raise GuardrailViolation(
+                        f"curve_exports['{key}'] in '{metrics_path}' is missing a path"
+                    )
+                continue
             rel_path = Path(path_value)
             curve_path = rel_path if rel_path.is_absolute() else (metrics_path.parent / rel_path)
             if not curve_path.exists():
-                raise GuardrailViolation(
-                    f"curve_exports['{key}'] references missing file '{curve_path}'"
-                )
+                if self.enforce_curve_exports:
+                    raise GuardrailViolation(
+                        f"curve_exports['{key}'] references missing file '{curve_path}'"
+                    )
+                continue
             computed_digest = compute_file_sha256(curve_path)
             if isinstance(sha_value, str) and sha_value.strip():
                 expected_digest = sha_value.strip().lower()

@@ -97,6 +97,24 @@ def test_result_loader_extracts_metrics_and_curves(tmp_path: Path) -> None:
     assert curve_meta.sha256 == compute_file_sha256(curve_path)
 
 
+def test_result_loader_allows_missing_curves_when_not_enforced(tmp_path: Path) -> None:
+    curve_path = _write_curve(tmp_path)
+    payload = _make_payload(curve_path)
+    payload.pop("curve_exports", None)
+    metrics_path = tmp_path / "metrics.json"
+    metrics_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loader = ResultLoader(
+        exp_id="exp1",
+        required_curve_keys=("pr",),
+        enforce_curve_exports=False,
+    )
+    result = loader.load(metrics_path)
+
+    assert isinstance(result, LoadedResult)
+    assert result.curves == {}
+
+
 def test_result_loader_ignores_debug_sections(tmp_path: Path) -> None:
     curve_path = _write_curve(tmp_path)
     payload = _make_payload(curve_path)

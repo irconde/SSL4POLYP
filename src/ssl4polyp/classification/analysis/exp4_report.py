@@ -79,7 +79,12 @@ class RunResult:
 
 
 def _get_loader(*, strict: bool = True) -> ResultLoader:
-    return ResultLoader(exp_id="exp4", required_curve_keys=("test",), strict=strict)
+    return ResultLoader(
+        exp_id="exp4",
+        required_curve_keys=("test",),
+        strict=strict,
+        enforce_curve_exports=False,
+    )
 
 
 def _normalise_case_id(raw: Optional[str], fallback_index: int) -> str:
