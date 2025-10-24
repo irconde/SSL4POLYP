@@ -13,7 +13,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-from .common_loader import resolve_outputs_csv
+from .common_loader import candidate_outputs_csv_paths
 from .exp3_report import FrameRecord, compute_strata_metrics
 from .result_loader import ResultLoader, GuardrailViolation
 from .common_metrics import _coerce_float, _coerce_int
@@ -102,7 +102,14 @@ def _normalise_morphology(raw: Optional[str]) -> str:
 
 
 def _resolve_outputs_path(metrics_path: Path) -> Path:
-    return resolve_outputs_csv(metrics_path)
+    candidates = candidate_outputs_csv_paths(metrics_path)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    tried = ", ".join(str(path) for path in candidates)
+    raise FileNotFoundError(
+        f"No test outputs CSV found for metrics file '{metrics_path}'. Tried: {tried}"
+    )
 
 
 def _infer_percent_from_name(metrics_path: Path) -> float:
