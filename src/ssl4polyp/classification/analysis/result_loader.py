@@ -501,8 +501,65 @@ class ResultLoader:
                     f"but expected approximately {expected_prevalence:.6f}"
                 )
 
+    def _contextualise_csv_digest_key(
+        self,
+        base_key: str,
+        *,
+        split: Optional[str] = None,
+        provenance: Optional[Mapping[str, Any]] = None,
+        entry: Optional[Mapping[str, Any]] = None,
+    ) -> str:
+        scope = split
+        if scope is None:
+            if base_key.startswith("data.train.") or base_key.startswith("train_"):
+                scope = "train"
+        if scope != "train":
+            return base_key
+
+        context_parts: list[str] = []
+        seen_parts: set[str] = set()
+
+        def _add_part(part: Optional[str]) -> None:
+            if part and part not in seen_parts:
+                seen_parts.add(part)
+                context_parts.append(part)
+
+        if isinstance(provenance, Mapping):
+            subset_value = _as_float(provenance.get("subset_percent"))
+            if subset_value is not None:
+                _add_part(f"subset={subset_value:g}")
+            pack_seed_value = _as_int(provenance.get("pack_seed"))
+            if pack_seed_value is not None:
+                _add_part(f"pack_seed={pack_seed_value}")
+            for field in ("train_pack_name", "train_pack"):
+                pack_value = provenance.get(field)
+                if isinstance(pack_value, str) and pack_value.strip():
+                    _add_part(f"pack={pack_value.strip()}")
+                    break
+
+        if isinstance(entry, Mapping):
+            pack_spec_value = entry.get("pack_spec")
+            if isinstance(pack_spec_value, str) and pack_spec_value.strip():
+                _add_part(f"pack_spec={Path(pack_spec_value.strip()).name}")
+            for path_key in ("path", "csv_path"):
+                path_value = entry.get(path_key)
+                if isinstance(path_value, str) and path_value.strip():
+                    _add_part(f"path={Path(path_value.strip()).name}")
+                    break
+
+        if not context_parts:
+            return base_key
+        context = ";".join(context_parts)
+        return f"{base_key}[{context}]"
+
     def _validate_csv_hashes(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
         digests: Dict[str, str] = {}
+        provenance = payload.get("provenance")
+        if isinstance(provenance, Mapping):
+            provenance_mapping: Mapping[str, Any] = provenance
+        else:
+            provenance_mapping = {}
+
         data_block = payload.get("data")
         if isinstance(data_block, Mapping):
             for split in ("train", "val", "test"):
@@ -510,18 +567,36 @@ class ResultLoader:
                 if isinstance(entry, Mapping):
                     sha_value = entry.get("sha256")
                     if isinstance(sha_value, str) and sha_value.strip():
-                        digests[f"data.{split}.sha256"] = sha_value.strip().lower()
-        provenance = payload.get("provenance")
+                        base_key = f"data.{split}.sha256"
+                        contextual_key = self._contextualise_csv_digest_key(
+                            base_key,
+                            split=split,
+                            provenance=provenance_mapping,
+                            entry=entry,
+                        )
+                        digests[contextual_key] = sha_value.strip().lower()
         if isinstance(provenance, Mapping):
             for key, value in provenance.items():
                 if isinstance(value, Mapping):
                     nested_sha = value.get("csv_sha256")
                     if isinstance(nested_sha, str) and nested_sha.strip():
-                        digests[f"{key}.csv_sha256"] = nested_sha.strip().lower()
+                        base_key = f"{key}.csv_sha256"
+                        contextual_key = self._contextualise_csv_digest_key(
+                            base_key,
+                            split="train" if str(key).endswith("train") else None,
+                            provenance=provenance_mapping,
+                            entry=value,
+                        )
+                        digests[contextual_key] = nested_sha.strip().lower()
                 elif isinstance(value, str) and key.endswith("_csv_sha256"):
                     text = value.strip().lower()
                     if text:
-                        digests[key] = text
+                        contextual_key = self._contextualise_csv_digest_key(
+                            key,
+                            split="train" if key.startswith("train_") else None,
+                            provenance=provenance_mapping,
+                        )
+                        digests[contextual_key] = text
         if not digests:
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' does not declare any dataset sha256 digests"
