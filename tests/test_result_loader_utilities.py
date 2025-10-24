@@ -138,6 +138,27 @@ def test_result_loader_ignores_debug_sections(tmp_path: Path) -> None:
     assert "debug" not in primary_block
 
 
+def test_result_loader_allows_distinct_train_csv_hashes_for_subsets(tmp_path: Path) -> None:
+    curve_path = _write_curve(tmp_path)
+    loader = ResultLoader(exp_id="exp1", required_curve_keys=("pr",))
+
+    payload_subset_5 = _make_payload(curve_path)
+    payload_subset_5.setdefault("provenance", {})["subset_percent"] = 5.0
+    payload_subset_5["data"]["train"]["sha256"] = "subset-five"
+    loader.validate(tmp_path / "run_subset_5.json", payload_subset_5)
+
+    payload_subset_10 = _make_payload(curve_path)
+    payload_subset_10.setdefault("provenance", {})["subset_percent"] = 10.0
+    payload_subset_10["data"]["train"]["sha256"] = "subset-ten"
+    loader.validate(tmp_path / "run_subset_10.json", payload_subset_10)
+
+    payload_conflict = _make_payload(curve_path)
+    payload_conflict.setdefault("provenance", {})["subset_percent"] = 10.0
+    payload_conflict["data"]["train"]["sha256"] = "conflicting-digest"
+    with pytest.raises(GuardrailViolation):
+        loader.validate(tmp_path / "run_conflict.json", payload_conflict)
+
+
 def test_result_loader_normalises_legacy_blocks() -> None:
     loader = ResultLoader(exp_id="exp1")
     payload = {
