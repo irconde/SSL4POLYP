@@ -1446,10 +1446,45 @@ def _render_learning_table(curves: Mapping[str, Dict[float, Mapping[str, float]]
     return rows
 
 
-def _render_slope_table(slopes: Mapping[str, Dict[str, float]]) -> List[str]:
+def _render_slope_table(slopes: Mapping[str, Mapping[str, Dict[str, float]]]) -> List[str]:
     if not slopes:
         return ["No slope data available."]
-    intervals = sorted({interval for stats in slopes.values() for interval in stats.keys()}, key=_interval_sort_key)
+
+    metric_tables: List[str] = []
+    rendered_any = False
+
+    for metric in PRIMARY_METRICS:
+        metric_slopes_obj = slopes.get(metric)
+        metric_slopes = metric_slopes_obj if isinstance(metric_slopes_obj, Mapping) else {}
+        if not metric_slopes:
+            continue
+        rows = _render_metric_slope_table(metric_slopes)
+        if not rows:
+            continue
+        rendered_any = True
+        metric_tables.append(f"### {METRIC_LABELS.get(metric, metric.upper())}")
+        metric_tables.extend(rows)
+        metric_tables.append("")
+
+    if rendered_any:
+        if metric_tables and metric_tables[-1] == "":
+            metric_tables.pop()
+        return metric_tables
+
+    # Fall back to treating the input as already model-indexed (legacy structure).
+    fallback_rows = _render_metric_slope_table(slopes)  # type: ignore[arg-type]
+    return fallback_rows or ["No slope data available."]
+
+
+def _render_metric_slope_table(slopes: Mapping[str, Dict[str, float]]) -> List[str]:
+    if not slopes:
+        return []
+    intervals = sorted(
+        {interval for stats in slopes.values() for interval in stats.keys()},
+        key=_interval_sort_key,
+    )
+    if not intervals:
+        return []
     ordered_models = _ordered_models(slopes.keys())
     header = "| Model | " + " | ".join(intervals) + " |"
     separator = "|" + " --- |" * (len(intervals) + 1)
