@@ -89,9 +89,11 @@ def _get_loader(*, strict: bool = True) -> ResultLoader:
 
 def _normalise_case_id(raw: Optional[str], fallback_index: int) -> str:
     if raw is None:
-        return f"case_{fallback_index}"
+        raise ValueError("Missing case identifier in outputs CSV")
     text = str(raw).strip()
-    return text or f"case_{fallback_index}"
+    if not text:
+        raise ValueError("Empty case identifier in outputs CSV")
+    return text
 
 
 def _normalise_morphology(raw: Optional[str]) -> str:
@@ -117,6 +119,52 @@ def _infer_percent_from_name(metrics_path: Path) -> float:
     if match is not None:
         return float(match.group(1))
     return 100.0
+
+
+def _validate_case_ids(
+    colon_run: RunResult,
+    baseline_run: RunResult,
+    *,
+    context: str,
+) -> List[str]:
+    colon_ids = set(colon_run.cases.keys())
+    baseline_ids = set(baseline_run.cases.keys())
+    if not colon_ids and not baseline_ids:
+        return []
+    missing_in_colon = sorted(baseline_ids - colon_ids)
+    missing_in_baseline = sorted(colon_ids - baseline_ids)
+    if missing_in_colon or missing_in_baseline:
+        raise ValueError(
+            (
+                f"{context}: case identifiers differ between {colon_run.metrics_path} "
+                f"and {baseline_run.metrics_path}. Missing in colon run: {missing_in_colon}; "
+                f"missing in baseline run: {missing_in_baseline}"
+            )
+        )
+    return sorted(colon_ids)
+
+
+def _get_metric_from_cases(
+    run: RunResult,
+    case_ids: Sequence[str],
+    metric: str,
+    source: str,
+) -> Optional[float]:
+    if not case_ids:
+        return None
+    frames: List[FrameRecord] = []
+    for case_id in case_ids:
+        frames.extend(run.cases.get(case_id, ()))
+    if not frames:
+        return None
+    metrics = compute_strata_metrics(frames, _resolve_tau(run, source))
+    value = metrics.get("overall", {}).get(metric)
+    if value is None:
+        return None
+    numeric = float(value)
+    if math.isnan(numeric):
+        return None
+    return numeric
 
 
 def _infer_seed_from_name(metrics_path: Path) -> Optional[int]:
@@ -172,7 +220,10 @@ def _load_outputs(outputs_path: Path, tau: float) -> Tuple[List[FrameRecord], Di
             pred_value = _coerce_int(row.get("pred"))
             if pred_value is None:
                 pred_value = 1 if prob >= tau else 0
-            case_id = _normalise_case_id(row.get("case_id") or row.get("sequence_id"), index)
+            try:
+                case_id = _normalise_case_id(row.get("case_id") or row.get("sequence_id"), index)
+            except ValueError as exc:
+                raise ValueError(f"{exc} (row {index} of {outputs_path})") from exc
             morph = _normalise_morphology(row.get("morphology"))
             record = FrameRecord(prob=float(prob), label=int(label), pred=int(pred_value), case_id=case_id, morphology=morph)
             frames.append(record)
@@ -499,8 +550,17 @@ def compute_pairwise_deltas(
             seeds = list(expected_seeds)
             deltas: List[float] = []
             for seed in seeds:
-                colon_value = _get_metric_value(colon_by_seed[seed], metric, source)
-                baseline_value = _get_metric_value(baseline_by_seed[seed], metric, source)
+                colon_run = colon_by_seed[seed]
+                baseline_run = baseline_by_seed[seed]
+                case_ids = _validate_case_ids(
+                    colon_run,
+                    baseline_run,
+                    context=f"Experiment 4 pairwise Δ at p{percent:g}, seed {seed}",
+                )
+                if not case_ids:
+                    continue
+                colon_value = _get_metric_from_cases(colon_run, case_ids, metric, source)
+                baseline_value = _get_metric_from_cases(baseline_run, case_ids, metric, source)
                 if colon_value is None or baseline_value is None:
                     continue
                 deltas.append(float(colon_value) - float(baseline_value))
@@ -566,17 +626,30 @@ def compute_aulc_deltas(
         sorted_seeds = list(expected_seeds)
         deltas: List[float] = []
         for seed in sorted_seeds:
-            colon_values = [
-                _get_metric_value(colon_runs[p][seed], metric, source) for p in shared_percents
-            ]
-            baseline_values = [
-                _get_metric_value(baseline_runs[p][seed], metric, source) for p in shared_percents
-            ]
-            if any(value is None for value in colon_values + baseline_values):
-                continue
-            colon_series = [float(v) for v in colon_values if v is not None]
-            baseline_series = [float(v) for v in baseline_values if v is not None]
-            if len(colon_series) != len(shared_percents) or len(baseline_series) != len(shared_percents):
+            colon_series: List[float] = []
+            baseline_series: List[float] = []
+            valid = True
+            for percent in shared_percents:
+                colon_run = colon_runs[percent][seed]
+                baseline_run = baseline_runs[percent][seed]
+                case_ids = _validate_case_ids(
+                    colon_run,
+                    baseline_run,
+                    context=(
+                        f"Experiment 4 ΔAULC vs {baseline} at p{percent:g}, seed {seed}"
+                    ),
+                )
+                if not case_ids:
+                    valid = False
+                    break
+                colon_value = _get_metric_from_cases(colon_run, case_ids, metric, source)
+                baseline_value = _get_metric_from_cases(baseline_run, case_ids, metric, source)
+                if colon_value is None or baseline_value is None:
+                    valid = False
+                    break
+                colon_series.append(float(colon_value))
+                baseline_series.append(float(baseline_value))
+            if not valid:
                 continue
             colon_aulc = compute_aulc_from_series(shared_percents, colon_series)
             baseline_aulc = compute_aulc_from_series(shared_percents, baseline_series)
@@ -704,7 +777,11 @@ def bootstrap_metric_delta_with_expected(
         for seed in seeds:
             colon_run = colon_runs[seed]
             baseline_run = baseline_runs[seed]
-            case_ids = sorted(set(colon_run.cases.keys()) & set(baseline_run.cases.keys()))
+            case_ids = _validate_case_ids(
+                colon_run,
+                baseline_run,
+                context=f"Experiment 4 bootstrap metric delta (seed {seed})",
+            )
             if not case_ids:
                 valid = False
                 break
@@ -782,7 +859,14 @@ def bootstrap_aulc_delta_with_expected(
             for percent in percents:
                 colon_run = colon_runs[percent][seed]
                 baseline_run = baseline_runs[percent][seed]
-                case_ids = sorted(set(colon_run.cases.keys()) & set(baseline_run.cases.keys()))
+                case_ids = _validate_case_ids(
+                    colon_run,
+                    baseline_run,
+                    context=(
+                        "Experiment 4 bootstrap ΔAULC "
+                        f"(seed {seed}, percent {percent:g})"
+                    ),
+                )
                 if not case_ids:
                     valid = False
                     break
