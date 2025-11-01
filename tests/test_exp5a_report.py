@@ -156,7 +156,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "run": {"exp": "exp5a"},
         "provenance": {
             "model": "ssl_colon",
-            "test_outputs_csv_sha256": "deadbeef",
+            "test_csv_sha256": "deadbeef",
         },
     }
     sup_metrics_template = {
@@ -193,7 +193,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "run": {"exp": "exp5a"},
         "provenance": {
             "model": "sup_imnet",
-            "test_outputs_csv_sha256": "deadbeef",
+            "test_csv_sha256": "deadbeef",
         },
     }
     ssl_metrics_template = {
@@ -230,7 +230,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         "run": {"exp": "exp5a"},
         "provenance": {
             "model": "ssl_imnet",
-            "test_outputs_csv_sha256": "deadbeef",
+            "test_csv_sha256": "deadbeef",
         },
     }
     for seed in EXPECTED_SEEDS:
@@ -313,7 +313,7 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
         "run": {"exp": "exp5a"},
         "provenance": {
             "model": "ssl_colon",
-            "test_outputs_csv_sha256": "deadbeef",
+            "test_csv_sha256": "deadbeef",
             "parent_run": {
                 "metrics": {
                     "path": "../sun_parent/seed1.metrics.json",
@@ -343,6 +343,69 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
     assert run.sun_tau == 0.4
     assert run.sun_frames is not None
     assert len(run.frames) == 4
+
+
+def test_load_run_accepts_legacy_outputs_sha(tmp_path: Path) -> None:
+    runs_root = tmp_path / "results"
+    colon_dir = runs_root / "ssl_colon" / "seed1"
+    sun_dir = runs_root / "sun_parent"
+    outputs_path = colon_dir / "ssl_colon__seed1_last_test_outputs.csv"
+    sun_outputs_path = sun_dir / "seed1_test_outputs.csv"
+    _write_outputs(outputs_path, _polyp_rows())
+    _write_outputs(sun_outputs_path, _sun_rows())
+    alt_sun_outputs_path = colon_dir.parent / "sun_parent" / "seed1_test_outputs.csv"
+    _write_outputs(alt_sun_outputs_path, _sun_rows())
+    val_path = _data_block()["val"]["path"]
+    metrics_payload = {
+        "seed": 1,
+        "data": _data_block(),
+        "test_primary": {
+            "tau": 0.4,
+            "auprc": 0.75,
+            "auroc": 0.88,
+            "f1": 0.7,
+            "recall": 0.72,
+            "precision": 0.78,
+            "balanced_accuracy": 0.83,
+            "mcc": 0.61,
+            "loss": 0.2,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+            "prevalence": 0.5,
+        },
+        "thresholds": {
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.4,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
+        },
+        "val": {"path": val_path},
+        "run": {"exp": "exp5a"},
+        "provenance": {
+            "model": "ssl_colon",
+            "test_outputs_csv_sha256": "cafebabe",
+            "parent_run": {
+                "metrics": {
+                    "path": "../sun_parent/seed1.metrics.json",
+                    "payload": _sun_payload(tau=0.4, offset=-0.05),
+                },
+                "outputs": {
+                    "path": "../sun_parent/seed1_test_outputs.csv",
+                },
+            },
+        },
+    }
+    metrics_path = colon_dir / "ssl_colon__seed1_last.metrics.json"
+    _write_metrics(metrics_path, metrics_payload)
+    run = load_run(metrics_path)
+    assert run.outputs_sha256 == "cafebabe"
 
 
 def test_load_run_raises_when_tau_mismatch(tmp_path: Path) -> None:
@@ -388,7 +451,7 @@ def test_load_run_raises_when_tau_mismatch(tmp_path: Path) -> None:
         "run": {"exp": "exp5a"},
         "provenance": {
             "model": "ssl_colon",
-            "test_outputs_csv_sha256": "deadbeef",
+            "test_csv_sha256": "deadbeef",
             "parent_run": {
                 "metrics": {
                     "path": "../sun_parent/seed1.metrics.json",
