@@ -454,10 +454,14 @@ def load_run(
             delta_metrics.setdefault(metric, value)
     frames = _frames_to_eval(base_run.frames)
     composition = _compute_composition(test_metrics, frames)
-    outputs_sha = _clean_text(provenance.get("test_outputs_csv_sha256"))
+    outputs_sha = _clean_text(
+        provenance.get("test_outputs_csv_sha256")
+        or provenance.get("test_csv_sha256")
+    )
     if outputs_sha is None:
         raise ValueError(
-            f"Missing provenance.test_outputs_csv_sha256 for run at {metrics_path}"
+            "Missing provenance.test_outputs_csv_sha256 or provenance.test_csv_sha256 "
+            f"for run at {metrics_path}"
         )
     return Exp5ARun(
         model=base_run.model,
@@ -749,7 +753,7 @@ def summarize_runs(
         for run in all_runs[1:]:
             if run.outputs_sha256 != reference_sha:
                 raise ValueError(
-                    "Mismatched test_outputs_csv_sha256 across Experiment 5A runs"
+                    "Mismatched test CSV SHA256 digest across Experiment 5A runs"
                 )
             comp = run.composition
             if comp.n_pos != reference_comp.n_pos or comp.n_neg != reference_comp.n_neg:
