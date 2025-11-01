@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import math
 from collections import defaultdict
 from dataclasses import dataclass
@@ -9,6 +10,8 @@ from types import MappingProxyType
 from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
+
+from reporting.threshold_specs import THRESHOLD_SPECS
 
 from .common_loader import (
     CommonFrame,
@@ -295,6 +298,45 @@ def _load_parent_payload(provenance: Mapping[str, Any], metrics_path: Path) -> T
     return payload, parent_metrics_path, parent_outputs_path
 
 
+def _infer_parent_experiment(
+    parent_payload: Optional[Mapping[str, Any]], metrics_path: Path
+) -> Optional[str]:
+    def _extract(block: Mapping[str, Any]) -> Optional[str]:
+        run_block = block.get("run") if isinstance(block.get("run"), Mapping) else None
+        if not isinstance(run_block, Mapping):
+            return None
+        for key in ("exp", "experiment"):
+            candidate = _clean_text(run_block.get(key)) if key in run_block else None
+            if candidate:
+                return candidate.lower()
+        return None
+
+    if isinstance(parent_payload, Mapping):
+        inferred = _extract(parent_payload)
+        if inferred:
+            return inferred
+    try:
+        raw = json.loads(metrics_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    if isinstance(raw, Mapping):
+        inferred = _extract(raw)
+        if inferred:
+            return inferred
+    return None
+
+
+def _resolve_parent_loader(
+    parent_payload: Optional[Mapping[str, Any]], metrics_path: Path
+) -> Optional[ResultLoader]:
+    exp_id = _infer_parent_experiment(parent_payload, metrics_path)
+    if not exp_id or exp_id == "exp5a":
+        return None
+    if exp_id not in THRESHOLD_SPECS:
+        return None
+    return get_default_loader(exp_id=exp_id)
+
+
 def _derive_delta(
     polyp_metrics: Mapping[str, float],
     sun_metrics: Mapping[str, float],
@@ -348,11 +390,19 @@ def load_run(
     sun_frames: Optional[Dict[str, EvalFrame]] = None
     base_tau = _coerce_float(base_run.tau)
     if parent_metrics_path and parent_metrics_path.exists():
+        parent_run = None
         try:
             parent_run = load_common_run(parent_metrics_path, loader=active_loader)
-        except (OSError, ValueError, GuardrailViolation):
+        except GuardrailViolation:
+            fallback_loader = _resolve_parent_loader(parent_payload, parent_metrics_path)
+            if fallback_loader is not None:
+                try:
+                    parent_run = load_common_run(parent_metrics_path, loader=fallback_loader)
+                except (OSError, ValueError, GuardrailViolation):
+                    parent_run = None
+        except (OSError, ValueError):
             parent_run = None
-        else:
+        if parent_run is not None:
             sun_metrics = dict(parent_run.primary_metrics)
             sun_tau = _coerce_float(parent_run.tau)
             sun_frames = _frames_to_eval(parent_run.frames)
