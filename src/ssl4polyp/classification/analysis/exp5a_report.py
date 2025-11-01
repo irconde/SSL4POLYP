@@ -339,14 +339,12 @@ def load_run(
     parent_payload, parent_metrics_path, parent_outputs_path = _load_parent_payload(
         provenance, metrics_path
     )
-    sun_metrics = _extract_metrics(
-        parent_payload.get("test_primary") if isinstance(parent_payload, Mapping) else None
-    )
-    if not sun_metrics:
-        raise ValueError(
-            f"Missing SUN baseline metrics for Experiment 5A run at {metrics_path}"
-        )
-    sun_tau = _coerce_float(sun_metrics.get("tau"))
+    sun_metrics: Dict[str, float] = {}
+    if isinstance(parent_payload, Mapping):
+        extracted_metrics = _extract_metrics(parent_payload.get("test_primary"))
+        if extracted_metrics:
+            sun_metrics = dict(extracted_metrics)
+    sun_tau = _coerce_float(sun_metrics.get("tau")) if sun_metrics else None
     sun_frames: Optional[Dict[str, EvalFrame]] = None
     base_tau = _coerce_float(base_run.tau)
     if parent_metrics_path and parent_metrics_path.exists():
@@ -358,6 +356,10 @@ def load_run(
             sun_metrics = dict(parent_run.primary_metrics)
             sun_tau = _coerce_float(parent_run.tau)
             sun_frames = _frames_to_eval(parent_run.frames)
+    if not sun_metrics:
+        raise ValueError(
+            f"Missing SUN baseline metrics for Experiment 5A run at {metrics_path}"
+        )
     if sun_frames is None and parent_outputs_path and parent_outputs_path.exists():
         if sun_tau is not None:
             try:
