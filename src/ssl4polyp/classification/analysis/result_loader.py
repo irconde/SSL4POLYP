@@ -230,7 +230,13 @@ class ResultLoader:
         return obj
 
     def _normalize_blocks(self, metrics_path: Path, payload: Mapping[str, Any]) -> None:
-        bad = [key for key in payload.keys() if isinstance(key, str) and key.startswith("eval_")]
+        bad = [
+            key
+            for key in payload.keys()
+            if isinstance(key, str)
+            and key.startswith("eval_")
+            and key != "eval_only"
+        ]
         if bad:
             raise GuardrailViolation(
                 f"Metrics file '{metrics_path}' contains disallowed evaluation keys: {sorted(bad)}"
