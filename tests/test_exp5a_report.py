@@ -102,7 +102,9 @@ def _sun_payload(tau: float, offset: float) -> dict[str, object]:
     }
 
 
-def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
+def _build_summary(
+    tmp_path: Path, *, bootstrap: int = 10, include_sha: bool = True
+) -> dict[str, object]:
     root = tmp_path / "results"
     sun_root = root / "sun_parent"
     for seed in EXPECTED_SEEDS:
@@ -122,6 +124,9 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         _write_outputs((ssl_dir.parent / "sun_parent" / f"seed{seed}_test_outputs.csv"), _sun_rows())
     parent_payload = _sun_payload(tau=0.45, offset=-0.08)
     val_path = _data_block()["val"]["path"]
+    colon_provenance = {"model": "ssl_colon"}
+    if include_sha:
+        colon_provenance["test_csv_sha256"] = "deadbeef"
     colon_metrics_template = {
         "seed": 0,
         "data": _data_block(),
@@ -154,11 +159,11 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         },
         "val": {"path": val_path},
         "run": {"exp": "exp5a"},
-        "provenance": {
-            "model": "ssl_colon",
-            "test_csv_sha256": "deadbeef",
-        },
+        "provenance": colon_provenance,
     }
+    sup_provenance = {"model": "sup_imnet"}
+    if include_sha:
+        sup_provenance["test_csv_sha256"] = "deadbeef"
     sup_metrics_template = {
         "seed": 0,
         "data": _data_block(),
@@ -191,11 +196,11 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         },
         "val": {"path": val_path},
         "run": {"exp": "exp5a"},
-        "provenance": {
-            "model": "sup_imnet",
-            "test_csv_sha256": "deadbeef",
-        },
+        "provenance": sup_provenance,
     }
+    ssl_provenance = {"model": "ssl_imnet"}
+    if include_sha:
+        ssl_provenance["test_csv_sha256"] = "deadbeef"
     ssl_metrics_template = {
         "seed": 0,
         "data": _data_block(),
@@ -228,10 +233,7 @@ def _build_summary(tmp_path: Path, *, bootstrap: int = 10) -> dict[str, object]:
         },
         "val": {"path": val_path},
         "run": {"exp": "exp5a"},
-        "provenance": {
-            "model": "ssl_imnet",
-            "test_csv_sha256": "deadbeef",
-        },
+        "provenance": ssl_provenance,
     }
     for seed in EXPECTED_SEEDS:
         colon_metrics_seed = copy.deepcopy(colon_metrics_template)
@@ -408,6 +410,68 @@ def test_load_run_accepts_legacy_outputs_sha(tmp_path: Path) -> None:
     assert run.outputs_sha256 == "cafebabe"
 
 
+def test_load_run_allows_missing_outputs_sha(tmp_path: Path) -> None:
+    runs_root = tmp_path / "results"
+    colon_dir = runs_root / "ssl_colon" / "seed1"
+    sun_dir = runs_root / "sun_parent"
+    outputs_path = colon_dir / "ssl_colon__seed1_last_test_outputs.csv"
+    sun_outputs_path = sun_dir / "seed1_test_outputs.csv"
+    _write_outputs(outputs_path, _polyp_rows())
+    _write_outputs(sun_outputs_path, _sun_rows())
+    alt_sun_outputs_path = colon_dir.parent / "sun_parent" / "seed1_test_outputs.csv"
+    _write_outputs(alt_sun_outputs_path, _sun_rows())
+    val_path = _data_block()["val"]["path"]
+    metrics_payload = {
+        "seed": 1,
+        "data": _data_block(),
+        "test_primary": {
+            "tau": 0.4,
+            "auprc": 0.75,
+            "auroc": 0.88,
+            "f1": 0.7,
+            "recall": 0.72,
+            "precision": 0.78,
+            "balanced_accuracy": 0.83,
+            "mcc": 0.61,
+            "loss": 0.2,
+            "tp": 2,
+            "fp": 0,
+            "tn": 2,
+            "fn": 0,
+            "n_pos": 2,
+            "n_neg": 2,
+            "prevalence": 0.5,
+        },
+        "thresholds": {
+            "primary": {
+                "policy": "sun_val_frozen",
+                "tau": 0.4,
+                "split": val_path,
+                "source_split": "sun_full/val",
+                "source_checkpoint": "sun_parent/seed1.pth",
+            },
+        },
+        "val": {"path": val_path},
+        "run": {"exp": "exp5a"},
+        "provenance": {
+            "model": "ssl_colon",
+            "parent_run": {
+                "metrics": {
+                    "path": "../sun_parent/seed1.metrics.json",
+                    "payload": _sun_payload(tau=0.4, offset=-0.05),
+                },
+                "outputs": {
+                    "path": "../sun_parent/seed1_test_outputs.csv",
+                },
+            },
+        },
+    }
+    metrics_path = colon_dir / "ssl_colon__seed1_last.metrics.json"
+    _write_metrics(metrics_path, metrics_payload)
+    run = load_run(metrics_path)
+    assert run.outputs_sha256 is None
+
+
 def test_load_run_raises_when_tau_mismatch(tmp_path: Path) -> None:
     runs_root = tmp_path / "results"
     colon_dir = runs_root / "ssl_colon" / "seed1"
@@ -517,6 +581,13 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
         assert metric in pairwise
         for baseline in ("sup_imnet", "ssl_imnet"):
             assert baseline in pairwise[metric]
+
+
+def test_summarize_runs_handles_missing_outputs_sha(tmp_path: Path) -> None:
+    summary = _build_summary(tmp_path, bootstrap=8, include_sha=False)
+    composition = summary.get("composition")
+    assert isinstance(composition, dict)
+    assert "sha256" not in composition
 
 
 def test_extended_delta_metrics_propagate_to_csv(tmp_path: Path) -> None:
