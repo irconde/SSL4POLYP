@@ -354,7 +354,7 @@ def _metric_from_frames(
 def _metric_from_case_ids(
     run: RunResult, case_ids: Sequence[str], metric: str, source: str
 ) -> Optional[float]:
-    if not case_ids:
+    if case_ids is None or len(case_ids) == 0:
         return None
     if metric in _FRAME_LEVEL_METRICS:
         return _metric_from_frames(run, case_ids, metric, source)
