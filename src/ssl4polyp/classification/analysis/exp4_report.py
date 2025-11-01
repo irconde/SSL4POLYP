@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import math
 import re
 from collections import defaultdict
@@ -59,6 +60,9 @@ TARGET_MODEL = "ssl_colon"
 BASELINE_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet")
 PREFERRED_MODELS: Tuple[str, ...] = ("sup_imnet", "ssl_imnet", "ssl_colon")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -575,6 +579,7 @@ def compute_pairwise_deltas(
                 rng_seed=rng_seed,
                 expected_seeds=expected_seeds,
                 source=source,
+                log_context=f"{metric} vs {baseline} @p{percent:g}",
             )
             ci = compute_ci_bounds(replicates)
             per_percent[percent] = {
@@ -668,6 +673,7 @@ def compute_aulc_deltas(
             rng_seed=rng_seed,
             expected_seeds=expected_seeds,
             source=source,
+            log_context=f"{metric} vs {baseline}",
         )
         ci = compute_ci_bounds(replicates)
         results[baseline] = {
@@ -739,6 +745,8 @@ def bootstrap_metric_delta(
     bootstrap: int,
     rng_seed: int,
     source: str = "metrics",
+    log_interval: int = 100,
+    log_context: Optional[str] = None,
 ) -> List[float]:
     return bootstrap_metric_delta_with_expected(
         colon_runs,
@@ -748,6 +756,8 @@ def bootstrap_metric_delta(
         rng_seed=rng_seed,
         expected_seeds=EXPECTED_SEEDS,
         source=source,
+        log_interval=log_interval,
+        log_context=log_context,
     )
 
 
@@ -760,6 +770,8 @@ def bootstrap_metric_delta_with_expected(
     rng_seed: int,
     expected_seeds: Sequence[int],
     source: str = "metrics",
+    log_interval: int = 100,
+    log_context: Optional[str] = None,
 ) -> List[float]:
     if bootstrap <= 0:
         return []
@@ -771,6 +783,8 @@ def bootstrap_metric_delta_with_expected(
     seeds = list(expected_seeds)
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
+    context_label = log_context or f"metric={metric}"
+    log_every = max(1, int(log_interval))
     for _ in range(bootstrap):
         deltas_seed: List[float] = []
         valid = True
@@ -809,6 +823,24 @@ def bootstrap_metric_delta_with_expected(
         if not valid or not deltas_seed:
             continue
         replicates.append(float(np.mean(deltas_seed)))
+        if logger.isEnabledFor(logging.INFO):
+            completed = len(replicates)
+            if completed % log_every == 0:
+                logger.info(
+                    "Bootstrap metric delta (%s): %d/%d replicates completed",
+                    context_label,
+                    completed,
+                    bootstrap,
+                )
+    if logger.isEnabledFor(logging.INFO) and replicates:
+        completed = len(replicates)
+        if completed % log_every != 0:
+            logger.info(
+                "Bootstrap metric delta (%s): %d/%d replicates completed",
+                context_label,
+                completed,
+                bootstrap,
+            )
     return replicates
 
 
@@ -821,6 +853,8 @@ def bootstrap_aulc_delta(
     bootstrap: int,
     rng_seed: int,
     source: str = "metrics",
+    log_interval: int = 100,
+    log_context: Optional[str] = None,
 ) -> List[float]:
     return bootstrap_aulc_delta_with_expected(
         colon_runs,
@@ -831,6 +865,8 @@ def bootstrap_aulc_delta(
         rng_seed=rng_seed,
         expected_seeds=EXPECTED_SEEDS,
         source=source,
+        log_interval=log_interval,
+        log_context=log_context,
     )
 
 
@@ -844,12 +880,16 @@ def bootstrap_aulc_delta_with_expected(
     rng_seed: int,
     expected_seeds: Sequence[int],
     source: str = "metrics",
+    log_interval: int = 100,
+    log_context: Optional[str] = None,
 ) -> List[float]:
     if bootstrap <= 0:
         return []
     sorted_seeds = list(expected_seeds)
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
+    context_label = log_context or f"metric={metric}"
+    log_every = max(1, int(log_interval))
     for _ in range(bootstrap):
         deltas_seed: List[float] = []
         valid = True
@@ -903,6 +943,24 @@ def bootstrap_aulc_delta_with_expected(
         if not valid or not deltas_seed:
             continue
         replicates.append(float(np.mean(deltas_seed)))
+        if logger.isEnabledFor(logging.INFO):
+            completed = len(replicates)
+            if completed % log_every == 0:
+                logger.info(
+                    "Bootstrap ΔAULC (%s): %d/%d replicates completed",
+                    context_label,
+                    completed,
+                    bootstrap,
+                )
+    if logger.isEnabledFor(logging.INFO) and replicates:
+        completed = len(replicates)
+        if completed % log_every != 0:
+            logger.info(
+                "Bootstrap ΔAULC (%s): %d/%d replicates completed",
+                context_label,
+                completed,
+                bootstrap,
+            )
     return replicates
 
 
