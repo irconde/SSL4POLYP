@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import json
 from pathlib import Path
 
@@ -62,12 +63,21 @@ def parse_args() -> argparse.Namespace:
         action="store_false",
         help="Disable strict guardrail enforcement (not recommended).",
     )
+    parser.add_argument(
+        "--log-progress",
+        action="store_true",
+        help=(
+            "Enable INFO-level logging to display bootstrap progress updates during report generation."
+        ),
+    )
     parser.set_defaults(strict=True)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.log_progress:
+        logging.basicConfig(level=logging.INFO)
     runs, summary, loader = collect_summary(
         args.runs_root,
         bootstrap=args.bootstrap,
