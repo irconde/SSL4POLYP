@@ -66,6 +66,18 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class CaseMetricPrimitives:
+    tp: int
+    fp: int
+    tn: int
+    fn: int
+    n_pos: int
+    n_neg: int
+    count: int
+    loss_sum: float
+
+
+@dataclass
 class RunResult:
     model: str
     percent: float
@@ -78,6 +90,7 @@ class RunResult:
     morphology: Dict[str, Dict[str, float]]
     frames: List[FrameRecord]
     cases: Dict[str, List[FrameRecord]]
+    case_primitives: Dict[str, Dict[str, CaseMetricPrimitives]]
     provenance: Dict[str, object]
     metrics_path: Path
 
@@ -154,21 +167,7 @@ def _get_metric_from_cases(
     metric: str,
     source: str,
 ) -> Optional[float]:
-    if not case_ids:
-        return None
-    frames: List[FrameRecord] = []
-    for case_id in case_ids:
-        frames.extend(run.cases.get(case_id, ()))
-    if not frames:
-        return None
-    metrics = compute_strata_metrics(frames, _resolve_tau(run, source))
-    value = metrics.get("overall", {}).get(metric)
-    if value is None:
-        return None
-    numeric = float(value)
-    if math.isnan(numeric):
-        return None
-    return numeric
+    return _metric_from_case_ids(run, case_ids, metric, source)
 
 
 def _infer_seed_from_name(metrics_path: Path) -> Optional[int]:
@@ -205,6 +204,173 @@ def _resolve_tau(run: RunResult, source: str) -> float:
             raise ValueError("Run is missing sensitivity tau value")
         return float(run.sensitivity_tau)
     raise ValueError(f"Unsupported metric source '{source}'")
+
+
+_FRAME_LEVEL_METRICS = {"auprc", "auroc"}
+_EPS = 1e-12
+
+
+def _compute_case_primitives_for_tau(
+    cases: Mapping[str, Sequence[FrameRecord]], tau: float
+) -> Dict[str, CaseMetricPrimitives]:
+    primitives: Dict[str, CaseMetricPrimitives] = {}
+    threshold = float(tau)
+    for case_id, frames in cases.items():
+        tp = fp = tn = fn = 0
+        n_pos = n_neg = 0
+        loss_sum = 0.0
+        for record in frames:
+            prob = float(record.prob)
+            label = int(record.label)
+            if label == 1:
+                n_pos += 1
+            else:
+                n_neg += 1
+            pred = 1 if prob >= threshold else 0
+            if pred == 1 and label == 1:
+                tp += 1
+            elif pred == 1 and label == 0:
+                fp += 1
+            elif pred == 0 and label == 0:
+                tn += 1
+            elif pred == 0 and label == 1:
+                fn += 1
+            clipped = min(max(prob, _EPS), 1.0 - _EPS)
+            loss_sum += -(label * math.log(clipped) + (1 - label) * math.log(1 - clipped))
+        primitives[case_id] = CaseMetricPrimitives(
+            tp=tp,
+            fp=fp,
+            tn=tn,
+            fn=fn,
+            n_pos=n_pos,
+            n_neg=n_neg,
+            count=n_pos + n_neg,
+            loss_sum=float(loss_sum),
+        )
+    return primitives
+
+
+def _sum_case_primitives(
+    primitives: Mapping[str, CaseMetricPrimitives], case_ids: Sequence[str]
+) -> Optional[CaseMetricPrimitives]:
+    tp = fp = tn = fn = 0
+    n_pos = n_neg = count = 0
+    loss_sum = 0.0
+    for raw_id in case_ids:
+        case_id = str(raw_id)
+        entry = primitives.get(case_id)
+        if entry is None:
+            return None
+        tp += int(entry.tp)
+        fp += int(entry.fp)
+        tn += int(entry.tn)
+        fn += int(entry.fn)
+        n_pos += int(entry.n_pos)
+        n_neg += int(entry.n_neg)
+        count += int(entry.count)
+        loss_sum += float(entry.loss_sum)
+    return CaseMetricPrimitives(
+        tp=tp,
+        fp=fp,
+        tn=tn,
+        fn=fn,
+        n_pos=n_pos,
+        n_neg=n_neg,
+        count=count,
+        loss_sum=float(loss_sum),
+    )
+
+
+def _metric_from_primitives(total: CaseMetricPrimitives, metric: str) -> Optional[float]:
+    key = metric.lower()
+    if key in _FRAME_LEVEL_METRICS:
+        return None
+    tp = float(total.tp)
+    fp = float(total.fp)
+    tn = float(total.tn)
+    fn = float(total.fn)
+    n_pos = float(total.n_pos)
+    n_neg = float(total.n_neg)
+    total_count = float(total.count)
+    if key == "count":
+        return total_count
+    if key == "n_pos":
+        return n_pos
+    if key == "n_neg":
+        return n_neg
+    if key == "prevalence":
+        denom = n_pos + n_neg
+        return n_pos / denom if denom > 0 else float("nan")
+    if key == "loss":
+        return total.loss_sum / total_count if total_count > 0 else float("nan")
+    pos_den = tp + fn
+    neg_den = tn + fp
+    recall = tp / pos_den if pos_den > 0 else 0.0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    if key == "recall":
+        return recall
+    if key == "precision":
+        return precision
+    if key == "f1":
+        denom = precision + recall
+        return (2.0 * precision * recall / denom) if denom > 0 else 0.0
+    if key == "balanced_accuracy":
+        specificity = tn / neg_den if neg_den > 0 else 0.0
+        return 0.5 * (recall + specificity)
+    if key == "mcc":
+        denom = (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)
+        if denom <= 0:
+            return float("nan")
+        return ((tp * tn) - (fp * fn)) / math.sqrt(denom)
+    if key in {"tp", "fp", "tn", "fn"}:
+        return {
+            "tp": tp,
+            "fp": fp,
+            "tn": tn,
+            "fn": fn,
+        }[key]
+    return None
+
+
+def _metric_from_frames(
+    run: RunResult, case_ids: Sequence[str], metric: str, source: str
+) -> Optional[float]:
+    frames: List[FrameRecord] = []
+    for raw_id in case_ids:
+        case_id = str(raw_id)
+        frames.extend(run.cases.get(case_id, ()))
+    if not frames:
+        return None
+    metrics = compute_strata_metrics(frames, _resolve_tau(run, source))
+    value = metrics.get("overall", {}).get(metric)
+    if value is None:
+        return None
+    numeric = float(value)
+    if math.isnan(numeric):
+        return None
+    return numeric
+
+
+def _metric_from_case_ids(
+    run: RunResult, case_ids: Sequence[str], metric: str, source: str
+) -> Optional[float]:
+    if not case_ids:
+        return None
+    if metric in _FRAME_LEVEL_METRICS:
+        return _metric_from_frames(run, case_ids, metric, source)
+    primitives_map = run.case_primitives.get(source)
+    if primitives_map is None:
+        return _metric_from_frames(run, case_ids, metric, source)
+    totals = _sum_case_primitives(primitives_map, case_ids)
+    if totals is None:
+        return None
+    value = _metric_from_primitives(totals, metric)
+    if value is None:
+        return _metric_from_frames(run, case_ids, metric, source)
+    numeric = float(value)
+    if math.isnan(numeric):
+        return None
+    return numeric
 
 
 def _load_outputs(outputs_path: Path, tau: float) -> Tuple[List[FrameRecord], Dict[str, List[FrameRecord]]]:
@@ -297,6 +463,12 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ru
     outputs_path = _resolve_outputs_path(metrics_path)
     frames, cases = _load_outputs(outputs_path, float(tau_value))
     sensitivity_tau_value = sensitivity_metrics.get("tau")
+    case_primitives: Dict[str, Dict[str, CaseMetricPrimitives]] = {}
+    case_primitives["metrics"] = _compute_case_primitives_for_tau(cases, float(tau_value))
+    if sensitivity_tau_value is not None and not math.isnan(float(sensitivity_tau_value)):
+        case_primitives["sensitivity"] = _compute_case_primitives_for_tau(
+            cases, float(sensitivity_tau_value)
+        )
     return RunResult(
         model=str(model_name),
         percent=float(percent_value),
@@ -309,6 +481,7 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ru
         morphology=morphology,
         frames=frames,
         cases=cases,
+        case_primitives=case_primitives,
         provenance=provenance,
         metrics_path=metrics_path,
     )
@@ -800,26 +973,14 @@ def bootstrap_metric_delta_with_expected(
                 valid = False
                 break
             sampled_ids = rng.choice(case_ids, size=len(case_ids), replace=True)
-            colon_frames: List[FrameRecord] = []
-            baseline_frames: List[FrameRecord] = []
-            for cid in sampled_ids:
-                colon_frames.extend(colon_run.cases[cid])
-                baseline_frames.extend(baseline_run.cases[cid])
-            colon_metrics = compute_strata_metrics(colon_frames, _resolve_tau(colon_run, source))
-            baseline_metrics = compute_strata_metrics(
-                baseline_frames, _resolve_tau(baseline_run, source)
+            colon_value = _metric_from_case_ids(colon_run, sampled_ids, metric, source)
+            baseline_value = _metric_from_case_ids(
+                baseline_run, sampled_ids, metric, source
             )
-            colon_value = colon_metrics.get("overall", {}).get(metric)
-            baseline_value = baseline_metrics.get("overall", {}).get(metric)
             if colon_value is None or baseline_value is None:
                 valid = False
                 break
-            numeric_colon = float(colon_value)
-            numeric_baseline = float(baseline_value)
-            if math.isnan(numeric_colon) or math.isnan(numeric_baseline):
-                valid = False
-                break
-            deltas_seed.append(numeric_colon - numeric_baseline)
+            deltas_seed.append(float(colon_value) - float(baseline_value))
         if not valid or not deltas_seed:
             continue
         replicates.append(float(np.mean(deltas_seed)))
@@ -911,27 +1072,15 @@ def bootstrap_aulc_delta_with_expected(
                     valid = False
                     break
                 sampled_ids = rng.choice(case_ids, size=len(case_ids), replace=True)
-                colon_frames: List[FrameRecord] = []
-                baseline_frames: List[FrameRecord] = []
-                for cid in sampled_ids:
-                    colon_frames.extend(colon_run.cases[cid])
-                    baseline_frames.extend(baseline_run.cases[cid])
-                colon_metrics = compute_strata_metrics(colon_frames, _resolve_tau(colon_run, source))
-                baseline_metrics = compute_strata_metrics(
-                    baseline_frames, _resolve_tau(baseline_run, source)
+                colon_value = _metric_from_case_ids(colon_run, sampled_ids, metric, source)
+                baseline_value = _metric_from_case_ids(
+                    baseline_run, sampled_ids, metric, source
                 )
-                colon_value = colon_metrics.get("overall", {}).get(metric)
-                baseline_value = baseline_metrics.get("overall", {}).get(metric)
                 if colon_value is None or baseline_value is None:
                     valid = False
                     break
-                numeric_colon = float(colon_value)
-                numeric_baseline = float(baseline_value)
-                if math.isnan(numeric_colon) or math.isnan(numeric_baseline):
-                    valid = False
-                    break
-                colon_values.append(numeric_colon)
-                baseline_values.append(numeric_baseline)
+                colon_values.append(float(colon_value))
+                baseline_values.append(float(baseline_value))
             if not valid:
                 break
             colon_aulc = compute_aulc_from_series(percents, colon_values)
