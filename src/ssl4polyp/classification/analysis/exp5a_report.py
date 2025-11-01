@@ -95,7 +95,7 @@ class Exp5ARun:
     provenance: Dict[str, Any]
     metrics_path: Path
     composition: CompositionStats
-    outputs_sha256: str
+    outputs_sha256: Optional[str]
     experiment: Optional[str]
 
 
@@ -458,11 +458,6 @@ def load_run(
         provenance.get("test_outputs_csv_sha256")
         or provenance.get("test_csv_sha256")
     )
-    if outputs_sha is None:
-        raise ValueError(
-            "Missing provenance.test_outputs_csv_sha256 or provenance.test_csv_sha256 "
-            f"for run at {metrics_path}"
-        )
     return Exp5ARun(
         model=base_run.model,
         seed=base_run.seed,
@@ -749,9 +744,20 @@ def summarize_runs(
     if all_runs:
         reference = all_runs[0]
         reference_comp = reference.composition
-        reference_sha = reference.outputs_sha256
+        unique_shas = {
+            run.outputs_sha256 for run in all_runs if run.outputs_sha256
+        }
+        if len(unique_shas) > 1:
+            raise ValueError(
+                "Mismatched test CSV SHA256 digest across Experiment 5A runs"
+            )
+        reference_sha = next(iter(unique_shas)) if unique_shas else None
         for run in all_runs[1:]:
-            if run.outputs_sha256 != reference_sha:
+            if (
+                reference_sha
+                and run.outputs_sha256
+                and run.outputs_sha256 != reference_sha
+            ):
                 raise ValueError(
                     "Mismatched test CSV SHA256 digest across Experiment 5A runs"
                 )
@@ -786,7 +792,8 @@ def summarize_runs(
                 ):
                     raise ValueError("Per-center prevalence mismatch across runs")
         composition_payload = reference_comp.to_dict()
-        composition_payload["sha256"] = reference_sha
+        if reference_sha is not None:
+            composition_payload["sha256"] = reference_sha
         summary["composition"] = composition_payload
     model_entries: Dict[str, Any] = {}
     for model, runs in sorted(runs_by_model.items()):
