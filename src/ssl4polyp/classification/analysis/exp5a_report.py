@@ -3,11 +3,13 @@ from __future__ import annotations
 import csv
 import json
 import math
+import re
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, Callable, DefaultDict, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -25,7 +27,6 @@ from .common_metrics import (
     ClusterSet,
     build_cluster_set,
     compute_binary_metrics,
-    sample_cluster_ids,
     _clean_text,
     _coerce_float,
     _coerce_int,
@@ -66,6 +67,7 @@ class CompositionStats:
     total: int
     prevalence: float
     per_center: Mapping[str, Mapping[str, float]]
+    centerless_frames: Tuple[str, ...]
 
     def to_dict(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -78,6 +80,8 @@ class CompositionStats:
             payload["per_center"] = {
                 key: dict(value) for key, value in self.per_center.items()
             }
+        if self.centerless_frames:
+            payload["centerless_frames"] = list(self.centerless_frames)
         return payload
 
 
@@ -90,8 +94,14 @@ class Exp5ARun:
     delta: Dict[str, float]
     sun_metrics: Dict[str, float]
     frames: Dict[str, EvalFrame]
+    centers: Mapping[str, Tuple[str, ...]]
+    center_ids: Tuple[str, ...]
+    centerless_frames: Tuple[str, ...]
     sun_tau: Optional[float]
     sun_frames: Optional[Dict[str, EvalFrame]]
+    sun_case_index: Optional[Mapping[str, Tuple[str, ...]]]
+    sun_case_ids: Tuple[str, ...]
+    sun_case_missing: Tuple[str, ...]
     provenance: Dict[str, Any]
     metrics_path: Path
     composition: CompositionStats
@@ -103,6 +113,137 @@ def _get_loader(*, strict: bool = True) -> ResultLoader:
     return get_default_loader(exp_id="exp5a", strict=strict)
 
 
+def _extract_center_from_path(value: Optional[object]) -> Optional[str]:
+    text = _clean_text(value)
+    if not text:
+        return None
+    try:
+        candidate = Path(text)
+    except (TypeError, ValueError):
+        return None
+    parts = candidate.parts
+    if not parts:
+        return None
+    for part in parts:
+        cleaned = _clean_text(part)
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        if "center" in lowered or "centre" in lowered:
+            return cleaned
+    stem = candidate.stem
+    if stem:
+        tokens = re.split(r"[\\/_.-]+", stem)
+        for token in tokens:
+            cleaned = _clean_text(token)
+            if not cleaned:
+                continue
+            lowered = cleaned.lower()
+            if "center" in lowered or "centre" in lowered:
+                return cleaned
+    return None
+
+
+def _extract_center_from_row(row: Mapping[str, Any]) -> Optional[str]:
+    explicit_keys = (
+        "center_id",
+        "center",
+        "centre",
+        "center_name",
+        "centre_name",
+    )
+    for key in explicit_keys:
+        if key in row:
+            center = _clean_text(row.get(key))
+            if center:
+                return center
+    origin = _clean_text(row.get("origin"))
+    if origin:
+        return origin
+    path_keys = (
+        "path",
+        "image_path",
+        "img_path",
+        "image",
+        "filepath",
+        "file_path",
+        "source",
+        "source_path",
+    )
+    for key in path_keys:
+        if key in row:
+            center = _extract_center_from_path(row.get(key))
+            if center:
+                return center
+    frame_id = _clean_text(row.get("frame_id"))
+    if frame_id:
+        tokens = re.split(r"[\\/_.-]+", frame_id)
+        for token in tokens:
+            cleaned = _clean_text(token)
+            if not cleaned:
+                continue
+            lowered = cleaned.lower()
+            if "center" in lowered or "centre" in lowered:
+                return cleaned
+    return None
+
+
+def _group_frames(
+    frames: Mapping[str, EvalFrame],
+    *,
+    key_fn: Callable[[EvalFrame], Optional[str]],
+) -> Tuple[Dict[str, Tuple[str, ...]], Tuple[str, ...]]:
+    grouped: DefaultDict[str, List[str]] = defaultdict(list)
+    missing: List[str] = []
+    for frame_id, record in frames.items():
+        key = key_fn(record)
+        if key:
+            grouped[key].append(frame_id)
+        else:
+            missing.append(frame_id)
+    frozen = {key: tuple(values) for key, values in grouped.items()}
+    return frozen, tuple(missing)
+
+
+def _index_by_center(frames: Mapping[str, EvalFrame]) -> Tuple[Dict[str, Tuple[str, ...]], Tuple[str, ...]]:
+    return _group_frames(frames, key_fn=lambda record: record.center_id or record.origin)
+
+
+def _index_by_case(frames: Mapping[str, EvalFrame]) -> Tuple[Dict[str, Tuple[str, ...]], Tuple[str, ...]]:
+    return _group_frames(frames, key_fn=lambda record: record.case_id or record.sequence_id)
+
+
+def _flatten_index(
+    index: Mapping[str, Sequence[str]],
+    keys: Sequence[str],
+) -> List[str]:
+    frame_ids: List[str] = []
+    for key in keys:
+        entries = index.get(key)
+        if not entries:
+            continue
+        frame_ids.extend(entries)
+    return frame_ids
+
+
+def _sample_index(
+    index: Mapping[str, Sequence[str]],
+    keys: Sequence[str],
+    rng: np.random.Generator,
+) -> List[str]:
+    if not keys:
+        return []
+    draw_indices = rng.integers(0, len(keys), size=len(keys))
+    sampled: List[str] = []
+    for draw in draw_indices:
+        key = keys[int(draw)]
+        entries = index.get(key)
+        if not entries:
+            return []
+        sampled.extend(entries)
+    return sampled
+
+
 def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
     mapping: Dict[str, EvalFrame] = {}
     for frame in frames:
@@ -111,7 +252,7 @@ def _frames_to_eval(frames: Iterable[CommonFrame]) -> Dict[str, EvalFrame]:
             case_id = _clean_text(frame.row.get("sequence_id"))
         if case_id is None:
             case_id = _clean_text(frame.case_id)
-        center_id = _clean_text(frame.row.get("center_id")) or _clean_text(frame.row.get("origin"))
+        center_id = _extract_center_from_row(frame.row)
         sequence_id = _clean_text(frame.row.get("sequence_id"))
         origin = _clean_text(frame.row.get("origin"))
         mapping[frame.frame_id] = EvalFrame(
@@ -191,6 +332,8 @@ def _build_cluster_set(frames: Mapping[str, EvalFrame], *, domain: str) -> Clust
 def _compute_composition(
     metrics: Mapping[str, float],
     frames: Mapping[str, EvalFrame],
+    centers: Mapping[str, Tuple[str, ...]],
+    centerless_frames: Sequence[str],
 ) -> CompositionStats:
     def _require_int(value: Optional[float], name: str) -> int:
         numeric = _coerce_float(value)
@@ -224,12 +367,14 @@ def _compute_composition(
             raise ValueError("Confusion matrix counts do not sum to n_pos + n_neg")
 
     per_center_counts: DefaultDict[str, Dict[str, int]] = defaultdict(lambda: {"n_pos": 0, "n_neg": 0})
-    for record in frames.values():
-        center_key = record.center_id or record.origin or record.sequence_id or record.case_id
-        if not center_key:
-            continue
-        label_key = "n_pos" if record.label == 1 else "n_neg"
-        per_center_counts[center_key][label_key] += 1
+    for center_key, frame_ids in centers.items():
+        counts = per_center_counts[center_key]
+        for frame_id in frame_ids:
+            record = frames.get(frame_id)
+            if record is None:
+                continue
+            label_key = "n_pos" if record.label == 1 else "n_neg"
+            counts[label_key] += 1
     per_center: Dict[str, Mapping[str, float]] = {}
     for center, counts in per_center_counts.items():
         center_total = counts["n_pos"] + counts["n_neg"]
@@ -250,6 +395,7 @@ def _compute_composition(
         total=total,
         prevalence=prevalence,
         per_center=MappingProxyType(dict(per_center)),
+        centerless_frames=tuple(centerless_frames),
     )
 
 
@@ -453,11 +599,22 @@ def load_run(
         for metric, value in computed_delta.items():
             delta_metrics.setdefault(metric, value)
     frames = _frames_to_eval(base_run.frames)
-    composition = _compute_composition(test_metrics, frames)
+    center_index_raw, centerless_frames = _index_by_center(frames)
+    centers = MappingProxyType({key: tuple(value) for key, value in center_index_raw.items()})
+    center_ids = tuple(sorted(centers.keys()))
+    composition = _compute_composition(test_metrics, frames, centers, centerless_frames)
     outputs_sha = _clean_text(
         provenance.get("test_outputs_csv_sha256")
         or provenance.get("test_csv_sha256")
     )
+    sun_case_index: Optional[Mapping[str, Tuple[str, ...]]] = None
+    sun_case_ids: Tuple[str, ...] = ()
+    sun_case_missing: Tuple[str, ...] = ()
+    if sun_frames is not None:
+        case_index_raw, case_missing = _index_by_case(sun_frames)
+        sun_case_index = MappingProxyType({key: tuple(value) for key, value in case_index_raw.items()})
+        sun_case_ids = tuple(sorted(sun_case_index.keys()))
+        sun_case_missing = tuple(case_missing)
     return Exp5ARun(
         model=base_run.model,
         seed=base_run.seed,
@@ -466,8 +623,14 @@ def load_run(
         delta=delta_metrics,
         sun_metrics=sun_metrics,
         frames=frames,
+        centers=centers,
+        center_ids=center_ids,
+        centerless_frames=tuple(centerless_frames),
         sun_tau=float(sun_tau),
         sun_frames=sun_frames,
+        sun_case_index=sun_case_index,
+        sun_case_ids=sun_case_ids,
+        sun_case_missing=sun_case_missing,
         provenance=provenance,
         metrics_path=metrics_path,
         composition=composition,
@@ -512,14 +675,18 @@ def _bootstrap_metrics(
     metrics: Sequence[str],
     bootstrap: int,
     rng_seed: int,
+    centers: Sequence[str],
 ) -> Dict[str, List[float]]:
     results: Dict[str, List[float]] = {metric: [] for metric in metrics}
     if bootstrap <= 0:
         return results
-    clusters = _build_cluster_set(run.frames, domain="polypgen")
+    if not centers:
+        return results
+    if not run.centers:
+        return results
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
-        sample_ids = sample_cluster_ids(clusters, rng)
+        sample_ids = _sample_index(run.centers, centers, rng)
         if not sample_ids:
             continue
         metric_values = _as_frames_metrics(run.frames, sample_ids, run.tau)
@@ -531,58 +698,39 @@ def _bootstrap_metrics(
     return results
 
 
-def _joint_sample_cluster_ids(
-    polyp_clusters: ClusterSet,
-    sun_clusters: ClusterSet,
-    rng: np.random.Generator,
-) -> Tuple[List[str], List[str]]:
-    def sample_with_uniform(clusters: Tuple[Tuple[str, ...], ...], uniforms: np.ndarray, count: int) -> List[str]:
-        if count == 0:
-            return []
-        if uniforms.size < count:
-            raise ValueError("Insufficient uniform samples for cluster resampling")
-        indices = np.floor(uniforms[:count] * count).astype(int)
-        indices = np.clip(indices, 0, count - 1)
-        sampled: List[str] = []
-        for idx in indices:
-            sampled.extend(clusters[idx])
-        return sampled
-
-    pos_count = max(len(polyp_clusters.positives), len(sun_clusters.positives))
-    neg_count = max(len(polyp_clusters.negatives), len(sun_clusters.negatives))
-    pos_uniforms = rng.random(pos_count) if pos_count else np.empty(0, dtype=float)
-    neg_uniforms = rng.random(neg_count) if neg_count else np.empty(0, dtype=float)
-
-    polyp_ids: List[str] = []
-    sun_ids: List[str] = []
-    polyp_ids.extend(
-        sample_with_uniform(polyp_clusters.positives, pos_uniforms, len(polyp_clusters.positives))
-    )
-    polyp_ids.extend(
-        sample_with_uniform(polyp_clusters.negatives, neg_uniforms, len(polyp_clusters.negatives))
-    )
-    sun_ids.extend(sample_with_uniform(sun_clusters.positives, pos_uniforms, len(sun_clusters.positives)))
-    sun_ids.extend(sample_with_uniform(sun_clusters.negatives, neg_uniforms, len(sun_clusters.negatives)))
-    return polyp_ids, sun_ids
-
-
 def _bootstrap_domain_shift(
     run: Exp5ARun,
     *,
     metrics: Sequence[str],
     bootstrap: int,
     rng_seed: int,
+    centers: Sequence[str],
+    sun_cases: Optional[Sequence[str]] = None,
 ) -> Dict[str, List[float]]:
     results: Dict[str, List[float]] = {metric: [] for metric in metrics}
     if bootstrap <= 0:
         return results
     if run.sun_frames is None or run.sun_tau is None:
         return results
-    polyp_clusters = _build_cluster_set(run.frames, domain="polypgen")
-    sun_clusters = _build_cluster_set(run.sun_frames, domain="sun")
+    if not centers:
+        return results
+    if not run.centers:
+        return results
+    if run.sun_case_index is None:
+        return results
+    sun_case_keys: Sequence[str]
+    if sun_cases is not None:
+        sun_case_keys = tuple(sun_cases)
+    else:
+        sun_case_keys = run.sun_case_ids
+    if not sun_case_keys:
+        return results
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
-        polyp_ids, sun_ids = _joint_sample_cluster_ids(polyp_clusters, sun_clusters, rng)
+        polyp_ids = _sample_index(run.centers, centers, rng)
+        if not polyp_ids:
+            continue
+        sun_ids = _sample_index(run.sun_case_index, sun_case_keys, rng)
         if not polyp_ids or not sun_ids:
             continue
         polyp_values = _as_frames_metrics(run.frames, polyp_ids, run.tau)
@@ -604,27 +752,34 @@ def _bootstrap_domain_shift_summary(
     metrics: Sequence[str],
     bootstrap: int,
     rng_seed: int,
+    centers: Sequence[str],
 ) -> Dict[str, List[float]]:
     summary_replicates: Dict[str, List[float]] = {metric: [] for metric in metrics}
     if bootstrap <= 0 or not runs:
         return summary_replicates
-    prepared: Dict[int, Tuple[Exp5ARun, ClusterSet, ClusterSet]] = {}
+    if not centers:
+        return summary_replicates
+    prepared: Dict[int, Tuple[Exp5ARun, Sequence[str]]] = {}
     for seed, run in runs.items():
         if run.sun_frames is None or run.sun_tau is None:
             continue
+        if run.sun_case_index is None:
+            continue
         prepared[seed] = (
             run,
-            _build_cluster_set(run.frames, domain="polypgen"),
-            _build_cluster_set(run.sun_frames, domain="sun"),
+            run.sun_case_ids,
         )
     if not prepared:
         return summary_replicates
     rng = np.random.default_rng(rng_seed)
     for _ in range(bootstrap):
         draw_totals: DefaultDict[str, List[float]] = defaultdict(list)
-        for run, polyp_clusters, sun_clusters in prepared.values():
-            polyp_ids, sun_ids = _joint_sample_cluster_ids(polyp_clusters, sun_clusters, rng)
-            if not polyp_ids or not sun_ids:
+        for run, sun_case_ids in prepared.values():
+            polyp_ids = _sample_index(run.centers, centers, rng)
+            if not polyp_ids:
+                continue
+            sun_ids = _sample_index(run.sun_case_index or {}, sun_case_ids, rng)
+            if not sun_ids:
                 continue
             polyp_values = _as_frames_metrics(run.frames, polyp_ids, run.tau)
             sun_values = _as_frames_metrics(run.sun_frames, sun_ids, run.sun_tau)
@@ -640,6 +795,62 @@ def _bootstrap_domain_shift_summary(
     return summary_replicates
 
 
+def _resolve_center_alignment(runs: Sequence[Exp5ARun]) -> Tuple[Tuple[str, ...], List[str]]:
+    if not runs:
+        return tuple(), []
+    warnings_list: List[str] = []
+    missing_center_message = (
+        "Uncertainty not reported: PolypGen lacks case-level identifiers; frame-level bootstrap would overstate precision."
+    )
+    if any(run.centerless_frames for run in runs):
+        if missing_center_message not in warnings_list:
+            warnings_list.append(missing_center_message)
+        return tuple(), warnings_list
+    center_sets: List[set[str]] = []
+    for run in runs:
+        centers = set(run.centers.keys())
+        if not centers:
+            if missing_center_message not in warnings_list:
+                warnings_list.append(missing_center_message)
+            return tuple(), warnings_list
+        center_sets.append(centers)
+    common = set.intersection(*center_sets) if center_sets else set()
+    no_overlap_message = "Uncertainty not reported: PolypGen center overlap across runs is empty; bootstrap disabled."
+    if not common:
+        if no_overlap_message not in warnings_list:
+            warnings_list.append(no_overlap_message)
+        return tuple(), warnings_list
+    mismatched: List[str] = []
+    for center in sorted(common):
+        counts = {len(run.centers.get(center, ())) for run in runs}
+        if len(counts) > 1:
+            mismatched.append(center)
+    mismatch_message: Optional[str] = None
+    if mismatched:
+        mismatch_message = (
+            "PolypGen per-center frame counts differ across runs for: "
+            + ", ".join(mismatched)
+            + "; excluding from bootstrap."
+        )
+        warnings_list.append(mismatch_message)
+        common -= set(mismatched)
+    empty_after_filter_message = (
+        "Uncertainty not reported: No PolypGen centers remain after alignment; bootstrap disabled."
+    )
+    if not common:
+        if empty_after_filter_message not in warnings_list:
+            warnings_list.append(empty_after_filter_message)
+        return tuple(), warnings_list
+    reference = set(next(iter(center_sets)))
+    if any(center_set != reference for center_set in center_sets):
+        coverage_message = (
+            "PolypGen center coverage differs across runs; restricting bootstrap to the shared centers."
+        )
+        if coverage_message not in warnings_list:
+            warnings_list.append(coverage_message)
+    return tuple(sorted(common)), warnings_list
+
+
 def _bootstrap_pairwise(
     colon_run: Exp5ARun,
     baseline_run: Exp5ARun,
@@ -647,18 +858,23 @@ def _bootstrap_pairwise(
     metric: str,
     bootstrap: int,
     rng_seed: int,
+    centers: Sequence[str],
 ) -> List[float]:
     if bootstrap <= 0:
         return []
-    clusters = _build_cluster_set(colon_run.frames, domain="polypgen")
+    if not centers:
+        return []
+    if not colon_run.centers or not baseline_run.centers:
+        return []
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
     for _ in range(bootstrap):
-        sample_ids = sample_cluster_ids(clusters, rng)
-        if not sample_ids:
+        colon_ids = _sample_index(colon_run.centers, centers, rng)
+        baseline_ids = _sample_index(baseline_run.centers, centers, rng)
+        if not colon_ids or not baseline_ids:
             continue
-        colon_metrics = _as_frames_metrics(colon_run.frames, sample_ids, colon_run.tau)
-        baseline_metrics = _as_frames_metrics(baseline_run.frames, sample_ids, baseline_run.tau)
+        colon_metrics = _as_frames_metrics(colon_run.frames, colon_ids, colon_run.tau)
+        baseline_metrics = _as_frames_metrics(baseline_run.frames, baseline_ids, baseline_run.tau)
         colon_value = colon_metrics.get(metric)
         baseline_value = baseline_metrics.get(metric)
         if colon_value is None or baseline_value is None:
@@ -676,18 +892,22 @@ def _bootstrap_pairwise_summary(
     metric: str,
     bootstrap: int,
     rng_seed: int,
+    centers: Sequence[str],
 ) -> List[float]:
     if bootstrap <= 0:
         return []
-    prepared: Dict[int, Tuple[Exp5ARun, Exp5ARun, ClusterSet]] = {}
+    if not centers:
+        return []
+    prepared: Dict[int, Tuple[Exp5ARun, Exp5ARun]] = {}
     for seed, colon_run in colon_runs.items():
         baseline_run = baseline_runs.get(seed)
         if colon_run is None or baseline_run is None:
             continue
+        if not colon_run.centers or not baseline_run.centers:
+            continue
         prepared[seed] = (
             colon_run,
             baseline_run,
-            _build_cluster_set(colon_run.frames, domain="polypgen"),
         )
     if not prepared:
         return []
@@ -695,12 +915,13 @@ def _bootstrap_pairwise_summary(
     replicates: List[float] = []
     for _ in range(bootstrap):
         draw_values: List[float] = []
-        for colon_run, baseline_run, clusters in prepared.values():
-            sample_ids = sample_cluster_ids(clusters, rng)
-            if not sample_ids:
+        for colon_run, baseline_run in prepared.values():
+            colon_ids = _sample_index(colon_run.centers, centers, rng)
+            baseline_ids = _sample_index(baseline_run.centers, centers, rng)
+            if not colon_ids or not baseline_ids:
                 continue
-            colon_metrics = _as_frames_metrics(colon_run.frames, sample_ids, colon_run.tau)
-            baseline_metrics = _as_frames_metrics(baseline_run.frames, sample_ids, baseline_run.tau)
+            colon_metrics = _as_frames_metrics(colon_run.frames, colon_ids, colon_run.tau)
+            baseline_metrics = _as_frames_metrics(baseline_run.frames, baseline_ids, baseline_run.tau)
             colon_value = _coerce_float(colon_metrics.get(metric))
             baseline_value = _coerce_float(baseline_metrics.get(metric))
             if colon_value is None or baseline_value is None:
@@ -714,7 +935,7 @@ def _bootstrap_pairwise_summary(
 def summarize_runs(
     runs_by_model: Mapping[str, Mapping[int, Exp5ARun]],
     *,
-    bootstrap: int = 2000,
+    bootstrap: int = 1000,
     rng_seed: int = 12345,
 ) -> Dict[str, Any]:
     if not runs_by_model:
@@ -773,28 +994,21 @@ def summarize_runs(
                 abs_tol=1e-9,
             ):
                 raise ValueError("PolypGen prevalence mismatch across runs")
-            ref_centers = {key: dict(value) for key, value in reference_comp.per_center.items()}
-            comp_centers = {key: dict(value) for key, value in comp.per_center.items()}
-            if set(ref_centers) != set(comp_centers):
-                raise ValueError("Per-center composition mismatch across runs")
-            for center, ref_counts in ref_centers.items():
-                comp_counts = comp_centers.get(center)
-                if comp_counts is None:
-                    raise ValueError("Missing per-center counts in one of the runs")
-                for key in ("n_pos", "n_neg", "total"):
-                    if int(ref_counts[key]) != int(comp_counts.get(key, -1)):
-                        raise ValueError("Per-center counts mismatch across runs")
-                if not math.isclose(
-                    float(ref_counts.get("prevalence", 0.0)),
-                    float(comp_counts.get("prevalence", 0.0)),
-                    rel_tol=1e-9,
-                    abs_tol=1e-9,
-                ):
-                    raise ValueError("Per-center prevalence mismatch across runs")
         composition_payload = reference_comp.to_dict()
         if reference_sha is not None:
             composition_payload["sha256"] = reference_sha
         summary["composition"] = composition_payload
+    centers_for_bootstrap, center_warnings = _resolve_center_alignment(all_runs)
+    effective_bootstrap = bootstrap if centers_for_bootstrap else 0
+    summary["metadata"]["bootstrap"] = int(max(0, effective_bootstrap))
+    summary["metadata"]["center_bootstrap"] = {
+        "enabled": bool(centers_for_bootstrap),
+        "centers": list(centers_for_bootstrap),
+        "n_centers": len(centers_for_bootstrap),
+        "warnings": list(center_warnings),
+    }
+    for message in center_warnings:
+        warnings.warn(message)
     model_entries: Dict[str, Any] = {}
     recomputed_metrics_cache: Dict[str, Dict[int, Dict[str, float]]] = {}
     for model, runs in sorted(runs_by_model.items()):
@@ -803,7 +1017,10 @@ def summarize_runs(
         delta_accumulators: DefaultDict[str, List[float]] = defaultdict(list)
         model_recomputed_metrics: Dict[int, Dict[str, float]] = {}
         for seed, run in sorted(runs.items()):
-            frame_ids = list(run.frames.keys())
+            if centers_for_bootstrap:
+                frame_ids = _flatten_index(run.centers, centers_for_bootstrap)
+            else:
+                frame_ids = list(run.frames.keys())
             polyp_metrics = _as_frames_metrics(run.frames, frame_ids, run.tau)
             polyp_payload = dict(polyp_metrics)
             if run.tau is not None and "tau" not in polyp_payload:
@@ -824,14 +1041,16 @@ def summarize_runs(
             metrics_ci_replicates = _bootstrap_metrics(
                 run,
                 metrics=PRIMARY_METRICS,
-                bootstrap=bootstrap,
+                bootstrap=effective_bootstrap,
                 rng_seed=rng_seed + seed,
+                centers=centers_for_bootstrap,
             )
             delta_ci_replicates = _bootstrap_domain_shift(
                 run,
                 metrics=PRIMARY_METRICS,
-                bootstrap=bootstrap,
+                bootstrap=effective_bootstrap,
                 rng_seed=rng_seed + seed * 7,
+                centers=centers_for_bootstrap,
             )
             metrics_ci = {
                 metric: _ci_bounds(values)
@@ -862,8 +1081,9 @@ def summarize_runs(
         delta_summary_ci_replicates = _bootstrap_domain_shift_summary(
             runs,
             metrics=PRIMARY_METRICS,
-            bootstrap=bootstrap,
+            bootstrap=effective_bootstrap,
             rng_seed=rng_seed + len(model) * 17,
+            centers=centers_for_bootstrap,
         )
         performance_summary: Dict[str, Dict[str, float]] = {}
         for metric, values in metric_accumulators.items():
@@ -936,8 +1156,9 @@ def summarize_runs(
                         colon_run,
                         baseline_run,
                         metric=metric,
-                        bootstrap=bootstrap,
+                        bootstrap=effective_bootstrap,
                         rng_seed=rng_seed + seed * 11,
+                        centers=centers_for_bootstrap,
                     )
                     rows.append(
                         {
@@ -951,8 +1172,9 @@ def summarize_runs(
                     colon_runs,
                     baseline_runs,
                     metric=metric,
-                    bootstrap=bootstrap,
+                    bootstrap=effective_bootstrap,
                     rng_seed=rng_seed + len(metric) * 29 + PAIRWISE_BASELINES.index(baseline) * 31,
+                    centers=centers_for_bootstrap,
                 )
                 summary_ci = _ci_bounds(summary_replicates)
                 payload: Dict[str, Any] = {"seeds": rows}

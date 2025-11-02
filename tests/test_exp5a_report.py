@@ -562,6 +562,11 @@ def test_summarize_runs_builds_expected_blocks(tmp_path: Path) -> None:
     assert isinstance(pairwise_metadata, list)
     for metric in PAIRWISE_METRICS:
         assert metric in pairwise_metadata
+    center_meta = metadata.get("center_bootstrap")
+    assert isinstance(center_meta, dict)
+    assert center_meta.get("enabled") is True
+    assert center_meta.get("n_centers") == 2
+    assert set(center_meta.get("centers", [])) == {"A", "B"}
     seed_payload = colon_entry["seeds"][EXPECTED_SEEDS[0]]
     delta_block = seed_payload.get("delta")
     assert isinstance(delta_block, dict)
