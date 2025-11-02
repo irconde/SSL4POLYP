@@ -226,6 +226,17 @@ def _flatten_index(
     return frame_ids
 
 
+def _sample_keys(
+    keys: Sequence[str],
+    rng: np.random.Generator,
+) -> List[str]:
+    """Sample keys with replacement (same length as keys)."""
+    if not keys:
+        return []
+    draw_indices = rng.integers(0, len(keys), size=len(keys))
+    return [keys[int(i)] for i in draw_indices]
+
+
 def _sample_index(
     index: Mapping[str, Sequence[str]],
     keys: Sequence[str],
@@ -869,8 +880,10 @@ def _bootstrap_pairwise(
     rng = np.random.default_rng(rng_seed)
     replicates: List[float] = []
     for _ in range(bootstrap):
-        colon_ids = _sample_index(colon_run.centers, centers, rng)
-        baseline_ids = _sample_index(baseline_run.centers, centers, rng)
+        # Paired resampling: same sampled centers for both runs
+        sampled_centers = _sample_keys(centers, rng)
+        colon_ids = _flatten_index(colon_run.centers, sampled_centers)
+        baseline_ids = _flatten_index(baseline_run.centers, sampled_centers)
         if not colon_ids or not baseline_ids:
             continue
         colon_metrics = _as_frames_metrics(colon_run.frames, colon_ids, colon_run.tau)
@@ -915,9 +928,11 @@ def _bootstrap_pairwise_summary(
     replicates: List[float] = []
     for _ in range(bootstrap):
         draw_values: List[float] = []
+        # One shared center sample per replicate; reuse across all seeds
+        sampled_centers = _sample_keys(centers, rng)
         for colon_run, baseline_run in prepared.values():
-            colon_ids = _sample_index(colon_run.centers, centers, rng)
-            baseline_ids = _sample_index(baseline_run.centers, centers, rng)
+            colon_ids = _flatten_index(colon_run.centers, sampled_centers)
+            baseline_ids = _flatten_index(baseline_run.centers, sampled_centers)
             if not colon_ids or not baseline_ids:
                 continue
             colon_metrics = _as_frames_metrics(colon_run.frames, colon_ids, colon_run.tau)
