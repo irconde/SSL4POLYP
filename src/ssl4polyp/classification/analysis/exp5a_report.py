@@ -796,11 +796,31 @@ def summarize_runs(
             composition_payload["sha256"] = reference_sha
         summary["composition"] = composition_payload
     model_entries: Dict[str, Any] = {}
+    recomputed_metrics_cache: Dict[str, Dict[int, Dict[str, float]]] = {}
     for model, runs in sorted(runs_by_model.items()):
         seeds_entry: Dict[int, Any] = {}
         metric_accumulators: DefaultDict[str, List[float]] = defaultdict(list)
         delta_accumulators: DefaultDict[str, List[float]] = defaultdict(list)
+        model_recomputed_metrics: Dict[int, Dict[str, float]] = {}
         for seed, run in sorted(runs.items()):
+            frame_ids = list(run.frames.keys())
+            polyp_metrics = _as_frames_metrics(run.frames, frame_ids, run.tau)
+            polyp_payload = dict(polyp_metrics)
+            if run.tau is not None and "tau" not in polyp_payload:
+                polyp_payload["tau"] = float(run.tau)
+            if run.sun_frames is None or run.sun_tau is None:
+                raise ValueError(
+                    "Experiment 5A bootstrap requires SUN baseline per-frame outputs"
+                )
+            sun_frame_ids = list(run.sun_frames.keys())
+            sun_metrics = _as_frames_metrics(run.sun_frames, sun_frame_ids, run.sun_tau)
+            sun_payload = dict(sun_metrics)
+            if run.sun_tau is not None and "tau" not in sun_payload:
+                sun_payload["tau"] = float(run.sun_tau)
+            delta_metrics = _derive_delta(
+                polyp_payload, sun_payload, metrics=PRIMARY_METRICS
+            )
+            model_recomputed_metrics[int(seed)] = dict(polyp_payload)
             metrics_ci_replicates = _bootstrap_metrics(
                 run,
                 metrics=PRIMARY_METRICS,
@@ -824,19 +844,19 @@ def summarize_runs(
                 if values
             }
             seeds_entry[int(seed)] = {
-                "metrics": run.metrics,
+                "metrics": polyp_payload,
                 "ci": metrics_ci,
-                "delta": run.delta,
+                "delta": dict(delta_metrics),
                 "delta_ci": delta_ci,
                 "tau": run.tau,
-                "sun_metrics": run.sun_metrics,
+                "sun_metrics": sun_payload,
             }
             for metric in PRIMARY_METRICS:
-                value = _coerce_float(run.metrics.get(metric))
+                value = _coerce_float(polyp_payload.get(metric))
                 if value is not None:
                     metric_accumulators[metric].append(value)
             for metric in PRIMARY_METRICS:
-                value = _coerce_float(run.delta.get(metric))
+                value = _coerce_float(delta_metrics.get(metric))
                 if value is not None:
                     delta_accumulators[metric].append(value)
         delta_summary_ci_replicates = _bootstrap_domain_shift_summary(
@@ -866,10 +886,12 @@ def summarize_runs(
             "domain_shift": delta_summary,
             "domain_shift_ci": delta_summary_ci,
         }
+        recomputed_metrics_cache[model] = model_recomputed_metrics
     summary["models"] = model_entries
 
     colon_runs = runs_by_model.get("ssl_colon", {})
     if colon_runs:
+        colon_points = recomputed_metrics_cache.get("ssl_colon", {})
         pairwise_summary: Dict[str, Dict[str, Any]] = {}
         for metric in PAIRWISE_METRICS:
             metric_entry: Dict[str, Any] = {}
@@ -894,8 +916,18 @@ def summarize_runs(
                     baseline_run = baseline_runs.get(seed)
                     if colon_run is None or baseline_run is None:
                         continue
-                    colon_value = _coerce_float(colon_run.metrics.get(metric))
-                    baseline_value = _coerce_float(baseline_run.metrics.get(metric))
+                    colon_metrics = colon_points.get(int(seed))
+                    baseline_metrics = recomputed_metrics_cache.get(baseline, {}).get(
+                        int(seed)
+                    )
+                    colon_value = _coerce_float(
+                        (colon_metrics or {}).get(metric) if colon_metrics else None
+                    )
+                    baseline_value = _coerce_float(
+                        (baseline_metrics or {}).get(metric)
+                        if baseline_metrics
+                        else None
+                    )
                     if colon_value is None or baseline_value is None:
                         continue
                     delta_value = float(colon_value - baseline_value)
