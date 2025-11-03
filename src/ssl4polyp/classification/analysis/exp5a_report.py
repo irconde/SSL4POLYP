@@ -157,9 +157,6 @@ def _extract_center_from_row(row: Mapping[str, Any]) -> Optional[str]:
             center = _clean_text(row.get(key))
             if center:
                 return center
-    origin = _clean_text(row.get("origin"))
-    if origin:
-        return origin
     path_keys = (
         "path",
         "image_path",
@@ -185,6 +182,9 @@ def _extract_center_from_row(row: Mapping[str, Any]) -> Optional[str]:
             lowered = cleaned.lower()
             if "center" in lowered or "centre" in lowered:
                 return cleaned
+    origin = _clean_text(row.get("origin"))
+    if origin:
+        return origin
     return None
 
 
