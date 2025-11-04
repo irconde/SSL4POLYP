@@ -76,13 +76,9 @@ EXPERIMENT5B_REQUIRED_PERTURBATIONS: Dict[str, Tuple[PerturbationDefinition, ...
         PerturbationDefinition("jpeg_q_50", 50.0, "q=50"),
         PerturbationDefinition("jpeg_q_30", 70.0, "q=30"),
     ),
-    "brightness": (
-        PerturbationDefinition("brightness_0p8", 0.2, "factor=0.8"),
-        PerturbationDefinition("brightness_0p6", 0.4, "factor=0.6"),
-    ),
-    "contrast": (
-        PerturbationDefinition("contrast_0p8", 0.2, "factor=0.8"),
-        PerturbationDefinition("contrast_0p6", 0.4, "factor=0.6"),
+    "brightness_contrast": (
+        PerturbationDefinition("bc_b0p8_c0p8", 0.2, "brightness=0.8, contrast=0.8"),
+        PerturbationDefinition("bc_b0p6_c0p6", 0.4, "brightness=0.6, contrast=0.6"),
     ),
     "occlusion": (
         PerturbationDefinition("occ_a5p", 0.05, "area=5%"),
