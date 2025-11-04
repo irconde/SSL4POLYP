@@ -477,6 +477,12 @@ def load_run(metrics_path: Path) -> RunPerturbationResult:
     provenance: Dict[str, object] = dict(provenance_raw) if isinstance(provenance_raw, Mapping) else {}
     model_name = str(provenance.get("model") or metrics_path.stem.split("_", 1)[0])
     tau_policy = _coerce_string(provenance.get("tau_policy"))
+    if not tau_policy:
+        thresholds_block = payload.get("thresholds")
+        if isinstance(thresholds_block, Mapping):
+            primary_block = thresholds_block.get("primary")
+            if isinstance(primary_block, Mapping):
+                tau_policy = _coerce_string(primary_block.get("policy"))
     expected_tau_policy = _coerce_string(EXPECTED_PRIMARY_TAU_POLICY)
     if expected_tau_policy:
         if not tau_policy:
