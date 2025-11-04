@@ -889,7 +889,9 @@ def _collect_family_seed_data(
             shared_seed_ids &= {int(seed) for seed in available}
     if not shared_seed_ids:
         return []
-    ordered_tags = sorted(tag_data.items(), key=lambda item: item[1][2])
+    ordered_tags = sorted(
+        tag_data.items(), key=lambda item: (item[1][4], item[0])
+    )
     seed_data: List[FamilyBootstrapSeedData] = []
     for seed in sorted(shared_seed_ids):
         case_candidates: Optional[Set[str]] = None
