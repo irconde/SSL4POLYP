@@ -944,6 +944,7 @@ def _bootstrap_aulc_delta(
     bootstrap: int,
     rng_seed: int,
     policy: str,
+    expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> List[float]:
     if bootstrap <= 0:
         return []
@@ -951,14 +952,14 @@ def _bootstrap_aulc_delta(
     if not shared_budgets:
         return []
     ensure_expected_seeds(
-        {
+        { 
             **{f"colon@b{budget}": colon_runs_per_budget.get(budget, {}) for budget in shared_budgets},
             **{f"baseline@b{budget}": baseline_runs_per_budget.get(budget, {}) for budget in shared_budgets},
         },
-        expected_seeds=EXPECTED_SEEDS,
+        expected_seeds=expected_seeds,
         context="Experiment 5C bootstrap ΔAULC",
     )
-    shared_seeds = list(EXPECTED_SEEDS)
+    shared_seeds = list(expected_seeds)
     rng = np.random.default_rng(rng_seed)
     cluster_cache: Dict[int, ClusterSet] = {}
     replicates: List[float] = []
