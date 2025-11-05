@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import math
+import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -45,6 +46,8 @@ PAIRWISE_METRICS: Tuple[str, ...] = ("auprc", "f1")
 AULC_METRICS: Tuple[str, ...] = ("auprc", "f1")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)
 EXPECTED_BUDGETS: Tuple[int, ...] = (50, 100, 200, 500)
+
+logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _DATA_PACK_ROOTS: Tuple[Path, ...] = (
@@ -365,18 +368,48 @@ def discover_runs(
     model_filter = {str(m) for m in models} if models else None
     runs: DefaultDict[str, DefaultDict[int, Dict[int, FewShotRun]]] = defaultdict(lambda: defaultdict(dict))
     active_loader = loader or _get_loader()
+    skipped: int = 0
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
         try:
             run = load_run(metrics_path, loader=active_loader)
         except FileNotFoundError as exc:
+            logger.error(
+                "Missing per-frame outputs for metrics file %s",
+                metrics_path,
+            )
             raise RuntimeError(
                 f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
             ) from exc
-        except (OSError, ValueError, GuardrailViolation):
+        except (OSError, ValueError, GuardrailViolation) as exc:
+            skipped += 1
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(
+                    "Skipping metrics file %s due to %s: %s",
+                    metrics_path,
+                    exc.__class__.__name__,
+                    exc,
+                )
             continue
         if model_filter and run.model not in model_filter:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Skipping metrics file %s because model %s is filtered",
+                    metrics_path,
+                    run.model,
+                )
             continue
         runs[run.model][run.budget][run.seed] = run
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                "Loaded %s (model=%s, budget=%s, seed=%s)",
+                metrics_path,
+                run.model,
+                run.budget,
+                run.seed,
+            )
+    discovered = sum(len(seed_map) for per_model in runs.values() for seed_map in per_model.values())
+    if logger.isEnabledFor(logging.INFO):
+        logger.info("Discovered %d runs across %d models (skipped=%d)", discovered, len(runs), skipped)
     return {
         model: {budget: dict(seed_map) for budget, seed_map in sorted(per_model.items())}
         for model, per_model in runs.items()

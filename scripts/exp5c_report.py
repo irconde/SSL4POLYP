@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import importlib
 import json
 import sys
@@ -135,6 +136,11 @@ def parse_args() -> argparse.Namespace:
         default=500,
         help="Budget S used for the S@target reference (default: 500).",
     )
+    parser.add_argument(
+        "--log-progress",
+        action="store_true",
+        help="Enable INFO-level logging for run discovery and aggregation.",
+    )
     return parser.parse_args()
 
 
@@ -227,6 +233,8 @@ def _emit_summary(summary: Mapping[str, object], models: Sequence[str]) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.log_progress:
+        logging.basicConfig(level=logging.INFO)
     runs_root = args.runs_root.expanduser()
     if not runs_root.exists():
         raise FileNotFoundError(f"Runs root '{runs_root}' does not exist")
