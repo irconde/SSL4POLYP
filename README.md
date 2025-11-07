@@ -232,8 +232,10 @@ command-line overrides):
 * `full` (default) trains the entire encoder.
 * `none` trains only the classification head, keeping the encoder frozen as in
   prior releases.
+* `head+1` unfreezes the classifier head together with the final transformer
+  block, offering a light-touch adaptation.
 * `head+2` updates the head together with the final two transformer blocks for a
-  lightweight adaptation regime.
+  slightly broader adaptation regime.
 
 ### Experiments
 
@@ -309,7 +311,7 @@ archival or publication.
 | 4 | `config/exp/exp4.yaml` | SUN sample-efficiency study with full encoder updates (5–100%) | Train per subset with seeds 13/29/47 (fixed pack seed per %) | `full` |
 | 5A | `config/exp/exp5a.yaml` | Zero-shot transfer to PolypGen clean test (encoder frozen) | Evaluate exp1/2 checkpoints at seeds 13/29/47 | `none` |
 | 5B | `config/exp/exp5b.yaml` | Zero-shot SUN robustness under perturbations (encoder frozen) | Evaluate exp1/2 checkpoints at seeds 13/29/47 (fixed corruption seed) | `none` |
-| 5C | `config/exp/exp5c.yaml` | Few-shot PolypGen adaptation with head+2 tuning (50–500 frames) | Fine-tune per support size with seeds 13/29/47 (fixed pack seed per size) | `head+2` |
+| 5C | `config/exp/exp5c.yaml` | Few-shot PolypGen adaptation with shallow encoder tuning (50–500 frames) | Fine-tune per support size with seeds 13/29/47 (fixed pack seed per size) | `head+1`/`head+2` |
 
 Exp‑1 does not ship a dedicated `exp1_report.py` wrapper because the full
 fine-tuning runs already emit the metrics and curve exports that the paper
@@ -322,7 +324,7 @@ analysis modules exist for them.
 
 Each few-shot pack `polypgen_fewshot_s{S}` reuses the same generation seed and enforces sequence-level disjointness, but its test fold is the complement of that support budget within `polypgen_clean_test_extended`. Results should therefore reference the specific pack size used rather than assuming a shared PolypGen test split across all budgets.
 
-Exp‑5C training follows a two-phase regime: a 3-epoch classifier-head warm-up (encoder frozen, head LR `1e-3`), then 47 epochs with the full encoder unfrozen, using head LR `5e-4` and a reduced backbone LR (`2e-5` for the ViT backbones shipped here).
+Exp‑5C training follows a two-phase regime: a classifier-head warm-up (encoder frozen, head LR `1e-3`), then a refinement stage that unfreezes the head plus the last encoder block for the 50-frame support budget (`head+1`) or the last two blocks for the larger budgets (`head+2`). The refinement stage keeps a reduced backbone LR (`5e-6` for the 50-frame pack, `2e-5` for the larger ViT runs).
 
 Runs log per-epoch summaries to `*.log` files and TensorBoard: we record `train/loss` together with the active learning rates for each parameter group, plus validation `loss`, `auprc` and `auroc`. The few-shot test remainder is only scored once the schedule finishes.
 

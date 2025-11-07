@@ -7436,7 +7436,7 @@ def get_args():
         "--finetune-mode",
         type=str,
         default="full",
-        choices=["none", "full", "head+2"],
+        choices=["none", "full", "head+1", "head+2"],
         help="Fine-tuning regime controlling which encoder layers receive gradients.",
     )
     parser.add_argument("--frozen", action="store_true", default=False)

@@ -1,3 +1,7 @@
+import pytest
+
+pytest.importorskip("torch")
+
 import torch.nn as nn
 
 from ssl4polyp.classification.finetune import configure_finetune_parameters
@@ -53,6 +57,22 @@ def test_configure_finetune_mode_head_plus_two_keeps_final_blocks():
         block = model.blocks[idx]
         for name, _ in block.named_parameters():
             expected.add(f"blocks.{idx}.{name}")
+
+    assert trainable == expected
+    assert model.frozen is False
+
+
+def test_configure_finetune_mode_head_plus_one_keeps_last_block():
+    depth = 5
+    model = DummyModel(depth=depth)
+    configure_finetune_parameters(model, "head+1")
+
+    trainable = _trainable_parameter_names(model)
+    expected = set(_head_parameter_names(model))
+    idx = depth - 1
+    block = model.blocks[idx]
+    for name, _ in block.named_parameters():
+        expected.add(f"blocks.{idx}.{name}")
 
     assert trainable == expected
     assert model.frozen is False
