@@ -2792,7 +2792,7 @@ def _export_frame_outputs(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     dataset_name_normalised = str(dataset_name or "").strip().lower()
-    is_polypgen_fewshot = dataset_name_normalised == "polypgen_fewshot"
+    is_polypgen_fewshot = dataset_name_normalised.startswith("polypgen_fewshot")
 
     if is_polypgen_fewshot:
         # exp5c evaluates polypgen_fewshot packs; adjust its exports without

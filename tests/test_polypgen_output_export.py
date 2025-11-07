@@ -4,6 +4,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
@@ -160,7 +162,17 @@ if "sklearn" not in sys.modules:
 from ssl4polyp.classification.train_classification import _export_frame_outputs
 
 
-def test_export_frame_outputs_polypgen_adjusts_columns(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "dataset_name",
+    [
+        "polypgen_fewshot",
+        "polypgen_fewshot_s50",
+        "PolypGen_FewShot_S200",
+    ],
+)
+def test_export_frame_outputs_polypgen_adjusts_columns(
+    tmp_path: Path, dataset_name: str
+) -> None:
     path = tmp_path / "polypgen.csv"
     metadata_rows = [
         {
@@ -184,7 +196,7 @@ def test_export_frame_outputs_polypgen_adjusts_columns(tmp_path: Path) -> None:
         probabilities=[0.9, 0.1],
         targets=[1, 0],
         preds=[1, 0],
-        dataset_name="polypgen_fewshot",
+        dataset_name=dataset_name,
     )
 
     with path.open(newline="", encoding="utf-8") as handle:
