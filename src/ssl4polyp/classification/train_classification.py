@@ -496,6 +496,7 @@ class EvalLoggingContext:
     tag: str
     start_lines: Tuple[str, ...]
     sample_display: str
+    dataset_name: Optional[str] = None
 
     @property
     def prefix(self) -> str:
@@ -996,6 +997,13 @@ def _build_eval_logging_context(
     if dataset_tag is None:
         return None
 
+    dataset_name_value = (
+        dataset_layout.get("name") if isinstance(dataset_layout, Mapping) else None
+    )
+    dataset_name = (
+        str(dataset_name_value).strip() if dataset_name_value not in (None, "") else None
+    )
+
     total_frames = len(dataset)
     labels = getattr(dataset, "labels_list", None)
     frame_counts = _summarize_frame_counts(labels)
@@ -1032,6 +1040,7 @@ def _build_eval_logging_context(
         tag=dataset_tag,
         start_lines=tuple(start_lines),
         sample_display=sample_display,
+        dataset_name=dataset_name,
     )
 
 
@@ -2699,6 +2708,42 @@ def _resolve_metadata_value(row: Mapping[str, Any], keys: Sequence[str]) -> Opti
     return None
 
 
+_POLYPGEN_NEGATIVE_SEQUENCE_PATTERN = re.compile(r"negseq\.seq(\d+)_neg", re.IGNORECASE)
+_POLYPGEN_CENTER_PATTERN = re.compile(r"^c\d+$", re.IGNORECASE)
+
+
+def _normalise_polypgen_center(case_id: Optional[str]) -> Optional[str]:
+    if not case_id:
+        return None
+    text = str(case_id).strip()
+    if not text:
+        return None
+    lowered = text.lower()
+    if lowered in {"none", "null"}:
+        return "None"
+    if _POLYPGEN_CENTER_PATTERN.fullmatch(text):
+        return text.upper()
+    return None
+
+
+def _resolve_polypgen_sequence(
+    frame_id: Optional[str], existing: Optional[str]
+) -> Optional[int]:
+    if existing:
+        try:
+            return int(existing)
+        except (TypeError, ValueError):
+            pass
+    frame_text = str(frame_id or "")
+    match = _POLYPGEN_NEGATIVE_SEQUENCE_PATTERN.search(frame_text)
+    if match:
+        try:
+            return int(match.group(1))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 def _export_frame_outputs(
     path: Path,
     *,
@@ -2706,19 +2751,37 @@ def _export_frame_outputs(
     probabilities: Sequence[float],
     targets: Sequence[int],
     preds: Sequence[int],
+    dataset_name: Optional[str] = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = [
-        "frame_id",
-        "prob",
-        "label",
-        "pred",
-        "case_id",
-        "origin",
-        "center_id",
-        "sequence_id",
-        "morphology",
-    ]
+    dataset_name_normalised = str(dataset_name or "").strip().lower()
+    is_polypgen_fewshot = dataset_name_normalised == "polypgen_fewshot"
+
+    if is_polypgen_fewshot:
+        # exp5c evaluates polypgen_fewshot packs; adjust its exports without
+        # perturbing other PolypGen experiments that rely on case/morph columns.
+        fieldnames = [
+            "frame_id",
+            "prob",
+            "label",
+            "pred",
+            "origin",
+            "center_id",
+            "sequence_id",
+        ]
+    else:
+        fieldnames = [
+            "frame_id",
+            "prob",
+            "label",
+            "pred",
+            "case_id",
+            "origin",
+            "center_id",
+            "sequence_id",
+            "morphology",
+        ]
+
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -2735,15 +2798,6 @@ def _export_frame_outputs(
                     "image_id",
                 ),
             ) or f"idx_{idx}"
-            case_id = _resolve_metadata_value(
-                row,
-                (
-                    "case_id",
-                    "sequence_id",
-                    "case",
-                    "study_id",
-                ),
-            )
             origin = _resolve_metadata_value(
                 row,
                 (
@@ -2753,47 +2807,102 @@ def _export_frame_outputs(
                     "source_dataset",
                 ),
             )
-            center_id = _resolve_metadata_value(
-                row,
-                (
-                    "center_id",
-                    "centre_id",
-                    "center",
-                    "centre",
-                    "hospital_id",
-                    "hospital",
-                    "origin",
-                    "store_id",
-                ),
-            )
-            sequence_id = _resolve_metadata_value(
-                row,
-                (
-                    "sequence_id",
-                    "sequence",
-                    "case_id",
-                    "case",
-                    "study_id",
-                ),
-            )
-            morphology = None
-            if isinstance(row, Mapping):
-                value = row.get("morphology")
-                if value not in (None, ""):
-                    morphology = str(value).strip()
-            writer.writerow(
-                {
-                    "frame_id": frame_id,
-                    "prob": float(probabilities[idx]),
-                    "label": int(targets[idx]) if idx < len(targets) else None,
-                    "pred": int(preds[idx]) if idx < len(preds) else None,
-                    "case_id": case_id,
-                    "origin": origin,
-                    "center_id": center_id,
-                    "sequence_id": sequence_id,
-                    "morphology": morphology,
-                }
-            )
+
+            row_payload: Dict[str, Any] = {
+                "frame_id": frame_id,
+                "prob": float(probabilities[idx]),
+                "label": int(targets[idx]) if idx < len(targets) else None,
+                "pred": int(preds[idx]) if idx < len(preds) else None,
+                "origin": origin,
+            }
+
+            if is_polypgen_fewshot:
+                case_id = _resolve_metadata_value(
+                    row,
+                    (
+                        "case_id",
+                        "case",
+                        "study_id",
+                    ),
+                )
+                center_candidate = _resolve_metadata_value(
+                    row,
+                    (
+                        "center_id",
+                        "centre_id",
+                        "center",
+                        "centre",
+                        "hospital_id",
+                        "hospital",
+                    ),
+                )
+                center_id = (
+                    _normalise_polypgen_center(center_candidate)
+                    or _normalise_polypgen_center(case_id)
+                )
+                sequence_candidate = _resolve_metadata_value(
+                    row,
+                    (
+                        "sequence_id",
+                        "sequence",
+                    ),
+                )
+                sequence_id = _resolve_polypgen_sequence(frame_id, sequence_candidate)
+                row_payload.update(
+                    {
+                        "center_id": center_id,
+                        "sequence_id": sequence_id,
+                    }
+                )
+            else:
+                case_id = _resolve_metadata_value(
+                    row,
+                    (
+                        "case_id",
+                        "sequence_id",
+                        "case",
+                        "study_id",
+                    ),
+                )
+                center_id = _resolve_metadata_value(
+                    row,
+                    (
+                        "center_id",
+                        "centre_id",
+                        "center",
+                        "centre",
+                        "hospital_id",
+                        "hospital",
+                        "origin",
+                        "store_id",
+                    ),
+                )
+                sequence_id = _resolve_metadata_value(
+                    row,
+                    (
+                        "sequence_id",
+                        "sequence",
+                        "case_id",
+                        "case",
+                        "study_id",
+                    ),
+                )
+                morphology = None
+                if isinstance(row, Mapping):
+                    value = row.get("morphology")
+                    if value not in (None, ""):
+                        morphology = str(value).strip()
+
+                row_payload.update(
+                    {
+                        "case_id": case_id,
+                        "center_id": center_id,
+                        "sequence_id": sequence_id,
+                        "morphology": morphology,
+                    }
+                )
+
+            writer.writerow({key: row_payload.get(key) for key in fieldnames})
 
 
 def _extract_positive_probabilities(probabilities: Any) -> torch.Tensor:
@@ -5055,12 +5164,18 @@ def test(
         probabilities = [float(v) for v in prob_tensor.detach().cpu().tolist()]
         target_list = [int(v) for v in targets.detach().cpu().tolist()]
         pred_list = [int(v) for v in preds.detach().cpu().tolist()]
+        export_dataset_name: Optional[str]
+        if eval_context is not None:
+            export_dataset_name = getattr(eval_context, "dataset_name", None)
+        else:
+            export_dataset_name = None
         _export_frame_outputs(
             outputs_path,
             metadata_rows=metadata_records[:sample_total],
             probabilities=probabilities,
             targets=target_list,
             preds=pred_list,
+            dataset_name=export_dataset_name,
         )
         results["outputs_path"] = str(outputs_path)
 
