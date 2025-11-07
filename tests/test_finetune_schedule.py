@@ -30,8 +30,14 @@ def test_schedule_runtime_applies_stage_modes_and_lrs():
     schedule_cfg = [
         {"mode": "none", "epochs": 3, "head_lr": 1e-3},
         {
+            "mode": "head+1",
+            "epochs": 7,
+            "head_lr": 7e-4,
+            "backbone_lr": 1e-5,
+        },
+        {
             "mode": "head+2",
-            "epochs": 47,
+            "epochs": 40,
             "head_lr": 5e-4,
             "backbone_lr": 2e-5,
         },
@@ -39,7 +45,8 @@ def test_schedule_runtime_applies_stage_modes_and_lrs():
     spec = tc._sanitize_finetune_schedule_config(schedule_cfg, default_mode="full")
     stages = tc._materialize_finetune_schedule(spec, base_lr=5e-4)
     assert stages[0].start_epoch == 1 and stages[0].end_epoch == 3
-    assert stages[1].start_epoch == 4 and stages[1].end_epoch == 50
+    assert stages[1].start_epoch == 4 and stages[1].end_epoch == 10
+    assert stages[2].start_epoch == 11 and stages[2].end_epoch == 50
     model = DummyModel()
     param_groups = finetune.collect_finetune_param_groups(model)
     optimizer = torch.optim.AdamW(
@@ -64,7 +71,18 @@ def test_schedule_runtime_applies_stage_modes_and_lrs():
     assert pytest.approx(_group_lr(optimizer, "backbone"), rel=1e-6) == 0.0
 
     stage2 = runtime.apply_if_needed(model, optimizer, epoch=4, rank=0)
-    assert stage2 is not None and stage2.mode == "head+2"
+    assert stage2 is not None and stage2.mode == "head+1"
+    for idx, block in enumerate(model.blocks):
+        params = list(block.parameters())
+        if idx < len(model.blocks) - 1:
+            assert all(not param.requires_grad for param in params)
+        else:
+            assert all(param.requires_grad for param in params)
+    assert pytest.approx(_group_lr(optimizer, "head"), rel=1e-6) == 7e-4
+    assert pytest.approx(_group_lr(optimizer, "backbone"), rel=1e-6) == 1e-5
+
+    stage3 = runtime.apply_if_needed(model, optimizer, epoch=11, rank=0)
+    assert stage3 is not None and stage3.mode == "head+2"
     for idx, block in enumerate(model.blocks):
         params = list(block.parameters())
         if idx < len(model.blocks) - 2:

@@ -14,7 +14,7 @@ __all__ = [
 def normalise_finetune_mode(raw: Any, *, default: str = "full") -> str:
     """Resolve a user-specified fine-tuning regime into a canonical label."""
 
-    valid_modes = {"none", "full", "head+2"}
+    valid_modes = {"none", "full", "head+1", "head+2"}
 
     if raw is None:
         mode = str(default).strip().lower()
@@ -55,10 +55,16 @@ def configure_finetune_parameters(model: nn.Module, mode: str) -> None:
             for param in head.parameters():
                 param.requires_grad_(True)
 
-        if resolved_mode == "head+2":
-            blocks = getattr(model, "blocks", None)
-            if isinstance(blocks, (nn.ModuleList, list, tuple)) and len(blocks) > 0:
-                for block in list(blocks)[-2:]:
+        blocks = getattr(model, "blocks", None)
+        if isinstance(blocks, (nn.ModuleList, list, tuple)) and len(blocks) > 0:
+            tail_count = 0
+            if resolved_mode == "head+1":
+                tail_count = 1
+            elif resolved_mode == "head+2":
+                tail_count = 2
+
+            if tail_count > 0:
+                for block in list(blocks)[-tail_count:]:
                     for param in block.parameters():
                         param.requires_grad_(True)
 
