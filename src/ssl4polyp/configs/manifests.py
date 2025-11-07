@@ -68,6 +68,8 @@ _LABEL_ALIASES = {
     "negative": "0",
 }
 
+_SUMMARY_KEY_SUBSTRINGS = ("frame", "frames", "case", "cases", "seq", "total")
+
 
 def _normalise_label_key(label: object) -> str:
     """Normalise ``label`` to a canonical representation for comparisons."""
@@ -76,6 +78,15 @@ def _normalise_label_key(label: object) -> str:
         stripped = label.strip()
         return _LABEL_ALIASES.get(stripped.lower(), stripped)
     return _normalise_label_key(str(label))
+
+
+def _is_summary_metric_key(key: object) -> bool:
+    """Return ``True`` when ``key`` encodes aggregate statistics, not labels."""
+
+    if not isinstance(key, str):
+        return False
+    lowered = key.lower()
+    return any(token in lowered for token in _SUMMARY_KEY_SUBSTRINGS)
 
 
 def _parse_expected_counts(
@@ -103,7 +114,11 @@ def _parse_expected_counts(
                 if coerced is not None:
                     label_expectations[_normalise_label_key(label)] = coerced
         for key, value in entry.items():
-            if key in {"frames", "label_counts"} or key.endswith("_cases"):
+            if (
+                key in {"frames", "label_counts"}
+                or (isinstance(key, str) and key.endswith("_cases"))
+                or _is_summary_metric_key(key)
+            ):
                 continue
             coerced = _coerce_int(value)
             if coerced is not None:
