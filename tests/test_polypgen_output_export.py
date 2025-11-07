@@ -168,6 +168,9 @@ from ssl4polyp.classification.train_classification import _export_frame_outputs
         "polypgen_fewshot",
         "polypgen_fewshot_s50",
         "PolypGen_FewShot_S200",
+        "polypgen_clean_test",
+        "polypgen_clean_test_extended",
+        "PolypGen_Clean_Test",
     ],
 )
 def test_export_frame_outputs_polypgen_adjusts_columns(
@@ -237,7 +240,7 @@ def test_export_frame_outputs_preserves_columns_for_other_datasets(tmp_path: Pat
         probabilities=[0.75],
         targets=[1],
         preds=[1],
-        dataset_name="polypgen_clean_test",
+        dataset_name="sun_test",
     )
 
     with path.open(newline="", encoding="utf-8") as handle:
