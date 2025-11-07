@@ -162,6 +162,21 @@ def _record_test_outputs_digest(args, outputs_path: Optional[Path]) -> None:
         setattr(args, "latest_test_outputs_sha256", None)
 
 
+def _record_zero_shot_outputs_digest(args, outputs_path: Optional[Path]) -> None:
+    """Compute and cache the SHA-256 digest for exported zero-shot outputs."""
+
+    if outputs_path is None:
+        return
+
+    path = Path(outputs_path).expanduser()
+    setattr(args, "zero_shot_outputs_path", path)
+    sha256 = _compute_file_sha256(path)
+    if sha256:
+        setattr(args, "zero_shot_outputs_sha256", sha256)
+    else:
+        setattr(args, "zero_shot_outputs_sha256", None)
+
+
 def _safe_relpath(path: Path, base: Path) -> str:
     """Return a stable string path relative to ``base`` when possible."""
 
@@ -197,6 +212,216 @@ def _infer_outputs_path_from_metrics(metrics_path: Path) -> Path:
     else:
         base = stem
     return metrics_path.with_name(f"{base}_test_outputs.csv")
+
+
+def _attach_zero_shot_to_payload(payload: MutableMapping[str, Any], args) -> None:
+    """Augment ``payload`` with zero-shot metadata when available."""
+
+    zero_shot = getattr(args, "zero_shot_payload", None)
+    if not isinstance(zero_shot, Mapping) or not zero_shot:
+        return
+
+    zero_root: Dict[str, Any]
+    if isinstance(payload.get("zero_shot"), Mapping):
+        zero_root = dict(payload["zero_shot"])  # type: ignore[index]
+    else:
+        zero_root = {}
+
+    for key in ("test_primary", "metrics", "dataset", "provenance"):
+        value = zero_shot.get(key)
+        if isinstance(value, Mapping):
+            zero_root.setdefault(key, dict(value))
+        elif value is not None and key not in zero_root:
+            zero_root[key] = value
+
+    outputs_relpath = zero_shot.get("outputs_csv")
+    outputs_sha = zero_shot.get("outputs_csv_sha256")
+    if isinstance(outputs_relpath, str) and outputs_relpath:
+        zero_root.setdefault("outputs_csv", outputs_relpath)
+    if isinstance(outputs_sha, str) and outputs_sha:
+        zero_root.setdefault("outputs_csv_sha256", outputs_sha)
+
+    payload["zero_shot"] = zero_root
+
+    if "test_primary_zero_shot" not in payload and "test_primary" in zero_root:
+        payload["test_primary_zero_shot"] = zero_root["test_primary"]
+
+    dataset_block = payload.get("dataset")
+    if isinstance(dataset_block, Mapping):
+        dataset_root: Dict[str, Any] = dict(dataset_block)
+    else:
+        dataset_root = {}
+    zero_dataset = zero_root.get("dataset")
+    if isinstance(zero_dataset, Mapping):
+        zero_test = zero_dataset.get("test")
+        if isinstance(zero_test, Mapping):
+            target_test = dataset_root.get("test")
+            if isinstance(target_test, Mapping):
+                test_block: Dict[str, Any] = dict(target_test)
+            else:
+                test_block = {}
+            for key in ("csv_sha256", "pack", "subset_seed", "fewshot_budget"):
+                value = zero_test.get(key)
+                if value is not None and key not in test_block:
+                    test_block[key] = value
+            dataset_root["test"] = test_block
+    if dataset_root:
+        payload["dataset"] = dataset_root
+
+    provenance_block = payload.get("provenance")
+    if isinstance(provenance_block, Mapping):
+        provenance_root: Dict[str, Any] = dict(provenance_block)
+    else:
+        provenance_root = {}
+    zero_provenance = zero_root.get("provenance")
+    if isinstance(zero_provenance, Mapping):
+        for key, value in zero_provenance.items():
+            if key not in provenance_root and value is not None:
+                provenance_root[key] = value
+    if isinstance(outputs_relpath, str) and outputs_relpath:
+        provenance_root.setdefault("test_zero_shot_outputs_csv", outputs_relpath)
+    if isinstance(outputs_sha, str) and outputs_sha:
+        provenance_root.setdefault("test_zero_shot_outputs_csv_sha256", outputs_sha)
+    if provenance_root:
+        payload["provenance"] = provenance_root
+
+
+def _maybe_run_zero_shot_inference(
+    *,
+    args,
+    model: nn.Module,
+    rank: int,
+    ckpt_stem: Path,
+    test_dataloader,
+    perf_fn,
+    aux_metric_fns: Mapping[str, Any],
+    loss_fn: Optional[nn.Module],
+    loss_mode: str,
+    resolve_eval_tau,
+    describe_tau_source,
+    threshold_key: Optional[str],
+    sun_threshold_key: Optional[str],
+    log_path: Path,
+    morphology_eval: Optional[Iterable[str]],
+    eval_context_lookup: Mapping[str, "EvalLoggingContext"],
+    epoch_hint: int,
+) -> Optional[Dict[str, Any]]:
+    """Run zero-shot inference for PolypGen few-shot experiments when required."""
+
+    if rank != 0:
+        return None
+
+    parent_reference = getattr(args, "parent_reference", None)
+    if not isinstance(parent_reference, ParentRunReference):
+        return None
+
+    dataset_layout = getattr(args, "dataset_layout", {}) or {}
+    dataset_name = str(dataset_layout.get("name") or "").lower()
+    if dataset_name != "polypgen_fewshot":
+        return None
+
+    if test_dataloader is None:
+        return None
+
+    if isinstance(getattr(args, "zero_shot_payload", None), Mapping):
+        return getattr(args, "zero_shot_payload")
+
+    zero_shot_outputs_path = ckpt_stem.parent / f"{ckpt_stem.name}_zeroshot_outputs.csv"
+    eval_tau, eval_tau_key = resolve_eval_tau(threshold_key, sun_threshold_key)
+    eval_tau_info = describe_tau_source(eval_tau_key)
+
+    print("Running zero-shot evaluation on PolypGen test split before fine-tuning.")
+    zero_metrics = test(
+        _unwrap_model(model),
+        rank,
+        test_dataloader,
+        epoch_hint,
+        perf_fn,
+        log_path,
+        metric_fns=aux_metric_fns,
+        loss_fn=loss_fn,
+        loss_mode=loss_mode,
+        split_name="Zero-Shot",
+        return_outputs=True,
+        tau=eval_tau,
+        tau_info=eval_tau_info,
+        max_batches=getattr(args, "limit_test_batches", None),
+        morphology_eval=morphology_eval,
+        eval_context=eval_context_lookup.get("Test"),
+        save_outputs_path=zero_shot_outputs_path,
+    )
+
+    if not isinstance(zero_metrics, Mapping):
+        return None
+
+    zero_metrics = dict(zero_metrics)
+    zero_metrics.pop("logits", None)
+    zero_metrics.pop("probabilities", None)
+    zero_metrics.pop("targets", None)
+    zero_metrics.pop("perturbation_samples", None)
+    zero_metrics.pop("_case_ids", None)
+    zero_metrics.pop("_morphology_labels", None)
+
+    _record_zero_shot_outputs_digest(args, zero_shot_outputs_path)
+
+    base_output_dir = getattr(args, "output_dir", None)
+    base_dir = Path(str(base_output_dir)).expanduser() if base_output_dir else Path.cwd()
+    outputs_relpath = _safe_relpath(zero_shot_outputs_path, base_dir)
+    outputs_sha = getattr(args, "zero_shot_outputs_sha256", None)
+
+    dataset_summary = getattr(args, "dataset_summary", None)
+    test_summary = dataset_summary.get("test") if isinstance(dataset_summary, Mapping) else None
+    zero_dataset: Dict[str, Any] = {}
+    dataset_sha: Optional[str] = None
+    if isinstance(test_summary, Mapping):
+        zero_dataset["test"] = _convert_json_compatible(dict(test_summary))
+        sha_candidate = test_summary.get("csv_sha256")
+        if isinstance(sha_candidate, str) and sha_candidate:
+            dataset_sha = sha_candidate
+
+    primary_block = _build_metric_block(zero_metrics)
+
+    zero_metrics_numeric: Dict[str, Any] = {}
+    for key, value in zero_metrics.items():
+        if isinstance(value, (int, np.integer)):
+            zero_metrics_numeric[key] = int(value)
+        elif isinstance(value, (float, np.floating)):
+            numeric = float(value)
+            if math.isfinite(numeric):
+                zero_metrics_numeric[key] = numeric
+        elif key == "tau_info" and isinstance(value, str) and value:
+            zero_metrics_numeric[key] = value
+    if eval_tau_info and "tau_info" not in zero_metrics_numeric:
+        zero_metrics_numeric["tau_info"] = eval_tau_info
+
+    zero_provenance: Dict[str, Any] = {}
+    if outputs_relpath:
+        zero_provenance["outputs_csv"] = outputs_relpath
+    if outputs_sha:
+        zero_provenance["outputs_csv_sha256"] = str(outputs_sha)
+    if dataset_sha:
+        zero_provenance.setdefault("test_csv_sha256", str(dataset_sha))
+    if eval_tau_key:
+        zero_provenance.setdefault("tau_source_key", str(eval_tau_key))
+    if eval_tau_info:
+        zero_provenance.setdefault("tau_info", eval_tau_info)
+    if getattr(args, "threshold_policy", None):
+        zero_provenance.setdefault("threshold_policy", str(args.threshold_policy))
+
+    zero_shot_payload: Dict[str, Any] = {"test_primary": primary_block}
+    if zero_metrics_numeric:
+        zero_shot_payload["metrics"] = zero_metrics_numeric
+    if zero_dataset:
+        zero_shot_payload["dataset"] = zero_dataset
+    if zero_provenance:
+        zero_shot_payload["provenance"] = zero_provenance
+    zero_shot_payload["outputs_csv"] = outputs_relpath
+    if outputs_sha:
+        zero_shot_payload["outputs_csv_sha256"] = str(outputs_sha)
+
+    args.zero_shot_payload = zero_shot_payload
+
+    return zero_shot_payload
 
 
 def _load_reference_payload(path: Path) -> Optional[Dict[str, Any]]:
@@ -851,6 +1076,8 @@ def _summarize_dataset_for_metrics(
     split_name: Optional[str],
     dataset: Optional["PackDataset"],
     pack_spec: Optional[str],
+    *,
+    dataset_layout: Optional[Mapping[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Return provenance and composition metadata for ``dataset`` suitable for JSON export."""
 
@@ -868,6 +1095,25 @@ def _summarize_dataset_for_metrics(
             if value in (None, ""):
                 continue
             summary[key] = value
+
+    layout = dataset_layout or {}
+    layout_name = str(layout.get("name") or "").lower()
+    if layout_name == "polypgen_fewshot":
+        size_value = layout.get("size")
+        try:
+            size_int = int(size_value) if size_value is not None else None
+        except (TypeError, ValueError):
+            size_int = None
+        if size_int is not None:
+            summary.setdefault("pack", f"polypgen_fewshot_s{size_int}")
+            summary.setdefault("fewshot_budget", size_int)
+        seed_value = layout.get("dataset_seed")
+        try:
+            seed_int = int(seed_value) if seed_value is not None else None
+        except (TypeError, ValueError):
+            seed_int = None
+        if seed_int is not None:
+            summary.setdefault("subset_seed", seed_int)
 
     total_frames = len(dataset)
     summary["frames"] = int(total_frames)
@@ -1752,6 +1998,20 @@ def _build_metrics_provenance(
             provenance["test_outputs_csv"] = _safe_relpath(outputs_path_obj, base_dir)
     if latest_outputs_sha:
         provenance["test_outputs_csv_sha256"] = str(latest_outputs_sha)
+
+    zero_outputs_path = getattr(args, "zero_shot_outputs_path", None)
+    zero_outputs_sha = getattr(args, "zero_shot_outputs_sha256", None)
+    if zero_outputs_path:
+        try:
+            zero_path_obj = Path(zero_outputs_path)
+        except (TypeError, ValueError):
+            zero_path_obj = None
+        if zero_path_obj:
+            provenance.setdefault(
+                "test_zero_shot_outputs_csv", _safe_relpath(zero_path_obj, base_dir)
+            )
+    if zero_outputs_sha:
+        provenance.setdefault("test_zero_shot_outputs_csv_sha256", str(zero_outputs_sha))
 
     fewshot_budget: Optional[int] = None
     pack_seed_value: Optional[int] = None
@@ -5086,7 +5346,13 @@ def build(args, rank, device: torch.device, distributed: bool):
         if not split_name:
             continue
         dataset_obj = datasets.get(split_name)
-        summary = _summarize_dataset_for_metrics(alias, split_name, dataset_obj, pack_spec)
+        summary = _summarize_dataset_for_metrics(
+            alias,
+            split_name,
+            dataset_obj,
+            pack_spec,
+            dataset_layout=dataset_layout,
+        )
         if summary:
             dataset_summaries[alias] = summary
     args.dataset_summary = dataset_summaries
@@ -6059,6 +6325,7 @@ def train(rank, args):
                     metrics_payload["domain_shift_delta"] = domain_shift_block
             metrics_path = ckpt_stem.with_suffix(".metrics.json")
             metrics_path.parent.mkdir(parents=True, exist_ok=True)
+            _attach_zero_shot_to_payload(metrics_payload, args)
             with metrics_path.open("w", encoding="utf-8") as handle:
                 json.dump(metrics_payload, handle, indent=2)
 
@@ -6123,6 +6390,29 @@ def train(rank, args):
             existing_sensitivity_tau = None
         if existing_sensitivity_tau is not None:
             latest_sensitivity_tau = float(existing_sensitivity_tau)
+
+    zero_shot_payload: Optional[Dict[str, Any]] = None
+    if rank == 0:
+        zero_shot_payload = _maybe_run_zero_shot_inference(
+            args=args,
+            model=model,
+            rank=rank,
+            ckpt_stem=ckpt_stem,
+            test_dataloader=test_dataloader,
+            perf_fn=perf_fn,
+            aux_metric_fns=aux_metric_fns,
+            loss_fn=loss_fn,
+            loss_mode=loss_mode,
+            resolve_eval_tau=resolve_eval_tau,
+            describe_tau_source=describe_tau_source,
+            threshold_key=threshold_key,
+            sun_threshold_key=sun_threshold_key,
+            log_path=log_path,
+            morphology_eval=morphology_eval,
+            eval_context_lookup=eval_context_lookup,
+            epoch_hint=max(int(start_epoch) - 1, 0),
+        )
+    args.zero_shot_payload = zero_shot_payload if zero_shot_payload else None
 
     for epoch in range(start_epoch, args.epochs + 1):
         if schedule_runtime is not None:
@@ -6649,6 +6939,7 @@ def train(rank, args):
                         "sensitivity_threshold_policy", sensitivity_policy
                     )
                 metrics_path = ckpt_stem.with_suffix(".metrics.json")
+                _attach_zero_shot_to_payload(metrics_payload, args)
                 with open(metrics_path, "w") as f:
                     json.dump(metrics_payload, f, indent=2)
                 if threshold_file_relpath:
@@ -7071,6 +7362,7 @@ def train(rank, args):
         if curve_export_metadata:
             last_metrics_payload.setdefault("curve_exports", {})["test"] = curve_export_metadata
         last_metrics_path = ckpt_stem.parent / f"{ckpt_stem.name}_last.metrics.json"
+        _attach_zero_shot_to_payload(last_metrics_payload, args)
         with open(last_metrics_path, "w") as handle:
             json.dump(last_metrics_payload, handle, indent=2)
     if distributed:
