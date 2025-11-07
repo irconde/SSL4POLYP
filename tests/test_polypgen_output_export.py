@@ -157,7 +157,10 @@ if "sklearn" not in sys.modules:
     sys.modules["sklearn"] = sklearn_stub
     sys.modules["sklearn.metrics"] = sklearn_metrics_stub
 
-from ssl4polyp.classification.train_classification import _export_frame_outputs
+from ssl4polyp.classification.train_classification import (
+    _build_eval_logging_context,
+    _export_frame_outputs,
+)
 
 
 def test_export_frame_outputs_polypgen_adjusts_columns(tmp_path: Path) -> None:
@@ -245,3 +248,22 @@ def test_export_frame_outputs_preserves_columns_for_other_datasets(tmp_path: Pat
 
     assert rows[0]["case_id"] == "caseA"
     assert rows[0]["morphology"] == "flat"
+
+
+def test_build_eval_logging_context_infers_polypgen_fewshot_tag() -> None:
+    class _DatasetStub:
+        labels_list = [0, 1]
+
+        def __len__(self) -> int:
+            return len(self.labels_list)
+
+    context = _build_eval_logging_context(
+        split_alias="test",
+        dataset=_DatasetStub(),
+        pack_spec="polypgen_fewshot/polypgen_fewshot_s50/test",
+        dataset_layout={"name": "polypgen_fewshot"},
+    )
+
+    assert context is not None
+    assert context.tag == "PolypGen-fewshot"
+    assert context.dataset_name == "polypgen_fewshot"
