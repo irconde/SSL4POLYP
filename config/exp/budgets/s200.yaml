@@ -24,4 +24,5 @@ early_stop:
   min_delta: 5.0e-5
   min_epochs: 3
  
-warmup_epochs: 3
+scheduler:
+  warmup_epochs: 3
