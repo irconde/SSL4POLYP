@@ -7186,9 +7186,109 @@ def train(rank, args):
                 final_tau_info = describe_tau_source(threshold_key) or final_tau_info
                 thresholds_map = dict(thresholds_map or {})
                 thresholds_map[threshold_key] = float(final_tau)
+        model_to_test = _unwrap_model(model)
+        best_checkpoint_path: Optional[Path] = None
+        if ckpt_pointer.is_symlink():
+            try:
+                best_checkpoint_path = ckpt_pointer.resolve(strict=True)
+            except FileNotFoundError:
+                best_checkpoint_path = None
+        elif ckpt_pointer.exists():
+            best_checkpoint_path = ckpt_pointer
+
+        if best_checkpoint_path is not None:
+            try:
+                best_checkpoint_payload = torch.load(
+                    best_checkpoint_path, map_location="cpu"
+                )
+            except Exception as exc:  # pragma: no cover - defensive safety net
+                warning_line = (
+                    "Warning: unable to reload best checkpoint "
+                    f"'{best_checkpoint_path}': {exc}"
+                )
+                print(warning_line)
+                _append_log_lines(log_path, [warning_line])
+            else:
+                state_dict = None
+                if isinstance(best_checkpoint_payload, Mapping):
+                    state_dict = best_checkpoint_payload.get("model_state_dict")
+                    payload_epoch = best_checkpoint_payload.get("epoch")
+                    if isinstance(payload_epoch, (int, np.integer)):
+                        best_epoch = int(payload_epoch)
+                    payload_thresholds = best_checkpoint_payload.get("thresholds")
+                    if isinstance(payload_thresholds, Mapping):
+                        thresholds_map = dict(payload_thresholds)
+                    payload_records = best_checkpoint_payload.get("threshold_records")
+                    if isinstance(payload_records, Mapping):
+                        normalized_records = _normalize_threshold_records_map(
+                            payload_records
+                        )
+                        threshold_record_cache.clear()
+                        threshold_record_cache.update(normalized_records)
+                        if (
+                            threshold_key is not None
+                            and threshold_key in normalized_records
+                        ):
+                            latest_threshold_record = dict(
+                                normalized_records[threshold_key]
+                            )
+                        if (
+                            sensitivity_threshold_key is not None
+                            and sensitivity_threshold_key in normalized_records
+                        ):
+                            latest_sensitivity_record = dict(
+                                normalized_records[sensitivity_threshold_key]
+                            )
+                            record_payload = normalized_records[
+                                sensitivity_threshold_key
+                            ]
+                            tau_candidate = record_payload.get("tau")
+                            if isinstance(tau_candidate, (int, float, np.integer, np.floating)):
+                                latest_sensitivity_tau = float(tau_candidate)
+                            info_candidate = record_payload.get("info") or record_payload.get(
+                                "tau_info"
+                            )
+                            if isinstance(info_candidate, str) and info_candidate:
+                                last_sensitivity_tau_info = info_candidate
+                    payload_threshold_files = best_checkpoint_payload.get(
+                        "threshold_files"
+                    )
+                    if (
+                        isinstance(payload_threshold_files, Mapping)
+                        and threshold_key is not None
+                    ):
+                        latest_threshold_file_relpath = (
+                            payload_threshold_files.get(threshold_key)
+                        )
+                    payload_thresholds_root = best_checkpoint_payload.get(
+                        "thresholds_root"
+                    )
+                    if isinstance(payload_thresholds_root, str):
+                        latest_thresholds_root = payload_thresholds_root
+                if state_dict is None and isinstance(best_checkpoint_payload, Mapping):
+                    state_dict = best_checkpoint_payload.get("state_dict")
+                if isinstance(state_dict, Mapping):
+                    model_to_test.load_state_dict(state_dict)
+                    reload_line = (
+                        "Reloaded best checkpoint weights from "
+                        f"'{best_checkpoint_path}'."
+                    )
+                    print(reload_line)
+                    _append_log_lines(log_path, [reload_line])
+                else:
+                    warning_line = (
+                        "Warning: best checkpoint payload does not contain "
+                        "'model_state_dict'; skipping reload."
+                    )
+                    print(warning_line)
+                    _append_log_lines(log_path, [warning_line])
+
+        if best_epoch is not None:
+            final_eval_epoch = int(best_epoch)
+
         test_outputs_path = ckpt_stem.parent / f"{ckpt_stem.name}_test_outputs.csv"
         final_test_metrics = test(
-            _unwrap_model(model),
+            model_to_test,
             rank,
             test_dataloader,
             final_eval_epoch,
