@@ -1,0 +1,27 @@
+# configs/exp5c/budgets/s100.yaml
+defaults:
+  - ../exp5c.yaml
+
+dataset:
+  size: 100
+
+epochs: 40
+protocol:
+  finetune_schedule:
+    - name: head_warmup
+      mode: none
+      epochs: 4
+      head_lr: 1.0e-3
+    - name: head2_refine
+      mode: head+2
+      epochs: 36
+      head_lr: 5.0e-4
+      backbone_lr: 1.5e-5
+
+early_stop:
+  monitor: val_loss
+  patience: 5
+  min_delta: 7.5e-5
+  min_epochs: 3
+ 
+warmup_epochs: 4
