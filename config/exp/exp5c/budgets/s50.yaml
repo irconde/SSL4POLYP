@@ -1,6 +1,6 @@
-# configs/exp5c/budgets/s50.yaml
+# config/exp/exp5c/budgets/s50.yaml
 defaults:
-  - ../exp5c.yaml
+  - ../../exp5c.yaml
 
 dataset:
   size: 50
