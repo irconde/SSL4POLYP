@@ -967,6 +967,9 @@ def _derive_eval_tag(
         if "polypgen_clean_test" in lower:
             base_tag = "PolypGen-clean"
             break
+        if "polypgen_fewshot" in lower:
+            base_tag = "PolypGen-fewshot"
+            break
         if "sun_full" in lower:
             base_tag = "SUN"
             break
