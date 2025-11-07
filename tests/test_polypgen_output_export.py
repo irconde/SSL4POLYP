@@ -170,7 +170,7 @@ from ssl4polyp.classification.train_classification import _export_frame_outputs
         "PolypGen_FewShot_S200",
         "polypgen_clean_test",
         "polypgen_clean_test_extended",
-        "PolypGen_Clean_Test",
+        "PolypGen_Clean_Test"
     ],
 )
 def test_export_frame_outputs_polypgen_adjusts_columns(
