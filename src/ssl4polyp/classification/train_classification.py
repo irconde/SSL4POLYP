@@ -17,7 +17,7 @@ import copy
 import warnings
 from pathlib import Path
 from collections import Counter, OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 import yaml
@@ -118,6 +118,8 @@ class TrainEpochStats:
     global_step: int
     samples_processed: int
     batches_processed: int
+    grad_norm: Optional[float] = None
+    grad_norms: Dict[str, Optional[float]] = field(default_factory=dict)
 
 
 @dataclass
@@ -1390,6 +1392,41 @@ def _format_lr_values(lrs: Iterable[float]) -> str:
     if len(lrs) == 1:
         return f"{lrs[0]:.3e}"
     return f"{min(lrs):.3e}-{max(lrs):.3e}"
+
+
+def _count_trainable_parameters(parameters: Iterable[torch.nn.Parameter]) -> int:
+    """Return the number of elements in ``parameters`` that require gradients."""
+
+    total = 0
+    for param in parameters:
+        if param is None or not isinstance(param, torch.nn.Parameter):
+            continue
+        if param.requires_grad:
+            total += int(param.numel())
+    return total
+
+
+def _summarize_trainable_param_counts(
+    param_groups: Mapping[str, Sequence[torch.nn.Parameter]]
+) -> Dict[str, int]:
+    """Return trainable parameter counts for each named parameter group."""
+
+    counts: Dict[str, int] = {}
+    seen: set[int] = set()
+    total = 0
+    for name, params in param_groups.items():
+        unique_params: list[torch.nn.Parameter] = []
+        for param in params:
+            param_id = id(param)
+            if param_id in seen:
+                continue
+            seen.add(param_id)
+            unique_params.append(param)
+        count = _count_trainable_parameters(unique_params)
+        counts[name] = count
+        total += count
+    counts["total"] = total
+    return counts
 
 
 def _compute_grad_norm(parameters: Iterable[torch.nn.Parameter]) -> Optional[float]:
@@ -4436,6 +4473,8 @@ def train_epoch(
                 global_step=int(global_step),
                 samples_processed=0,
                 batches_processed=0,
+                grad_norm=None,
+                grad_norms={},
             )
 
     t = time.time()
@@ -4445,6 +4484,8 @@ def train_epoch(
     if not isinstance(scaler, torch.cuda.amp.GradScaler):
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     loss_accumulator: list[float] = []
+    latest_grad_norms: Dict[str, Optional[float]] = {}
+    last_grad_norm_value: Optional[float] = None
 
     dataset_size = len(train_loader.dataset)
     grad_accum_steps = int(getattr(optimizer, "grad_accum_steps", 1)) or 1
@@ -4478,9 +4519,15 @@ def train_epoch(
         scaler.scale(loss).backward()
         if use_amp:
             scaler.unscale_(optimizer)
+        group_grad_norms: Dict[str, Optional[float]] = {}
+        for idx, group in enumerate(optimizer.param_groups):
+            group_name = str(group.get("name") or f"group{idx}")
+            group_grad_norms[group_name] = _compute_grad_norm(group["params"])
         grad_norm_value = _compute_grad_norm(
             param for group in optimizer.param_groups for param in group["params"]
         )
+        latest_grad_norms = dict(group_grad_norms)
+        last_grad_norm_value = grad_norm_value
         scaler.step(optimizer)
         scaler.update()
         loss_scale_value = scaler.get_scale() if use_amp else None
@@ -4497,6 +4544,13 @@ def train_epoch(
                 lr = optimizer.param_groups[0]["lr"]
                 tb_logger.log_scalar("loss", loss_value, global_step)
                 tb_logger.log_scalar("lr", lr, global_step)
+                if grad_norm_value is not None:
+                    tb_logger.log_scalar("grad_norm/total", float(grad_norm_value), global_step)
+                for group_name, group_norm in group_grad_norms.items():
+                    if group_norm is not None:
+                        tb_logger.log_scalar(
+                            f"grad_norm/{group_name}", float(group_norm), global_step
+                        )
             progress_pct = (
                 100.0 * batches_processed / total_batches if total_batches else 0.0
             )
@@ -4572,6 +4626,12 @@ def train_epoch(
         global_step=int(global_step),
         samples_processed=int(sample_count),
         batches_processed=int(batches_processed),
+        grad_norm=(
+            float(last_grad_norm_value)
+            if last_grad_norm_value is not None
+            else None
+        ),
+        grad_norms=dict(latest_grad_norms),
     )
 
 
@@ -6550,6 +6610,9 @@ def train(rank, args):
             if stage is not None:
                 args.finetune_mode = stage.mode
                 args.frozen = stage.mode == "none"
+        target_model = _unwrap_model(model)
+        epoch_param_groups = collect_finetune_param_groups(target_model)
+        epoch_trainable_counts = _summarize_trainable_param_counts(epoch_param_groups)
         try:
             prev_global_step = global_step
             epoch_stats = train_epoch(
@@ -6595,11 +6658,38 @@ def train(rank, args):
                         primary_lr = lr_value
                 if primary_lr is not None:
                     train_metrics_payload["lr"] = primary_lr
+                for name, count in epoch_trainable_counts.items():
+                    metric_name = "trainable_params" if name == "total" else f"{name}_trainable_params"
+                    train_metrics_payload[metric_name] = int(count)
+                if epoch_stats.grad_norm is not None:
+                    train_metrics_payload["grad_norm"] = float(epoch_stats.grad_norm)
+                for group_name, group_norm in epoch_stats.grad_norms.items():
+                    if group_norm is not None:
+                        train_metrics_payload[f"{group_name}_grad_norm"] = float(group_norm)
                 if tb_logger:
                     tb_logger.log_metrics("train", train_metrics_payload, epoch)
                 last_train_lr = primary_lr
                 last_train_lr_groups = dict(train_lr_groups_map)
                 train_lr_summary = ", ".join(train_lr_display_parts) if train_lr_display_parts else "n/a"
+                head_trainable = int(epoch_trainable_counts.get("head", 0))
+                backbone_trainable = int(epoch_trainable_counts.get("backbone", 0))
+                total_trainable = int(
+                    epoch_trainable_counts.get(
+                        "total", head_trainable + backbone_trainable
+                    )
+                )
+                trainable_display = (
+                    f"head={head_trainable} backbone={backbone_trainable} total={total_trainable}"
+                )
+                grad_summary_parts: list[str] = []
+                if epoch_stats.grad_norm is not None:
+                    grad_summary_parts.append(f"total={epoch_stats.grad_norm:.2f}")
+                for group_name in sorted(epoch_stats.grad_norms):
+                    group_norm = epoch_stats.grad_norms[group_name]
+                    if group_norm is None:
+                        continue
+                    grad_summary_parts.append(f"{group_name}={group_norm:.2f}")
+                grad_summary = ", ".join(grad_summary_parts) if grad_summary_parts else "n/a"
                 eval_tau, eval_tau_key = resolve_eval_tau(
                     threshold_key, sun_threshold_key
                 )
@@ -6682,7 +6772,9 @@ def train(rank, args):
 
                 summary_line = (
                     f"[epoch {epoch}] train: loss={_format_epoch_metric(loss)}"
-                    f", lr={train_lr_summary} | val: loss={_format_epoch_metric(val_loss_value)}"
+                    f", lr={train_lr_summary}, trainable=({trainable_display})"
+                    f", grad_norms=({grad_summary})"
+                    f" | val: loss={_format_epoch_metric(val_loss_value)}"
                     f", auprc={_format_epoch_metric(val_metrics.get('auprc'))}"
                     f", auroc={_format_epoch_metric(val_metrics.get('auroc'))}"
                 )

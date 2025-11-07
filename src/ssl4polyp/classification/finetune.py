@@ -11,6 +11,21 @@ __all__ = [
 ]
 
 
+def _clear_param_grad(param: nn.Parameter) -> None:
+    """Zero and clear the gradient stored on ``param`` if present."""
+
+    grad = getattr(param, "grad", None)
+    if grad is None:
+        return
+    if grad.is_sparse:
+        grad = grad.coalesce()
+        values = grad._values()
+        values.zero_()
+    else:
+        grad.zero_()
+    param.grad = None
+
+
 def normalise_finetune_mode(raw: Any, *, default: str = "full") -> str:
     """Resolve a user-specified fine-tuning regime into a canonical label."""
 
@@ -39,9 +54,11 @@ def configure_finetune_parameters(model: nn.Module, mode: str) -> None:
     if resolved_mode == "full":
         for param in model.parameters():
             param.requires_grad_(True)
+            _clear_param_grad(param)
     else:
         for param in model.parameters():
             param.requires_grad_(False)
+            _clear_param_grad(param)
 
         head_modules: list[nn.Module] = []
         lin_head = getattr(model, "lin_head", None)
@@ -54,6 +71,7 @@ def configure_finetune_parameters(model: nn.Module, mode: str) -> None:
         for head in head_modules:
             for param in head.parameters():
                 param.requires_grad_(True)
+                _clear_param_grad(param)
 
         blocks = getattr(model, "blocks", None)
         if isinstance(blocks, (nn.ModuleList, list, tuple)) and len(blocks) > 0:
@@ -67,6 +85,7 @@ def configure_finetune_parameters(model: nn.Module, mode: str) -> None:
                 for block in list(blocks)[-tail_count:]:
                     for param in block.parameters():
                         param.requires_grad_(True)
+                        _clear_param_grad(param)
 
     if hasattr(model, "frozen"):
         model.frozen = resolved_mode == "none"
