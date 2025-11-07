@@ -4070,6 +4070,19 @@ def apply_experiment_config(
     args.persistent_workers = experiment_cfg.get("persistent_workers", args.persistent_workers)
     args.log_interval = experiment_cfg.get("log_interval", args.log_interval)
 
+    if not hasattr(args, "warmup_epochs"):
+        args.warmup_epochs = 0
+
+    top_level_warmup = experiment_cfg.get("warmup_epochs")
+    if top_level_warmup is not None:
+        warnings.warn(
+            (
+                "Experiment configuration defines 'warmup_epochs' at the top level; "
+                "this entry is ignored. Declare warmup values under the scheduler block."
+            ),
+            RuntimeWarning,
+        )
+
     scheduler_cfg = experiment_cfg.get("scheduler")
     if isinstance(scheduler_cfg, str):
         args.scheduler = scheduler_cfg
@@ -7527,7 +7540,15 @@ def get_args():
             "Values <= 0 disable the limit."
         ),
     )
-    parser.add_argument("--warmup-epochs", type=int, default=0)
+    parser.add_argument(
+        "--warmup-epochs",
+        type=int,
+        default=0,
+        help=(
+            "Number of warmup epochs when the scheduler configuration does not "
+            "override the value."
+        ),
+    )
     parser.add_argument("--min-lr", type=float, default=1e-6)
     parser.add_argument("--scheduler-patience", type=int, default=2)
     parser.add_argument("--scheduler-factor", type=float, default=0.5)
