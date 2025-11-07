@@ -2792,11 +2792,14 @@ def _export_frame_outputs(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     dataset_name_normalised = str(dataset_name or "").strip().lower()
-    is_polypgen_fewshot = dataset_name_normalised == "polypgen_fewshot"
+    is_polypgen_metadata_adjusted = dataset_name_normalised.startswith(
+        "polypgen_fewshot"
+    ) or dataset_name_normalised.startswith("polypgen_clean")
 
-    if is_polypgen_fewshot:
-        # exp5c evaluates polypgen_fewshot packs; adjust its exports without
-        # perturbing other PolypGen experiments that rely on case/morph columns.
+    if is_polypgen_metadata_adjusted:
+        # exp5-style evaluations export PolypGen metadata; adjust its exports
+        # without perturbing other PolypGen experiments that rely on case/morph
+        # columns.
         fieldnames = [
             "frame_id",
             "prob",
@@ -2853,7 +2856,7 @@ def _export_frame_outputs(
                 "origin": origin,
             }
 
-            if is_polypgen_fewshot:
+            if is_polypgen_metadata_adjusted:
                 case_id = _resolve_metadata_value(
                     row,
                     (
