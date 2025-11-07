@@ -7187,6 +7187,7 @@ def train(rank, args):
                 thresholds_map = dict(thresholds_map or {})
                 thresholds_map[threshold_key] = float(final_tau)
         model_to_test = _unwrap_model(model)
+        original_state_dict: Optional[OrderedDict[str, torch.Tensor]] = None
         best_checkpoint_path: Optional[Path] = None
         if ckpt_pointer.is_symlink():
             try:
@@ -7268,6 +7269,14 @@ def train(rank, args):
                 if state_dict is None and isinstance(best_checkpoint_payload, Mapping):
                     state_dict = best_checkpoint_payload.get("state_dict")
                 if isinstance(state_dict, Mapping):
+                    if original_state_dict is None:
+                        original_state_dict = OrderedDict(
+                            (
+                                key,
+                                tensor.detach().cpu().clone(),
+                            )
+                            for key, tensor in model_to_test.state_dict().items()
+                        )
                     model_to_test.load_state_dict(state_dict)
                     reload_line = (
                         "Reloaded best checkpoint weights from "
@@ -7314,6 +7323,9 @@ def train(rank, args):
             metrics=final_test_metrics,
             log_path=log_path,
         )
+        if original_state_dict is not None:
+            model_to_test.load_state_dict(original_state_dict)
+            original_state_dict = None
         final_morphology_block: Dict[str, Dict[str, Any]] = {}
         final_test_probabilities_tensor: Optional[torch.Tensor] = None
         final_test_targets_tensor: Optional[torch.Tensor] = None
