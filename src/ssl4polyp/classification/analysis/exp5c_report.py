@@ -460,10 +460,8 @@ def _build_cluster_set(run: FewShotRun) -> ClusterSet:
         run.frames.values(),
         is_positive=lambda record: record.label == 1,
         record_id=lambda record: record.frame_id,
-        positive_key=lambda record: None,
-        negative_key=lambda record: record.center_id
-        or record.sequence_id
-        or record.case_id,
+        positive_key=lambda record: record.center_id or record.sequence_id,
+        negative_key=lambda record: record.sequence_id or record.center_id,
     )
 
 
