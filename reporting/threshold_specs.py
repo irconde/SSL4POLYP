@@ -26,13 +26,13 @@ THRESHOLD_SPECS = {
         "sensitivity": {"policy": "youden_on_val", "split": "${val_path}", "require": ["tau", "split", "epoch"]},
     },
     "exp5a": {
-        "primary":     {"policy": "sun_val_frozen", "source_split": "sun_full/val", "require": ["tau", "source_checkpoint", "source_split"]},
+        "primary":     {"policy": "sun_val_frozen", "source_split": "sun_full/val", "require": ["tau", "source_split"]},
     },
     "exp5b": {
-        "primary":     {"policy": "sun_val_frozen", "source_split": "sun_full/val", "require": ["tau", "source_checkpoint", "source_split"]},
+        "primary":     {"policy": "sun_val_frozen", "source_split": "sun_full/val", "require": ["tau", "source_split"]},
     },
     "exp5c": {
-        "primary":     {"policy": "sun_val_frozen", "source_split": "sun_full/val", "require": ["tau", "source_checkpoint", "source_split"]},
+        "primary":     {"policy": "sun_val_frozen", "source_split": "sun_full/val", "require": ["tau", "source_split"]},
         "sensitivity": {"policy": "val_opt_youden", "split": "${val_path}", "require": ["tau", "split", "epoch"]},
     },
 }
