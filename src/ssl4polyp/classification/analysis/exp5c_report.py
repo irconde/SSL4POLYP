@@ -1051,8 +1051,12 @@ def _compute_pairwise_deltas(
                 rng_seed=rng_seed,
                 policy=policy,
             )
+            if replicates:
+                delta_mean = float(np.mean(replicates))
+            else:
+                delta_mean = float(np.mean(deltas))
             baseline_result[budget] = {
-                "delta": float(np.mean(deltas)),
+                "delta": delta_mean,
                 "ci": _compute_ci(replicates) if replicates else {"lower": float("nan"), "upper": float("nan")},
                 "replicates": replicates,
                 "seeds": len(deltas),
@@ -1173,8 +1177,14 @@ def _compute_aulc_deltas(
             policy=policy,
             expected_seeds=expected_seeds,
         )
+        if replicates:
+            delta_mean = float(np.mean(replicates))
+        elif per_seed_deltas:
+            delta_mean = float(np.mean(per_seed_deltas))
+        else:
+            delta_mean = float("nan")
         results[baseline] = {
-            "delta": float(np.mean(per_seed_deltas)) if per_seed_deltas else float("nan"),
+            "delta": delta_mean,
             "ci": _compute_ci(replicates) if replicates else {"lower": float("nan"), "upper": float("nan")},
             "replicates": replicates,
             "seeds": len(per_seed_deltas),
@@ -1428,8 +1438,12 @@ def _compute_gain_summary(
                     bootstrap=bootstrap,
                     rng_seed=rng_seed,
                 )
+                if replicates:
+                    mean_value = float(np.mean(replicates))
+                else:
+                    mean_value = mean
                 metric_block[metric] = {
-                    "mean": mean,
+                    "mean": mean_value,
                     "std": std,
                     "n": len(diffs),
                     "per_seed": per_seed_values,
