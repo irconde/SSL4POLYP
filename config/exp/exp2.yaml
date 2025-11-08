@@ -1,6 +1,8 @@
 defaults:
   - base
   - data/sun_full
+reporting:
+  inputs_subdir: exp2_sun_baselines_sslcolon_vs_sslimnet
 models:
   - model/ssl_imnet
   - model/ssl_colon

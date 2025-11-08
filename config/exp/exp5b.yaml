@@ -1,6 +1,8 @@
 defaults:
   - base
   - data/sun_test_perturbations
+reporting:
+  inputs_subdir: exp5b_sun_perturbations
 models:
   - model/sup_imnet
   - model/ssl_imnet

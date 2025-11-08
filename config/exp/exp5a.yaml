@@ -1,6 +1,8 @@
 defaults:
   - base
   - data/polypgen_clean_test
+reporting:
+  inputs_subdir: exp5a_polypgen
 models:
   - model/sup_imnet
   - model/ssl_imnet

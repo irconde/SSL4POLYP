@@ -1,6 +1,8 @@
 defaults:
   - base
   - data/sun_full
+reporting:
+  inputs_subdir: exp1_sun_baselines_sup_vs_ssl
 models:
   - model/sup_imnet
   - model/ssl_imnet
