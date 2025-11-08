@@ -2390,7 +2390,7 @@ def _resolve_threshold_train_pack_segment(args) -> Optional[str]:
         if percent is None:
             percent = _as_int(resolved.get("percent"))
         if percent is not None:
-            return f"sun_p{int(percent):02d}"
+            return f"sun_p{int(percent)}"
     if dataset_name == "polypgen_fewshot":
         size = _as_int(layout.get("size"))
         if size is None:
@@ -2419,7 +2419,7 @@ def _resolve_threshold_subset_segment(args) -> Optional[str]:
     tokens: list[str] = []
     if dataset_name == "sun_subsets":
         if percent is not None:
-            tokens.append(f"p{int(percent):02d}")
+            tokens.append(f"p{int(percent)}")
         if dataset_seed is not None:
             tokens.append(f"s{int(dataset_seed)}")
     elif dataset_name == "polypgen_fewshot":
@@ -3658,8 +3658,8 @@ def _resolve_dataset_layout(
     elif dataset_key == "sun_subsets":
         segments = ["sun_subsets"]
         if percent is not None:
-            segments.append(f"p{int(percent):02d}")
-            data_tag = f"SUNP{int(percent):02d}"
+            segments.append(f"p{int(percent)}")
+            data_tag = f"SUNP{int(percent)}"
         else:
             data_tag = "SUNSubset"
         if active_seed:

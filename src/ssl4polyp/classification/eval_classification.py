@@ -328,7 +328,7 @@ def _resolve_train_pack_segment(args, checkpoint: CheckpointCandidate) -> Option
     if dataset_kind == "sun_subsets":
         percent = _search_int(r"p(\d+)", *tokens)
         if percent is not None:
-            return f"sun_p{int(percent):02d}"
+            return f"sun_p{int(percent)}"
     elif dataset_kind == "polypgen_fewshot":
         size = _search_int(r"s(\d+)", *tokens)
         if size is not None:
@@ -350,7 +350,7 @@ def _resolve_subset_segment(args, checkpoint: CheckpointCandidate) -> Optional[s
     parts: List[str] = []
     if dataset_kind == "sun_subsets":
         if percent is not None:
-            parts.append(f"p{int(percent):02d}")
+            parts.append(f"p{int(percent)}")
         if dataset_seed is not None:
             parts.append(f"s{int(dataset_seed)}")
     elif dataset_kind == "polypgen_fewshot":
