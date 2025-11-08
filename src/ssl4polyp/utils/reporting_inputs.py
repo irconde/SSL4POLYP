@@ -8,7 +8,7 @@ import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Mapping, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence
 
 from ssl4polyp.configs.layered import load_layered_config
 
@@ -48,14 +48,54 @@ def _load_reporting_subdir(config_path: Path) -> Optional[str]:
     return None
 
 
-def _prefer_metrics(run_dir: Path) -> Sequence[Path]:
-    last_candidates = list(run_dir.glob("*_last.metrics.json"))
-    other_candidates = list(run_dir.glob("*.metrics.json"))
-    unique: List[Path] = []
-    for candidate in sorted(last_candidates + other_candidates):
-        if candidate not in unique:
-            unique.append(candidate)
-    return unique
+def _is_descendant(parent: Path, child: Path) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _select_metrics_files(run_dir: Path) -> Sequence[Path]:
+    """Return one metrics export per leaf directory under ``run_dir``.
+
+    ``train_classification`` writes artifacts inside dataset-specific
+    directories, optionally introducing ``p{percentage}/seed{seed}`` or
+    ``s{budget}/seed{seed}`` levels depending on the experiment.  We treat the
+    directory containing the metrics export as the leaf and pick the
+    corresponding ``*_last.metrics.json`` file if it exists; otherwise we fall
+    back to the first available ``*.metrics.json``.
+    """
+
+    metrics_by_dir: Dict[Path, List[Path]] = {}
+    for metrics_path in sorted(run_dir.rglob("*.metrics.json")):
+        metrics_by_dir.setdefault(metrics_path.parent, []).append(metrics_path)
+
+    if not metrics_by_dir:
+        return []
+
+    directories = sorted(metrics_by_dir.keys())
+    leaf_directories: List[Path] = []
+    for directory in directories:
+        if not any(
+            other != directory and _is_descendant(directory, other)
+            for other in directories
+        ):
+            leaf_directories.append(directory)
+
+    selected: List[Path] = []
+    for directory in leaf_directories:
+        metrics_candidates = sorted(metrics_by_dir[directory])
+        last_candidates = [
+            candidate
+            for candidate in metrics_candidates
+            if candidate.name.endswith("_last.metrics.json")
+        ]
+        if last_candidates:
+            selected.append(last_candidates[0])
+        else:
+            selected.append(metrics_candidates[0])
+    return selected
 
 
 def _load_metrics_payload(path: Path) -> Mapping[str, object]:
@@ -112,7 +152,7 @@ def copy_reporting_inputs(
     destination_dir = reporting_root / reporting_subdir
     destination_dir.mkdir(parents=True, exist_ok=True)
 
-    metrics_candidates = _prefer_metrics(run_dir)
+    metrics_candidates = _select_metrics_files(run_dir)
     if not metrics_candidates:
         raise ReportingInputsError(
             f"No metrics exports were found in run directory {run_dir}"
@@ -140,7 +180,6 @@ def copy_reporting_inputs(
         shutil.copy2(outputs_path, dest_outputs)
         copies.append(ReportingCopyResult(metrics_path, dest_metrics))
         copies.append(ReportingCopyResult(outputs_path, dest_outputs))
-        break
     if not copies:
         joined_errors = "; ".join(errors) if errors else "unknown reason"
         raise ReportingInputsError(
