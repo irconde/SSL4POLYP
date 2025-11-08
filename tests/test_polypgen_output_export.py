@@ -3,6 +3,7 @@ import csv
 import sys
 import types
 from pathlib import Path
+from typing import Mapping, Sequence
 
 import pytest
 
@@ -159,7 +160,11 @@ if "sklearn" not in sys.modules:
     sys.modules["sklearn"] = sklearn_stub
     sys.modules["sklearn.metrics"] = sklearn_metrics_stub
 
-from ssl4polyp.classification.train_classification import _export_frame_outputs
+from ssl4polyp.classification.train_classification import (
+    _build_eval_logging_context,
+    _derive_eval_tag,
+    _export_frame_outputs,
+)
 
 
 @pytest.mark.parametrize(
@@ -260,3 +265,36 @@ def test_export_frame_outputs_preserves_columns_for_other_datasets(tmp_path: Pat
 
     assert rows[0]["case_id"] == "caseA"
     assert rows[0]["morphology"] == "flat"
+
+
+class _DatasetStub:
+    def __init__(self, labels: Sequence[int], metadata: Sequence[Mapping[str, object]]):
+        self.labels_list = list(labels)
+        self.metadata = list(metadata)
+
+    def __len__(self) -> int:
+        return len(self.metadata)
+
+
+def test_derive_eval_tag_recognises_polypgen_fewshot() -> None:
+    tag = _derive_eval_tag(
+        split_alias="test",
+        pack_spec="polypgen_fewshot_s50",
+        dataset_layout={"name": "polypgen_fewshot"},
+    )
+    assert tag == "PolypGen-fewshot"
+
+
+def test_build_eval_logging_context_sets_dataset_name_for_polypgen() -> None:
+    dataset = _DatasetStub(
+        labels=[1, 0],
+        metadata=[{"case_id": "C1"}, {"case_id": "C2"}],
+    )
+    context = _build_eval_logging_context(
+        split_alias="test",
+        dataset=dataset,
+        pack_spec="polypgen_fewshot_s50",
+        dataset_layout={"name": "polypgen_fewshot"},
+    )
+    assert context is not None
+    assert context.dataset_name == "polypgen_fewshot"

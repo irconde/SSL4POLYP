@@ -961,16 +961,21 @@ def _derive_eval_tag(
     """Infer a dataset tag for evaluation logging."""
 
     candidates = [pack_spec, dataset_layout.get("name") if dataset_layout else None]
+    token_to_tag: tuple[tuple[str, str], ...] = (
+        ("polypgen_fewshot", "PolypGen-fewshot"),
+        ("polypgen_clean", "PolypGen-clean"),
+        ("sun_full", "SUN"),
+    )
     base_tag: Optional[str] = None
     for candidate in candidates:
         if not candidate:
             continue
         lower = str(candidate).lower()
-        if "polypgen_clean_test" in lower:
-            base_tag = "PolypGen-clean"
-            break
-        if "sun_full" in lower:
-            base_tag = "SUN"
+        for token, tag in token_to_tag:
+            if token in lower:
+                base_tag = tag
+                break
+        if base_tag is not None:
             break
     if base_tag is None:
         return None
