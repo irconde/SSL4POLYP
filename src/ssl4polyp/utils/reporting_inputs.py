@@ -137,13 +137,70 @@ def _resolve_outputs_path(metrics_path: Path, payload: Mapping[str, object]) -> 
     return None
 
 
+def _resolve_zero_shot_path(
+    metrics_path: Path, payload: Mapping[str, object]
+) -> Optional[Path]:
+    """Return the zero-shot outputs CSV corresponding to ``metrics_path`` if present."""
+
+    candidates: List[Path] = []
+
+    def _push(value: object) -> None:
+        if isinstance(value, Path):
+            path = value if value.is_absolute() else metrics_path.parent / value
+            candidates.append(path)
+        elif isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return
+            candidate = Path(text)
+            if not candidate.is_absolute():
+                candidate = metrics_path.parent / candidate
+            candidates.append(candidate)
+
+    provenance = payload.get("provenance")
+    if isinstance(provenance, Mapping):
+        for key in (
+            "test_zero_shot_outputs_csv",
+            "zero_shot_outputs_csv",
+            "zero_shot_outputs",
+        ):
+            _push(provenance.get(key))
+        for nested in provenance.values():
+            if isinstance(nested, Mapping):
+                for key in (
+                    "test_zero_shot_outputs_csv",
+                    "zero_shot_outputs_csv",
+                    "outputs_csv",
+                ):
+                    _push(nested.get(key))
+
+    zero_shot_block = payload.get("zero_shot")
+    if isinstance(zero_shot_block, Mapping):
+        for key in ("outputs_csv", "test_outputs_csv", "outputs"):
+            _push(zero_shot_block.get(key))
+        zero_provenance = zero_shot_block.get("provenance")
+        if isinstance(zero_provenance, Mapping):
+            for key in ("outputs_csv", "test_outputs_csv"):
+                _push(zero_provenance.get(key))
+
+    stem = metrics_path.stem
+    base_name = stem[:-5] if stem.endswith("_last") else stem
+    _push(metrics_path.with_name(f"{base_name}_zeroshot_outputs.csv"))
+    _push(metrics_path.with_name(f"{stem}_zeroshot_outputs.csv"))
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def copy_reporting_inputs(
     run_dir: Path,
     reporting_root: Path,
     *,
     reporting_subdir: str,
 ) -> Sequence[ReportingCopyResult]:
-    """Copy metrics and test outputs from ``run_dir`` into ``reporting_root``."""
+    """Copy metrics and prediction exports from ``run_dir`` into ``reporting_root``."""
 
     run_dir = _expand_path(run_dir)
     if not run_dir.is_dir():
@@ -180,6 +237,11 @@ def copy_reporting_inputs(
         shutil.copy2(outputs_path, dest_outputs)
         copies.append(ReportingCopyResult(metrics_path, dest_metrics))
         copies.append(ReportingCopyResult(outputs_path, dest_outputs))
+        zero_shot_path = _resolve_zero_shot_path(metrics_path, payload)
+        if zero_shot_path and zero_shot_path.exists():
+            dest_zero_shot = destination_dir / zero_shot_path.name
+            shutil.copy2(zero_shot_path, dest_zero_shot)
+            copies.append(ReportingCopyResult(zero_shot_path, dest_zero_shot))
     if not copies:
         joined_errors = "; ".join(errors) if errors else "unknown reason"
         raise ReportingInputsError(
@@ -191,8 +253,9 @@ def copy_reporting_inputs(
 def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Copy *_last.metrics.json (or fallback metrics exports) and their corresponding "
-            "*_test_outputs.csv files into results/reporting_inputs."
+            "Copy *_last.metrics.json (or fallback metrics exports) along with their "
+            "*_test_outputs.csv files (and optional *_zeroshot_outputs.csv) into "
+            "results/reporting_inputs."
         )
     )
     parser.add_argument(
