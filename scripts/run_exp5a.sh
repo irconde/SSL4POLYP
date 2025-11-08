@@ -7,6 +7,7 @@ EXP_CONFIG=${EXP_CONFIG:-exp/exp5a.yaml}
 ROOTS=${ROOTS:-data/roots.json}
 OUTPUT_ROOT=${OUTPUT_ROOT:-checkpoints/classification}
 PARENT_ROOT=${PARENT_ROOT:-checkpoints/classification}
+REPORTING_INPUTS_ROOT=${REPORTING_INPUTS_ROOT:-results/reporting_inputs}
 DEFAULT_SEEDS=$("${SCRIPT_DIR}/print_config_seeds.py" "${EXP_CONFIG}")
 DEFAULT_MODELS=$("${SCRIPT_DIR}/print_config_models.py" "${EXP_CONFIG}")
 SEEDS=${SEEDS:-${DEFAULT_SEEDS}}
@@ -85,5 +86,9 @@ EOF
       --parent-checkpoint "${parent_ckpt}" \
       --roots "${ROOTS}" \
       --output-dir "${out_dir}" "${@}"
+    python -m ssl4polyp.utils.reporting_inputs \
+      --run-dir "${out_dir}" \
+      --exp-config "${EXP_CONFIG}" \
+      --reporting-root "${REPORTING_INPUTS_ROOT}"
   done
 done

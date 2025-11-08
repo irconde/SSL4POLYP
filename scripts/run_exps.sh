@@ -10,6 +10,7 @@ REPO_ROOT=$(dirname "$CONFIG_ROOT")
 DEFAULT_ROOTS_JSON="${REPO_ROOT}/data/roots.json"
 DEFAULT_OUT_BASE="${REPO_ROOT}/checkpoints/classification"
 DEFAULT_RESULTS_BASE="${REPO_ROOT}/results/classification"
+DEFAULT_REPORTING_INPUTS_BASE="${REPO_ROOT}/results/reporting_inputs"
 
 # Usage: scripts/run_exps.sh EXP_CONFIG_DIR [ROOTS_JSON] [OUT_BASE] [RESULTS_BASE]
 if [[ $# -lt 1 || $# -gt 4 ]]; then
@@ -27,6 +28,7 @@ if [[ "$ROOTS_JSON" != /* && ! -e "$ROOTS_JSON" ]]; then
 fi
 OUT_BASE="${3:-$DEFAULT_OUT_BASE}"
 RESULTS_BASE="${4:-$DEFAULT_RESULTS_BASE}"
+REPORTING_INPUTS_BASE="${REPORTING_INPUTS_BASE:-$DEFAULT_REPORTING_INPUTS_BASE}"
 
 if [[ ! -d "$EXP_DIR" ]]; then
   echo "Experiment configuration directory not found: $EXP_DIR" >&2
@@ -109,5 +111,9 @@ PY
     RESULTS_DIR="${RESULTS_BASE}/${EXP_NAME}"
     mkdir -p "$RESULTS_DIR"
     cp "$METRICS_SRC" "${RESULTS_DIR}/seed${SEED}.json"
+    python -m ssl4polyp.utils.reporting_inputs \
+      --run-dir "${OUT_DIR}" \
+      --exp-config "${CONFIG_PATH}" \
+      --reporting-root "${REPORTING_INPUTS_BASE}"
   done
 done

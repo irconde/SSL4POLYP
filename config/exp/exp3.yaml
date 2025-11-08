@@ -1,6 +1,8 @@
 defaults:
   - base
   - data/sun_morphology
+reporting:
+  inputs_subdir: exp3_sun_morphology_all_models
 models:
   - model/sup_imnet
   - model/ssl_imnet

@@ -1,6 +1,8 @@
 defaults:
   - base
   - data/polypgen_fewshot
+reporting:
+  inputs_subdir: exp5c_polypgen_fewshot
 models:
   - model/sup_imnet
   - model/ssl_imnet

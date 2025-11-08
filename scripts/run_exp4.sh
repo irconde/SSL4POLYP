@@ -6,6 +6,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 EXP_CONFIG=${EXP_CONFIG:-exp/exp4.yaml}
 ROOTS=${ROOTS:-data/roots.json}
 OUTPUT_ROOT=${OUTPUT_ROOT:-checkpoints/classification}
+REPORTING_INPUTS_ROOT=${REPORTING_INPUTS_ROOT:-results/reporting_inputs}
 REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 export PYTHONPATH="${REPO_ROOT}:${REPO_ROOT}/src:${PYTHONPATH:-}"
 DEFAULT_SEEDS=$("${SCRIPT_DIR}/print_config_seeds.py" "${EXP_CONFIG}")
@@ -67,6 +68,10 @@ for seed in ${SEEDS}; do
         --roots "${ROOTS}" \
         --override dataset.percent="${pct}" dataset.seed="${SUBSET_SEED}" \
         --output-dir "${out_dir}" "${@}"
+      python -m ssl4polyp.utils.reporting_inputs \
+        --run-dir "${out_dir}" \
+        --exp-config "${EXP_CONFIG}" \
+        --reporting-root "${REPORTING_INPUTS_ROOT}"
     done
   done
 done

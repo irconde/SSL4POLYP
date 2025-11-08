@@ -1,6 +1,8 @@
 defaults:
   - base
   - data/sun_subsets
+reporting:
+  inputs_subdir: exp4_sun_subsets
 models:
   - model/sup_imnet
   - model/ssl_imnet
