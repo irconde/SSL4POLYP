@@ -443,7 +443,15 @@ def resolve_frozen_sun_threshold(
 
     degenerate = bool(candidate.get("degenerate_val")) if isinstance(candidate, Mapping) else False
     split_value = source_split or (expected_split_substring or None)
-    canonical_source_split = expected_split_substring or source_split or None
+    if expected_split_substring:
+        if source_split and expected_split_substring in source_split:
+            canonical_source_split = expected_split_substring
+        elif source_split:
+            canonical_source_split = source_split
+        else:
+            canonical_source_split = None
+    else:
+        canonical_source_split = source_split or None
     if source_split:
         notes.setdefault("source_split_path", source_split)
 
