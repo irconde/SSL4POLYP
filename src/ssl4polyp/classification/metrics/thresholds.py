@@ -413,12 +413,17 @@ def resolve_frozen_sun_threshold(
     if tau is None or not isinstance(tau, (int, float)) or not math.isfinite(float(tau)):
         raise ValueError(f"Frozen threshold entry '{source_key}' does not provide a valid tau")
     source_policy = candidate.get("policy")
-    source_split = candidate.get("split")
+    source_split_raw = candidate.get("split")
+    source_split = (
+        str(source_split_raw).strip()
+        if isinstance(source_split_raw, str) and source_split_raw.strip()
+        else None
+    )
     candidate_notes = candidate.get("notes") if isinstance(candidate, Mapping) else None
     notes: Dict[str, Any] = {}
     if isinstance(candidate_notes, Mapping):
         notes.update({str(key): candidate_notes[key] for key in candidate_notes.keys()})
-    if expected_split_substring and isinstance(source_split, str):
+    if expected_split_substring and source_split:
         if expected_split_substring not in source_split:
             notes["unexpected_source_split"] = source_split
     elif expected_split_substring and source_split is None:
@@ -437,11 +442,10 @@ def resolve_frozen_sun_threshold(
         epoch = -1
 
     degenerate = bool(candidate.get("degenerate_val")) if isinstance(candidate, Mapping) else False
-    split_value = (
-        str(source_split)
-        if isinstance(source_split, str) and source_split
-        else (expected_split_substring or None)
-    )
+    split_value = source_split or (expected_split_substring or None)
+    canonical_source_split = expected_split_substring or source_split or None
+    if source_split:
+        notes.setdefault("source_split_path", source_split)
 
     record: Dict[str, Any] = {
         "policy": "sun_val_frozen",
@@ -453,7 +457,7 @@ def resolve_frozen_sun_threshold(
         "degenerate_val": degenerate,
         "notes": notes,
         "source_policy": source_policy,
-        "source_split": source_split,
+        "source_split": canonical_source_split,
         "source_key": source_key,
     }
     return float(tau), record
