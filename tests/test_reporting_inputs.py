@@ -4,10 +4,15 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from ssl4polyp.utils.reporting_inputs import copy_reporting_inputs
+from ssl4polyp.utils.reporting_inputs import (
+    ReportingInputsError,
+    copy_reporting_inputs,
+)
 
 
 def _write_metrics_payload(path: Path) -> None:
@@ -85,4 +90,38 @@ def test_copy_reporting_inputs_collects_all_leaf_directories(tmp_path: Path) -> 
         reporting_root / "exp" / "bar" / second_outputs.name,
     ):
         assert path.exists()
+
+
+def test_copy_reporting_inputs_raises_when_leaf_missing_outputs(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    complete_leaf = run_dir / "dataset_a" / "seed13"
+    failing_leaf = run_dir / "dataset_b" / "seed29"
+    complete_leaf.mkdir(parents=True)
+    failing_leaf.mkdir(parents=True)
+
+    metrics_ok = complete_leaf / "ok_last.metrics.json"
+    outputs_ok = complete_leaf / "ok_test_outputs.csv"
+    _write_metrics_payload(metrics_ok)
+    outputs_ok.write_text("id,pred\n1,0\n", encoding="utf-8")
+
+    missing_outputs_metrics = failing_leaf / "missing_last.metrics.json"
+    _write_metrics_payload(missing_outputs_metrics)
+
+    reporting_root = tmp_path / "reporting"
+
+    with pytest.raises(ReportingInputsError) as excinfo:
+        copy_reporting_inputs(
+            run_dir,
+            reporting_root,
+            reporting_subdir="exp/baz",
+        )
+
+    assert "Test outputs CSV" in str(excinfo.value)
+
+    dest_metrics = reporting_root / "exp" / "baz" / metrics_ok.name
+    dest_outputs = reporting_root / "exp" / "baz" / outputs_ok.name
+    assert dest_metrics.exists()
+    assert dest_outputs.exists()
 
