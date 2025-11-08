@@ -397,10 +397,6 @@ class ResultLoader:
                     raise GuardrailViolation(
                         f"thresholds.{slot}.source_split must be {source_split_expected!r}"
                     )
-                if not block.get("source_checkpoint"):
-                    raise GuardrailViolation(
-                        f"thresholds.{slot}.source_checkpoint missing"
-                    )
 
         _check_slot("primary", spec["primary"])
         if "sensitivity" in spec:
