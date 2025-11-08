@@ -180,10 +180,15 @@ def copy_reporting_inputs(
         shutil.copy2(outputs_path, dest_outputs)
         copies.append(ReportingCopyResult(metrics_path, dest_metrics))
         copies.append(ReportingCopyResult(outputs_path, dest_outputs))
-    if not copies:
-        joined_errors = "; ".join(errors) if errors else "unknown reason"
+    if errors:
+        joined_errors = "; ".join(errors)
         raise ReportingInputsError(
-            f"Failed to copy reporting inputs from {run_dir}: {joined_errors}"
+            "Encountered errors while copying reporting inputs from "
+            f"{run_dir}: {joined_errors}"
+        )
+    if not copies:
+        raise ReportingInputsError(
+            f"Failed to copy reporting inputs from {run_dir}: unknown reason"
         )
     return copies
 
