@@ -3631,6 +3631,8 @@ def _resolve_dataset_layout(
         train_pack = getattr(args, "train_pack", None)
     train_pack = str(train_pack) if train_pack is not None else None
 
+    active_seed = _get_active_seed(args)
+
     if dataset_key == "sun_subsets":
         if percent is None:
             percent = _extract_int(r"p(\d+)", train_pack)
@@ -3660,7 +3662,9 @@ def _resolve_dataset_layout(
             data_tag = f"SUNP{int(percent):02d}"
         else:
             data_tag = "SUNSubset"
-        if dataset_seed is not None:
+        if active_seed:
+            segments.append(f"seed{int(active_seed)}")
+        elif dataset_seed is not None:
             segments.append(f"seed{int(dataset_seed)}")
     elif dataset_key == "polypgen_fewshot":
         segments = ["polypgen_fewshot"]
@@ -3669,7 +3673,9 @@ def _resolve_dataset_layout(
             data_tag = f"PolypGenFew{int(size)}"
         else:
             data_tag = "PolypGenFewShot"
-        if dataset_seed is not None:
+        if active_seed:
+            segments.append(f"seed{int(active_seed)}")
+        elif dataset_seed is not None:
             segments.append(f"seed{int(dataset_seed)}")
         default_parent_tag = "SUN"
         default_parent_seed = dataset_seed
