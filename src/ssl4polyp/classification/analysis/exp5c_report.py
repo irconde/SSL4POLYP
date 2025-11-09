@@ -456,12 +456,13 @@ def _mean_std(values: Sequence[float]) -> Tuple[float, float]:
 
 
 def _build_cluster_set(run: FewShotRun) -> ClusterSet:
+    frames = list(run.frames.values())
     return build_cluster_set(
-        run.frames.values(),
+        frames,
         is_positive=lambda record: record.label == 1,
         record_id=lambda record: record.frame_id,
-        positive_key=lambda record: record.center_id or record.sequence_id,
-        negative_key=lambda record: record.sequence_id or record.center_id,
+        positive_key=lambda record: record.frame_id,
+        negative_key=lambda record: record.frame_id,
     )
 
 
