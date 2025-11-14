@@ -2335,16 +2335,6 @@ def _resolve_thresholds_subdir(args) -> str:
     """Determine the sub-directory used to persist threshold metadata."""
 
     dataset_layout = getattr(args, "dataset_layout", {}) or {}
-    val_pack = getattr(args, "val_pack", None)
-    if not val_pack:
-        resolved = getattr(args, "dataset_resolved", {}) or {}
-        val_pack = resolved.get("val_pack")
-    if not val_pack:
-        val_pack = getattr(args, "train_pack", None)
-    if val_pack:
-        segment = _sanitize_path_segment(val_pack)
-        if segment and segment != "default":
-            return segment
 
     dataset_name = dataset_layout.get("name") or getattr(args, "dataset", None)
     dataset_name = "sun" if dataset_name == "sun_full" else dataset_name
@@ -2353,17 +2343,41 @@ def _resolve_thresholds_subdir(args) -> str:
     size = dataset_layout.get("size")
     percent = dataset_layout.get("percent")
 
-    parts: list[str] = [dataset_name]
+    slug_parts: list[str] = [dataset_name]
     if dataset_name.startswith("polypgen_fewshot") and size:
-        parts.append(f"c{int(size)}")
+        slug_parts.append(f"c{int(size)}")
     elif dataset_name.startswith("sun_subsets") and percent:
-        parts.append(f"p{int(percent)}")
+        slug_parts.append(f"p{int(percent)}")
     if dataset_seed is not None:
-        parts.append(f"s{int(dataset_seed)}")
-    if len(parts) == 1:
+        slug_parts.append(f"s{int(dataset_seed)}")
+    if len(slug_parts) == 1:
         split = getattr(args, "val_split", None) or "val"
-        parts.append(_sanitize_path_segment(split, default="val"))
-    return "_".join(parts)
+        slug_parts.append(_sanitize_path_segment(split, default="val"))
+    dataset_slug = "_".join(slug_parts)
+    slug_segment = _sanitize_path_segment(dataset_slug, default="dataset")
+
+    val_pack = getattr(args, "val_pack", None)
+    if not val_pack:
+        resolved = getattr(args, "dataset_resolved", {}) or {}
+        val_pack = resolved.get("val_pack")
+    if not val_pack:
+        val_pack = getattr(args, "train_pack", None)
+    val_segment: Optional[str] = None
+    if val_pack:
+        candidate = _sanitize_path_segment(val_pack)
+        if candidate and candidate != "default":
+            val_segment = candidate
+
+    placeholder_slug = slug_segment in {None, "", "default", "dataset"}
+    if not placeholder_slug and slug_segment is not None:
+        if val_segment and slug_segment in val_segment:
+            return val_segment
+        return slug_segment
+
+    if val_segment:
+        return val_segment
+
+    return slug_segment or "dataset"
 
 
 def _resolve_threshold_train_pack_segment(args) -> Optional[str]:
@@ -5712,6 +5726,22 @@ def build(args, rank, device: torch.device, distributed: bool):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch(exist_ok=True)
         parent_run_reference = _resolve_parent_reference(parent_path)
+        # ``sun_val_frozen`` thresholds rely on metadata stored alongside the
+        # parent run.  Some canonical checkpoints only ship the raw checkpoint
+        # while the thresholds are serialized inside the checkpoint payload.  In
+        # those cases ``metrics_payload`` is ``None`` and downstream policy
+        # resolution fails despite the thresholds being available.  Seed the
+        # parent reference with the thresholds we already loaded so that the
+        # policy can resolve without requiring an external metrics JSON.
+        if isinstance(parent_run_reference, ParentRunReference):
+            payload = (
+                dict(parent_run_reference.metrics_payload)
+                if parent_run_reference.metrics_payload
+                else {}
+            )
+            if thresholds_map and not payload.get("thresholds"):
+                payload["thresholds"] = dict(thresholds_map)
+            parent_run_reference.metrics_payload = payload or None
     else:
         start_epoch = 1
         best_val_perf = None
@@ -6963,6 +6993,144 @@ def train(rank, args):
                             snapshot_tau=previous_tau,
                             storage_path=storage_relpath,
                         )
+                        dataset_from_key, split_from_key, _ = _parse_threshold_key(
+                            threshold_key
+                        )
+                        normalised_dataset = (
+                            dataset_from_key.lower() if isinstance(dataset_from_key, str) else None
+                        )
+                        normalised_split = (
+                            split_from_key.lower() if isinstance(split_from_key, str) else None
+                        )
+                        redirect_threshold_path: Optional[Path] = None
+                        if threshold_file.exists():
+                            existing_payload: Optional[Dict[str, Any]] = None
+                            try:
+                                with threshold_file.open("r", encoding="utf-8") as existing_handle:
+                                    existing_payload = json.load(existing_handle) or {}
+                            except json.JSONDecodeError as exc:
+                                collision_warning = (
+                                    "Existing threshold file '%s' contains invalid JSON (%s); "
+                                    "proceeding with overwrite"
+                                ) % (threshold_file, exc)
+                                print(collision_warning)
+                                _append_log_lines(log_path, [collision_warning])
+                            if existing_payload:
+                                existing_key = existing_payload.get("threshold_key")
+                                existing_dataset, existing_split, _ = _parse_threshold_key(
+                                    existing_key
+                                )
+                                policy_split = None
+                                policy_record_block = existing_payload.get("policy_record")
+                                if isinstance(policy_record_block, Mapping):
+                                    policy_split_raw = policy_record_block.get("split")
+                                    if isinstance(policy_split_raw, str):
+                                        policy_split = policy_split_raw.strip().lower()
+                                    elif policy_split_raw is not None:
+                                        policy_split = str(policy_split_raw).strip().lower()
+                                existing_dataset_norm = (
+                                    existing_dataset.lower()
+                                    if isinstance(existing_dataset, str)
+                                    else None
+                                )
+                                existing_split_norm = (
+                                    existing_split.lower()
+                                    if isinstance(existing_split, str)
+                                    else None
+                                )
+                                dataset_mismatch = False
+                                split_mismatch = False
+                                if (
+                                    normalised_dataset
+                                    and existing_dataset_norm
+                                    and normalised_dataset != existing_dataset_norm
+                                ):
+                                    dataset_mismatch = True
+                                if normalised_split:
+                                    if (
+                                        existing_split_norm
+                                        and existing_split_norm != normalised_split
+                                    ):
+                                        split_mismatch = True
+                                    if policy_split and policy_split != normalised_split:
+                                        split_mismatch = True
+                                if dataset_mismatch or split_mismatch:
+                                    dataset_segment = _sanitize_path_segment(
+                                        dataset_from_key or dataset_label, default="dataset"
+                                    )
+                                    split_segment = _sanitize_path_segment(
+                                        split_from_key or val_split_label, default="split"
+                                    )
+                                    redirected_name_parts = [model_tag, dataset_segment]
+                                    if split_segment:
+                                        redirected_name_parts.append(split_segment)
+                                    redirected_filename = "_".join(
+                                        part for part in redirected_name_parts if part
+                                    )
+                                    redirect_threshold_path = (
+                                        threshold_dir / f"{redirected_filename}.json"
+                                    )
+                                    if redirect_threshold_path == threshold_file:
+                                        raise ValueError(
+                                            "Threshold file collision detected but unable to derive a"
+                                            " dataset-qualified path for redirection"
+                                        )
+                                    if redirect_threshold_path.exists():
+                                        try:
+                                            with redirect_threshold_path.open(
+                                                "r", encoding="utf-8"
+                                            ) as redirect_handle:
+                                                redirect_payload = json.load(redirect_handle) or {}
+                                        except json.JSONDecodeError as exc:
+                                            redirect_payload = {}
+                                            redirect_warning = (
+                                                "Redirect threshold file '%s' contains invalid JSON (%s); "
+                                                "proceeding with overwrite"
+                                            ) % (redirect_threshold_path, exc)
+                                            print(redirect_warning)
+                                            _append_log_lines(log_path, [redirect_warning])
+                                        redirect_key = redirect_payload.get("threshold_key")
+                                        redirect_dataset, redirect_split, _ = _parse_threshold_key(
+                                            redirect_key
+                                        )
+                                        redirect_dataset_norm = (
+                                            redirect_dataset.lower()
+                                            if isinstance(redirect_dataset, str)
+                                            else None
+                                        )
+                                        redirect_split_norm = (
+                                            redirect_split.lower()
+                                            if isinstance(redirect_split, str)
+                                            else None
+                                        )
+                                        if normalised_dataset and redirect_dataset_norm and (
+                                            redirect_dataset_norm != normalised_dataset
+                                        ):
+                                            raise ValueError(
+                                                "Redirect threshold path already contains data for"
+                                                " another dataset"
+                                            )
+                                        if normalised_split and redirect_split_norm and (
+                                            redirect_split_norm != normalised_split
+                                        ):
+                                            raise ValueError(
+                                                "Redirect threshold path already contains data for"
+                                                " another split"
+                                            )
+                                    collision_summary = (
+                                        "Detected threshold file collision for '%s': existing payload"
+                                        " references dataset='%s', split='%s'; redirecting to '%s'"
+                                        % (
+                                            threshold_key,
+                                            existing_dataset or "?",
+                                            policy_split or existing_split or "?",
+                                            redirect_threshold_path,
+                                        )
+                                    )
+                                    print(collision_summary)
+                                    _append_log_lines(log_path, [collision_summary])
+                        if redirect_threshold_path is not None:
+                            threshold_file = redirect_threshold_path
                         with threshold_file.open("w", encoding="utf-8") as handle:
                             json.dump(threshold_record_payload, handle, indent=2)
                         try:
