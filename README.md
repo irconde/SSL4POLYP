@@ -3,7 +3,10 @@ based on "A Study on Self-Supervised Pretraining for Vision Problems in Gastroin
 
 Original authors: [Edward Sanderson](https://scholar.google.com/citations?user=ea4c7r0AAAAJ&hl=en&oi=ao) and [Bogdan J. Matuszewski](https://scholar.google.co.uk/citations?user=QlUO_oAAAAAJ&hl=en)
 
-Repository author: Ivan Rodriguez-Conde, assistant professor at the Department of Computer Science at University of Vigo ([ivarodriguez@uvigo.gal](mailto:ivarodriguez@uvigo.gal))
+Repository authors: 
+- Vincent Yip, PhD student at the Department of Computer Science at University of Arkansas at Little Rock ([vxyip@ualr.edu](mailto:vxyip@ualr.edu))
+- Florentino Fdez-Riverola, full professor at the Department of Computer Science at University of Vigo ([riverola@uvigo.gal](mailto:riverola@uvigo.gal))
+- Ivan Rodriguez-Conde, associate professor at the Department of Computer Science at University of Vigo ([ivarodriguez@uvigo.gal](mailto:ivarodriguez@uvigo.gal))
 
 Links to the original paper:
 + [IEEE Access (open access)](https://ieeexplore.ieee.org/document/10478725)
