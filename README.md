@@ -1,12 +1,13 @@
-Official code repository for *Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection: A Morphology-Aware and Sample-Efficient Perspective*,
-based on "A Study on Self-Supervised Pretraining for Vision Problems in Gastrointestinal Endoscopy"
-
-Original authors: [Edward Sanderson](https://scholar.google.com/citations?user=ea4c7r0AAAAJ&hl=en&oi=ao) and [Bogdan J. Matuszewski](https://scholar.google.co.uk/citations?user=QlUO_oAAAAAJ&hl=en)
+Official code repository for the paper entitled "Self-supervised pre-training for generalizable and data-efficient polyp detection"
 
 Repository authors: 
 - Vincent Yip, PhD student at the Department of Computer Science at University of Arkansas at Little Rock ([vxyip@ualr.edu](mailto:vxyip@ualr.edu))
 - Florentino Fdez-Riverola, full professor at the Department of Computer Science at University of Vigo ([riverola@uvigo.gal](mailto:riverola@uvigo.gal))
 - Ivan Rodriguez-Conde, associate professor at the Department of Computer Science at University of Vigo ([ivarodriguez@uvigo.gal](mailto:ivarodriguez@uvigo.gal))
+
+This work is based on the study: "A Study on Self-Supervised Pretraining for Vision Problems in Gastrointestinal Endoscopy"
+
+Original authors: [Edward Sanderson](https://scholar.google.com/citations?user=ea4c7r0AAAAJ&hl=en&oi=ao) and [Bogdan J. Matuszewski](https://scholar.google.co.uk/citations?user=QlUO_oAAAAAJ&hl=en)
 
 Links to the original paper:
 + [IEEE Access (open access)](https://ieeexplore.ieee.org/document/10478725)
