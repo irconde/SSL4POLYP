@@ -103,7 +103,11 @@ def _sun_payload(tau: float, offset: float) -> dict[str, object]:
 
 
 def _build_summary(
-    tmp_path: Path, *, bootstrap: int = 10, include_sha: bool = True
+    tmp_path: Path,
+    *,
+    bootstrap: int = 10,
+    include_sha: bool = True,
+    run_key: str = "experiment",
 ) -> dict[str, object]:
     root = tmp_path / "results"
     sun_root = root / "sun_parent"
@@ -158,7 +162,7 @@ def _build_summary(
             },
         },
         "val": {"path": val_path},
-        "run": {"exp": "exp5a"},
+        "run": {run_key: "exp5a"},
         "provenance": colon_provenance,
     }
     sup_provenance = {"model": "sup_imnet"}
@@ -195,7 +199,7 @@ def _build_summary(
             },
         },
         "val": {"path": val_path},
-        "run": {"exp": "exp5a"},
+        "run": {run_key: "exp5a"},
         "provenance": sup_provenance,
     }
     ssl_provenance = {"model": "ssl_imnet"}
@@ -232,7 +236,7 @@ def _build_summary(
             },
         },
         "val": {"path": val_path},
-        "run": {"exp": "exp5a"},
+        "run": {run_key: "exp5a"},
         "provenance": ssl_provenance,
     }
     for seed in EXPECTED_SEEDS:
@@ -262,6 +266,12 @@ def _build_summary(
         _write_metrics(ssl_dir / f"ssl_imnet__seed{seed}_last.metrics.json", ssl_metrics_seed)
     runs = discover_runs(root)
     return summarize_runs(runs, bootstrap=bootstrap, rng_seed=123)
+
+
+def test_build_summary_accepts_legacy_exp_key(tmp_path: Path) -> None:
+    # The trainer emits run.experiment; the loader must also accept the legacy run.exp key.
+    summary = _build_summary(tmp_path, run_key="exp")
+    assert summary.get("models")
 
 
 def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
@@ -312,7 +322,7 @@ def test_load_run_consumes_parent_metadata(tmp_path: Path) -> None:
                 "f1": 0.05,
             }
         },
-        "run": {"exp": "exp5a"},
+        "run": {"experiment": "exp5a"},
         "provenance": {
             "model": "ssl_colon",
             "test_csv_sha256": "deadbeef",
@@ -389,7 +399,7 @@ def test_load_run_accepts_legacy_outputs_sha(tmp_path: Path) -> None:
             },
         },
         "val": {"path": val_path},
-        "run": {"exp": "exp5a"},
+        "run": {"experiment": "exp5a"},
         "provenance": {
             "model": "ssl_colon",
             "test_outputs_csv_sha256": "cafebabe",
@@ -452,7 +462,7 @@ def test_load_run_allows_missing_outputs_sha(tmp_path: Path) -> None:
             },
         },
         "val": {"path": val_path},
-        "run": {"exp": "exp5a"},
+        "run": {"experiment": "exp5a"},
         "provenance": {
             "model": "ssl_colon",
             "parent_run": {
@@ -512,7 +522,7 @@ def test_load_run_raises_when_tau_mismatch(tmp_path: Path) -> None:
             },
         },
         "val": {"path": val_path},
-        "run": {"exp": "exp5a"},
+        "run": {"experiment": "exp5a"},
         "provenance": {
             "model": "ssl_colon",
             "test_csv_sha256": "deadbeef",

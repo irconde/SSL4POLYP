@@ -17,7 +17,7 @@ import numpy as np
 from .common_loader import candidate_outputs_csv_paths
 from .exp3_report import FrameRecord, compute_strata_metrics
 from .result_loader import ResultLoader, GuardrailViolation
-from .common_metrics import _coerce_float, _coerce_int
+from .common_metrics import _coerce_float, _coerce_int, integrate_trapezoid
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
 from .display import (
     format_ci,
@@ -131,11 +131,11 @@ def _resolve_outputs_path(metrics_path: Path) -> Path:
     )
 
 
-def _infer_percent_from_name(metrics_path: Path) -> float:
+def _infer_percent_from_name(metrics_path: Path) -> Optional[float]:
     match = re.search(r"p(\d+)", metrics_path.stem)
     if match is not None:
         return float(match.group(1))
-    return 100.0
+    return None
 
 
 def _validate_case_ids(
@@ -386,7 +386,9 @@ def _load_outputs(outputs_path: Path, tau: float) -> Tuple[List[FrameRecord], Di
                 continue
             label = _coerce_int(row.get("label"))
             if label is None:
-                label = 0
+                raise ValueError(
+                    f"Missing or non-integer label in row {index} of {outputs_path}"
+                )
             pred_value = _coerce_int(row.get("pred"))
             if pred_value is None:
                 pred_value = 1 if prob >= tau else 0
@@ -418,6 +420,10 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ru
     percent_value = _coerce_float(provenance.get("subset_percent"))
     if percent_value is None:
         percent_value = _infer_percent_from_name(metrics_path)
+    if percent_value is None:
+        raise ValueError(
+            f"Unable to determine subset percent for metrics file '{metrics_path}'"
+        )
     seed_value = _coerce_int(payload.get("seed"))
     if seed_value is None:
         seed_value = _coerce_int(provenance.get("train_seed"))
@@ -672,7 +678,7 @@ def compute_aulc_from_series(percents: Sequence[float], values: Sequence[float])
     width = float(x[-1] - x[0])
     if width <= 0:
         return float("nan")
-    area = float(np.trapz(y, x))
+    area = integrate_trapezoid(y, x)
     return area / width
 
 

@@ -520,14 +520,20 @@ def load_run(
     payload = base_run.payload
     provenance = dict(base_run.provenance)
     run_block = payload.get("run") if isinstance(payload, Mapping) else None
-    experiment_name = (
-        _clean_text(run_block.get("exp")) if isinstance(run_block, Mapping) else None
-    )
+    if isinstance(run_block, Mapping):
+        experiment_name = _clean_text(
+            run_block.get("exp") or run_block.get("experiment")
+        )
+    else:
+        experiment_name = None
     if experiment_name is None:
-        raise ValueError("Metrics payload must include run.exp for Experiment 5A")
+        raise ValueError(
+            "Metrics payload must include run.exp or run.experiment for Experiment 5A"
+        )
     if experiment_name.lower() != "exp5a":
         raise ValueError(
-            f"Metrics payload at {metrics_path} reports run.exp='{experiment_name}', expected 'exp5a'"
+            f"Metrics payload at {metrics_path} reports run.exp/run.experiment="
+            f"'{experiment_name}', expected 'exp5a'"
         )
     test_metrics = dict(base_run.primary_metrics)
     delta_block = (

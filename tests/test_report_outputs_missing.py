@@ -205,7 +205,7 @@ def _write_metrics(path: Path, *, overrides: Dict[str, Any] | None = None) -> No
             exp5a_report,
             "ssl_colon_seed13_last.metrics.json",
             {
-                "run": {"exp": "exp5a"},
+                "run": {"experiment": "exp5a"},
                 "test_sensitivity": None,
                 "thresholds": {"sensitivity": None},
             },

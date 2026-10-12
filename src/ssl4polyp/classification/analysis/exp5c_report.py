@@ -22,6 +22,7 @@ from .common_metrics import (
     ClusterSet,
     build_cluster_set,
     compute_binary_metrics,
+    integrate_trapezoid,
     sample_cluster_ids,
     _clean_text,
     _coerce_float,
@@ -30,7 +31,6 @@ from .common_metrics import (
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
 TARGET_MODEL = "ssl_colon"
-BASELINE_MODELS: Tuple[str, ...] = ("ssl_imnet", "sup_imnet")
 AGG_METRICS: Tuple[str, ...] = (
     "auprc",
     "auroc",
@@ -368,7 +368,6 @@ def discover_runs(
     model_filter = {str(m) for m in models} if models else None
     runs: DefaultDict[str, DefaultDict[int, Dict[int, FewShotRun]]] = defaultdict(lambda: defaultdict(dict))
     active_loader = loader or _get_loader()
-    skipped: int = 0
     for metrics_path in sorted(root.rglob("*_last.metrics.json")):
         try:
             run = load_run(metrics_path, loader=active_loader)
@@ -381,15 +380,9 @@ def discover_runs(
                 f"Failed to load metrics from {metrics_path} (missing per-frame outputs)"
             ) from exc
         except (OSError, ValueError, GuardrailViolation) as exc:
-            skipped += 1
-            if logger.isEnabledFor(logging.INFO):
-                logger.info(
-                    "Skipping metrics file %s due to %s: %s",
-                    metrics_path,
-                    exc.__class__.__name__,
-                    exc,
-                )
-            continue
+            raise RuntimeError(
+                f"Failed to load metrics from {metrics_path}"
+            ) from exc
         if model_filter and run.model not in model_filter:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
@@ -409,7 +402,7 @@ def discover_runs(
             )
     discovered = sum(len(seed_map) for per_model in runs.values() for seed_map in per_model.values())
     if logger.isEnabledFor(logging.INFO):
-        logger.info("Discovered %d runs across %d models (skipped=%d)", discovered, len(runs), skipped)
+        logger.info("Discovered %d runs across %d models", discovered, len(runs))
     return {
         model: {budget: dict(seed_map) for budget, seed_map in sorted(per_model.items())}
         for model, per_model in runs.items()
@@ -930,7 +923,7 @@ def _compute_aulc_from_series(budgets: Sequence[int], values: Sequence[float]) -
     width = float(x[-1] - x[0])
     if width <= 0:
         return float("nan")
-    area = float(np.trapz(y, x))
+    area = integrate_trapezoid(y, x)
     return area / width
 
 
@@ -1007,12 +1000,16 @@ def _compute_pairwise_deltas(
     rng_seed: int,
     expected_seeds: Sequence[int],
     policy: str,
+    target_model: str = TARGET_MODEL,
 ) -> Dict[str, Dict[int, Dict[str, Any]]]:
-    colon_runs = runs_by_model.get(TARGET_MODEL)
+    colon_runs = runs_by_model.get(target_model)
     if not colon_runs:
         return {}
+    baseline_models = sorted(
+        model for model in runs_by_model if model != target_model
+    )
     results: Dict[str, Dict[int, Dict[str, Any]]] = {}
-    for baseline in BASELINE_MODELS:
+    for baseline in baseline_models:
         baseline_runs = runs_by_model.get(baseline)
         if not baseline_runs:
             continue
@@ -1023,7 +1020,7 @@ def _compute_pairwise_deltas(
             baseline_seed_map = baseline_runs.get(budget, {})
             ensure_expected_seeds(
                 {
-                    f"{TARGET_MODEL}@b{budget}": colon_seed_map,
+                    f"{target_model}@b{budget}": colon_seed_map,
                     f"{baseline}@b{budget}": baseline_seed_map,
                 },
                 expected_seeds=expected_seeds,
@@ -1118,13 +1115,17 @@ def _compute_aulc_deltas(
     rng_seed: int,
     expected_seeds: Sequence[int],
     policy: str,
+    target_model: str = TARGET_MODEL,
 ) -> Dict[str, Dict[str, Any]]:
-    colon_runs = runs_by_model.get(TARGET_MODEL)
+    colon_runs = runs_by_model.get(target_model)
     if not colon_runs:
         return {}
+    baseline_models = sorted(
+        model for model in runs_by_model if model != target_model
+    )
     results: Dict[str, Dict[str, Any]] = {}
-    colon_aulc = _compute_aulc_summary({TARGET_MODEL: colon_runs}, metric, policy=policy)[TARGET_MODEL]
-    for baseline in BASELINE_MODELS:
+    colon_aulc = _compute_aulc_summary({target_model: colon_runs}, metric, policy=policy)[target_model]
+    for baseline in baseline_models:
         baseline_runs = runs_by_model.get(baseline)
         if not baseline_runs:
             continue
@@ -1135,7 +1136,7 @@ def _compute_aulc_deltas(
         ensure_expected_seeds(
             {
                 **{
-                    f"{TARGET_MODEL}@b{budget}": colon_runs.get(budget, {})
+                    f"{target_model}@b{budget}": colon_runs.get(budget, {})
                     for budget in shared_budgets
                 },
                 **{
@@ -1466,6 +1467,7 @@ def _summarize_policy(
     bootstrap: int,
     rng_seed: int,
     seed_validation: SeedValidationResult,
+    target_model: str = TARGET_MODEL,
 ) -> Dict[str, Any]:
     performance: Dict[str, Dict[int, Dict[str, Any]]] = {}
     for model, model_budgets in runs_by_model.items():
@@ -1539,6 +1541,7 @@ def _summarize_policy(
             rng_seed=rng_seed,
             expected_seeds=seed_validation.expected_seeds,
             policy=policy,
+            target_model=target_model,
         )
     aulc_summary: Dict[str, Dict[str, Any]] = {}
     for metric in AULC_METRICS:
@@ -1556,6 +1559,7 @@ def _summarize_policy(
             rng_seed=rng_seed,
             expected_seeds=seed_validation.expected_seeds,
             policy=policy,
+            target_model=target_model,
         )
     return {
         "performance": performance,
@@ -1571,8 +1575,7 @@ def summarize_runs(
     *,
     bootstrap: int = 2000,
     rng_seed: int = 12345,
-    target_model: str = "ssl_imnet",
-    target_budget: int = 500,
+    target_model: str = TARGET_MODEL,
 ) -> Dict[str, Any]:
     if runs_by_model:
         seed_groups = {
@@ -1594,6 +1597,7 @@ def summarize_runs(
             bootstrap=max(0, bootstrap),
             rng_seed=rng_seed,
             seed_validation=seed_validation,
+            target_model=target_model,
         )
         for policy in ("primary", "sensitivity")
     }
@@ -1633,7 +1637,6 @@ def summarize_runs(
             "models": sorted(runs_by_model.keys()),
             "budgets": budgets,
             "target_model": target_model,
-            "target_budget": target_budget,
         },
         "runs": runs_catalog,
         "policies": policy_summaries,
@@ -1871,6 +1874,8 @@ def write_aulc_csv(
     aulc_deltas = policy_block.get("aulc_deltas")
     if not isinstance(aulc, Mapping):
         raise ValueError(f"Summary payload does not contain AULC data for policy '{policy}'")
+    metadata = summary.get("metadata") if isinstance(summary.get("metadata"), Mapping) else {}
+    target_model = metadata.get("target_model") or TARGET_MODEL
     rows: List[Dict[str, Any]] = []
     for metric, model_block in aulc.items():
         if not isinstance(model_block, Mapping):
@@ -1908,7 +1913,7 @@ def write_aulc_csv(
                         "policy": policy,
                         "category": "delta",
                         "metric": metric,
-                        "model": TARGET_MODEL,
+                        "model": target_model,
                         "baseline": baseline,
                         "mean": colon_aulc.get("mean"),
                         "std": colon_aulc.get("std"),

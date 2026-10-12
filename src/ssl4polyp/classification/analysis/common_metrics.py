@@ -22,10 +22,23 @@ __all__ = [
     "_coerce_float",
     "_coerce_int",
     "compute_binary_metrics",
+    "integrate_trapezoid",
     "ClusterSet",
     "build_cluster_set",
     "sample_cluster_ids",
 ]
+
+
+def integrate_trapezoid(y: "np.ndarray", x: "np.ndarray") -> float:
+    """Trapezoidal integration compatible with NumPy <2 and >=2.
+
+    NumPy 2.0 renamed ``np.trapz`` to ``np.trapezoid`` and removed the former.
+    This helper picks whichever is available so AULC computations work across
+    the pinned (1.x) and newer stacks.
+    """
+
+    function = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+    return float(function(y, x))
 
 _DEFAULT_BINARY_METRICS: Tuple[str, ...] = (
     "auprc",

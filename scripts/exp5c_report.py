@@ -127,14 +127,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--target-model",
         type=str,
-        default="ssl_imnet",
-        help="Model used as the S@target reference (default: ssl_imnet).",
-    )
-    parser.add_argument(
-        "--target-budget",
-        type=int,
-        default=500,
-        help="Budget S used for the S@target reference (default: 500).",
+        default="ssl_colon",
+        help="Model used as the target for pairwise and AULC deltas (default: ssl_colon).",
     )
     parser.add_argument(
         "--log-progress",
@@ -247,7 +241,6 @@ def main() -> None:
         bootstrap=max(0, args.bootstrap),
         rng_seed=args.rng_seed,
         target_model=args.target_model,
-        target_budget=args.target_budget,
     )
     if args.output_json is not None:
         output_json = args.output_json.expanduser()

@@ -14,30 +14,41 @@ if str(SRC_ROOT) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-sklearn_stub = ModuleType("sklearn")
-sklearn_metrics_stub = ModuleType("sklearn.metrics")
+try:  # Use the real scikit-learn stack when available.
+    import sklearn.metrics as _sklearn_metrics  # noqa: F401
+    import sklearn.exceptions as _sklearn_exceptions  # noqa: F401
+except Exception:  # pragma: no cover - exercised only without scikit-learn
+    sklearn_stub = ModuleType("sklearn")
+    sklearn_metrics_stub = ModuleType("sklearn.metrics")
 
+    def _unavailable(*args, **kwargs):
+        raise RuntimeError("scikit-learn functionality unavailable in tests")
 
-def _unavailable(*args, **kwargs):  # pragma: no cover - safety guard
-    raise RuntimeError("scikit-learn functionality unavailable in tests")
+    for _name in (
+        "average_precision_score",
+        "balanced_accuracy_score",
+        "f1_score",
+        "matthews_corrcoef",
+        "precision_score",
+        "precision_recall_curve",
+        "recall_score",
+        "roc_auc_score",
+        "roc_curve",
+    ):
+        setattr(sklearn_metrics_stub, _name, _unavailable)
 
+    sklearn_stub.metrics = sklearn_metrics_stub
 
-for _name in (
-    "average_precision_score",
-    "balanced_accuracy_score",
-    "f1_score",
-    "matthews_corrcoef",
-    "precision_score",
-    "precision_recall_curve",
-    "recall_score",
-    "roc_auc_score",
-    "roc_curve",
-):
-    setattr(sklearn_metrics_stub, _name, _unavailable)
+    class UndefinedMetricWarning(UserWarning):
+        """Stand-in matching sklearn.exceptions.UndefinedMetricWarning."""
 
-sklearn_stub.metrics = sklearn_metrics_stub
-sys.modules.setdefault("sklearn", sklearn_stub)
-sys.modules.setdefault("sklearn.metrics", sklearn_metrics_stub)
+    sklearn_exceptions_stub = ModuleType("sklearn.exceptions")
+    sklearn_exceptions_stub.UndefinedMetricWarning = UndefinedMetricWarning
+    sklearn_stub.exceptions = sklearn_exceptions_stub
+
+    sys.modules["sklearn"] = sklearn_stub
+    sys.modules["sklearn.metrics"] = sklearn_metrics_stub
+    sys.modules["sklearn.exceptions"] = sklearn_exceptions_stub
 
 from ssl4polyp.classification.analysis import exp5c_report  # type: ignore[import]
 from ssl4polyp.classification.analysis.common_loader import CommonFrame
@@ -114,7 +125,7 @@ def test_discover_runs_errors_when_outputs_missing(tmp_path: Path) -> None:
     assert "missing per-frame outputs" in str(excinfo.value)
 
 
-def test_build_cluster_set_prefers_center_then_sequence_then_case() -> None:
+def test_build_cluster_set_prefers_center_for_positives_and_sequence_for_negatives() -> None:
     frames = [
         CommonFrame(
             frame_id="pos_center_cluster_1",
@@ -126,11 +137,11 @@ def test_build_cluster_set_prefers_center_then_sequence_then_case() -> None:
         ),
         CommonFrame(
             frame_id="pos_center_cluster_2",
-            case_id="caseA",
+            case_id="caseB",
             prob=0.85,
             label=1,
             pred=1,
-            row=MappingProxyType({"case_id": "caseA", "center_id": "center1"}),
+            row=MappingProxyType({"case_id": "caseB", "center_id": "center2"}),
         ),
         CommonFrame(
             frame_id="neg_center_pref_1",
@@ -212,8 +223,106 @@ def test_build_cluster_set_prefers_center_then_sequence_then_case() -> None:
     }
 
     negative_clusters = {frozenset(cluster) for cluster in clusters.negatives}
+    # Negatives cluster by sequence first, then center; frames without either key
+    # fall back to per-frame singletons.
     assert negative_clusters == {
-        frozenset({"neg_center_pref_1", "neg_center_pref_2"}),
+        frozenset({"neg_center_pref_1"}),
+        frozenset({"neg_center_pref_2"}),
         frozenset({"neg_sequence_fallback_1", "neg_sequence_fallback_2"}),
-        frozenset({"neg_case_fallback_1", "neg_case_fallback_2"}),
+        frozenset({"neg_case_fallback_1"}),
+        frozenset({"neg_case_fallback_2"}),
     }
+
+
+def _make_shot_run(
+    model: str,
+    seed: int,
+    budget: int,
+    *,
+    auprc: float,
+    f1: float,
+) -> "exp5c_report.FewShotRun":
+    return exp5c_report.FewShotRun(
+        model=model,
+        seed=seed,
+        budget=budget,
+        tau=0.5,
+        sensitivity_tau=None,
+        primary_metrics={"auprc": auprc, "f1": f1},
+        primary_counts={},
+        sensitivity_metrics={},
+        sensitivity_counts={},
+        val_metrics={},
+        provenance={},
+        dataset={},
+        frames={},
+        zero_shot=None,
+        path=Path("dummy"),
+    )
+
+
+def _make_runs_by_model(per_model_auprc: dict[str, float]):
+    runs: dict[str, dict[int, dict[int, "exp5c_report.FewShotRun"]]] = {}
+    for model, base in per_model_auprc.items():
+        per_budget: dict[int, dict[int, "exp5c_report.FewShotRun"]] = {}
+        for budget in (50, 100):
+            seed_map: dict[int, "exp5c_report.FewShotRun"] = {}
+            for seed in exp5c_report.EXPECTED_SEEDS:
+                seed_map[seed] = _make_shot_run(
+                    model, seed, budget, auprc=base + seed * 0.0001, f1=base
+                )
+            per_budget[budget] = seed_map
+        runs[model] = per_budget
+    return runs
+
+
+def test_pairwise_deltas_target_model_selects_baselines() -> None:
+    runs = _make_runs_by_model(
+        {"ssl_colon": 0.8, "ssl_imnet": 0.7, "sup_imnet": 0.6}
+    )
+    pairwise = exp5c_report._compute_pairwise_deltas(
+        runs,
+        metric="auprc",
+        bootstrap=0,
+        rng_seed=1,
+        expected_seeds=exp5c_report.EXPECTED_SEEDS,
+        policy="primary",
+    )
+    assert set(pairwise.keys()) == {"ssl_imnet", "sup_imnet"}
+
+    pairwise_imnet = exp5c_report._compute_pairwise_deltas(
+        runs,
+        metric="auprc",
+        bootstrap=0,
+        rng_seed=1,
+        expected_seeds=exp5c_report.EXPECTED_SEEDS,
+        policy="primary",
+        target_model="ssl_imnet",
+    )
+    assert set(pairwise_imnet.keys()) == {"ssl_colon", "sup_imnet"}
+
+
+def test_aulc_deltas_target_model_selects_baselines() -> None:
+    runs = _make_runs_by_model(
+        {"ssl_colon": 0.8, "ssl_imnet": 0.7, "sup_imnet": 0.6}
+    )
+    aulc = exp5c_report._compute_aulc_deltas(
+        runs,
+        metric="auprc",
+        bootstrap=0,
+        rng_seed=1,
+        expected_seeds=exp5c_report.EXPECTED_SEEDS,
+        policy="primary",
+    )
+    assert set(aulc.keys()) == {"ssl_imnet", "sup_imnet"}
+
+    aulc_imnet = exp5c_report._compute_aulc_deltas(
+        runs,
+        metric="auprc",
+        bootstrap=0,
+        rng_seed=1,
+        expected_seeds=exp5c_report.EXPECTED_SEEDS,
+        policy="primary",
+        target_model="ssl_imnet",
+    )
+    assert set(aulc_imnet.keys()) == {"ssl_colon", "sup_imnet"}
