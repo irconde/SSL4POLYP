@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
-"""Utility to fine-tune ViT-B/16 under all pretraining schemes.
+"""Sequentially fine-tune a backbone under several pretraining schemes.
 
-This script sequentially launches ``train_classification.py`` for the
-three pretraining modes used in the paper:
+This script launches ``ssl4polyp.classification.train_classification`` once per
+requested model key defined in an experiment config. By default it runs the
+three pretraining schemes used in the paper:
 
 * SUP-imnet  – supervised ImageNet-1k weights.
 * SSL-imnet – MAE self-supervised ImageNet-1k weights.
 * SSL-colon – MAE self-supervised Hyperkvasir-unlabelled weights.
 
-Checkpoints for the self-supervised options must be supplied via the
-command line. Fine-tuned models are stored in
-``checkpoints/`` by default.
+The self-supervised checkpoints are referenced directly by the model configs
+(``config/model/ssl_imnet.yaml`` and ``config/model/ssl_colon.yaml``), so no
+checkpoint paths need to be supplied here. Outputs are written under
+``<output-root>/<exp>_<model>_seed<seed>/``.
 """
 
 import argparse
-import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import List
+
+DEFAULT_MODEL_KEYS = ("sup_imnet", "ssl_imnet", "ssl_colon")
+
+TRAIN_MODULE = "ssl4polyp.classification.train_classification"
 
 
 def run(cmd: List[str]) -> None:
@@ -28,27 +34,35 @@ def run(cmd: List[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Fine-tune ViT-B/16 for all pretraining configurations"
+        description="Fine-tune a backbone under multiple pretraining schemes"
     )
     parser.add_argument(
-        "--dataset", required=True, help="Dataset tag, e.g. Hyperkvasir_pathological"
-    )
-    parser.add_argument(
-        "--data-root", required=True, help="Path to the dataset root directory"
-    )
-    parser.add_argument(
-        "--imagenet-mae",
+        "--exp-config",
         required=True,
-        help="Checkpoint for MAE pretraining on ImageNet-1k (SSL-imnet)",
+        help="Experiment manifest (relative to config/ or an absolute path)",
     )
     parser.add_argument(
-        "--hyperkvasir-mae",
-        required=True,
-        help="Checkpoint for MAE pretraining on Hyperkvasir-unlabelled (SSL-colon)",
+        "--roots",
+        default=str(Path("data") / "roots.json"),
+        help="JSON file mapping manifest roots to directories (default: data/roots.json)",
     )
-    parser.add_argument("--arch", default="vit_b", help="Backbone architecture")
+    parser.add_argument(
+        "--model-keys",
+        nargs="+",
+        default=list(DEFAULT_MODEL_KEYS),
+        help=(
+            "Model keys defined in the experiment config to run sequentially "
+            f"(default: {' '.join(DEFAULT_MODEL_KEYS)})"
+        ),
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Training seed")
     parser.add_argument(
         "--batch-size", type=int, default=16, help="Batch size for each run"
+    )
+    parser.add_argument(
+        "--output-root",
+        default=str(Path("checkpoints") / "classification"),
+        help="Base directory for per-run outputs (default: checkpoints/classification)",
     )
     parser.add_argument(
         "--extra-args",
@@ -57,53 +71,29 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    script = os.path.join(os.path.dirname(__file__), "train_classification.py")
-
-    base_cmd = [
-        sys.executable,
-        script,
-        "--architecture",
-        args.arch,
-        "--dataset",
-        args.dataset,
-        "--data-root",
-        args.data_root,
-        "--batch-size",
-        str(args.batch_size),
-        "--learning-rate-scheduler",
-    ]
+    exp_stem = Path(args.exp_config).stem
     extra = args.extra_args.split()
 
-    # SUP-imnet: supervised ImageNet baseline
-    run(base_cmd + ["--pretraining", "ImageNet_class"] + extra)
-
-    # SSL-imnet: MAE on ImageNet-1k
-    run(
-        base_cmd
-        + [
-            "--pretraining",
-            "ImageNet_self",
-            "--ss-framework",
-            "mae",
-            "--checkpoint",
-            args.imagenet_mae,
-        ]
-        + extra
-    )
-
-    # SSL-colon: MAE on Hyperkvasir-unlabelled
-    run(
-        base_cmd
-        + [
-            "--pretraining",
-            "Hyperkvasir",
-            "--ss-framework",
-            "mae",
-            "--checkpoint",
-            args.hyperkvasir_mae,
-        ]
-        + extra
-    )
+    for model_key in args.model_keys:
+        out_dir = Path(args.output_root) / f"{exp_stem}_{model_key}_seed{args.seed}"
+        cmd = [
+            sys.executable,
+            "-m",
+            TRAIN_MODULE,
+            "--exp-config",
+            args.exp_config,
+            "--model-key",
+            model_key,
+            "--seed",
+            str(args.seed),
+            "--roots",
+            args.roots,
+            "--batch-size",
+            str(args.batch_size),
+            "--output-dir",
+            str(out_dir),
+        ] + extra
+        run(cmd)
 
 
 if __name__ == "__main__":
