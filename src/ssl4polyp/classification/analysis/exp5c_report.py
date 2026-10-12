@@ -42,7 +42,11 @@ AGG_METRICS: Tuple[str, ...] = (
     "mcc",
     "loss",
 )
-VAL_METRICS: Tuple[str, ...] = ("auprc", "auroc", "loss")
+# Validation scores are not exported, so these come straight from the training JSON.
+# Its validation ``auprc`` is computed from hard predictions rather than scores and
+# cannot be recomputed, hence it is not reported. ``loss`` is the training loss
+# (BCE with ``pos_weight``), not the plain BCE recomputed from the test CSVs.
+VAL_METRICS: Tuple[str, ...] = ("auroc", "loss")
 PAIRWISE_METRICS: Tuple[str, ...] = ("auprc", "f1")
 AULC_METRICS: Tuple[str, ...] = ("auprc", "f1")
 EXPECTED_SEEDS: Tuple[int, ...] = (13, 29, 47)

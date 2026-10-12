@@ -326,3 +326,72 @@ def test_aulc_deltas_target_model_selects_baselines() -> None:
         target_model="ssl_imnet",
     )
     assert set(aulc_imnet.keys()) == {"ssl_colon", "sup_imnet"}
+
+
+def _write_scores_csv(path: Path, rows: list[tuple[float, int]]) -> None:
+    lines = ["frame_id,prob,label,pred,origin,center_id,sequence_id"]
+    for index, (prob, label) in enumerate(rows):
+        lines.append(f"f{index},{prob},{label},{int(prob >= 0.5)},polypgen_clean,C{index % 2 + 1},")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_load_run_recomputes_metrics_from_scores(tmp_path: Path) -> None:
+    import numpy as np
+
+    from ssl4polyp.classification.analysis.common_metrics import compute_binary_metrics
+
+    rows = [(0.9, 1), (0.8, 1), (0.4, 1), (0.7, 0), (0.3, 0), (0.2, 0), (0.1, 0), (0.6, 0)]
+    zero_rows = [(0.55, 1), (0.9, 1), (0.45, 1), (0.8, 0), (0.1, 0), (0.7, 0), (0.2, 0), (0.3, 0)]
+    runs_root = tmp_path / "runs"
+    metrics_path = runs_root / "ssl_colon_s13_last.metrics.json"
+    _write_metrics(metrics_path)
+    _write_scores_csv(runs_root / "ssl_colon_s13_test_outputs.csv", rows)
+    _write_scores_csv(runs_root / "ssl_colon_s13_zeroshot_outputs.csv", zero_rows)
+
+    def _counts(data, tau):
+        probs = np.array([p for p, _ in data])
+        labels = np.array([y for _, y in data])
+        return {
+            "tp": int(((probs >= tau) & (labels == 1)).sum()),
+            "fp": int(((probs >= tau) & (labels == 0)).sum()),
+            "tn": int(((probs < tau) & (labels == 0)).sum()),
+            "fn": int(((probs < tau) & (labels == 1)).sum()),
+            "n_pos": int((labels == 1).sum()),
+            "n_neg": int((labels == 0).sum()),
+        }
+
+    # JSON as written by training: macro-averaged recall/precision/F1 and a wrong AUPRC.
+    wrong = {"f1": 0.01, "recall": 0.01, "precision": 0.01, "auprc": 0.01}
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    payload["test_primary"] = {"tau": 0.5, **wrong, **_counts(rows, 0.5), "prevalence": 3 / 8}
+    payload["test_sensitivity"] = {"tau": 0.4, **wrong, **_counts(rows, 0.4), "prevalence": 3 / 8}
+    payload["zero_shot"] = {
+        "test_primary": {"tau": 0.5, **wrong, **_counts(zero_rows, 0.5), "prevalence": 3 / 8},
+        "outputs_csv": "ssl_colon_s13_zeroshot_outputs.csv",
+    }
+    metrics_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    runs = exp5c_report.discover_runs(runs_root)
+    run = runs["ssl_colon"][50][13]
+
+    def _expected(data, tau):
+        probs = np.array([p for p, _ in data])
+        labels = np.array([y for _, y in data])
+        return compute_binary_metrics(probs, labels, tau)
+
+    for source, data, tau in (
+        (run.primary_metrics, rows, 0.5),
+        (run.sensitivity_metrics, rows, 0.4),
+        (run.zero_shot.metrics, zero_rows, 0.5),
+    ):
+        expected = _expected(data, tau)
+        for key in ("f1", "recall", "precision", "auprc"):
+            assert source[key] == pytest.approx(expected[key])
+            assert source[key] != pytest.approx(0.01)
+
+
+def test_val_metrics_exclude_unrecoverable_auprc() -> None:
+    # The training JSON's validation AUPRC is computed from hard predictions and no
+    # validation scores are exported, so it must not be reported.
+    assert "auprc" not in exp5c_report.VAL_METRICS
+    assert "auroc" in exp5c_report.VAL_METRICS

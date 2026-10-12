@@ -11,6 +11,7 @@ from ssl4polyp.classification.analysis.common_metrics import (  # type: ignore[i
     ClusterSet,
     build_cluster_set,
     compute_binary_metrics,
+    recompute_metrics_from_scores,
     sample_cluster_ids,
     _clean_text,
     _coerce_float,
@@ -99,3 +100,29 @@ def test_sample_cluster_ids_matches_rng_sequence() -> None:
     sampled = sample_cluster_ids(clusters, rng)
     assert sampled == expected
     assert Counter(sampled).keys() <= {"p1", "p2", "p3", "n1", "n2", "n3"}
+
+
+def test_recompute_metrics_from_scores_overrides_macro_and_keeps_extras() -> None:
+    probs = np.array([0.9, 0.8, 0.4, 0.7, 0.3, 0.2, 0.1, 0.6])
+    labels = np.array([1, 1, 1, 0, 0, 0, 0, 0])
+    tau = 0.5
+    # Mimic the training JSON: macro-averaged recall/precision/F1 and a wrong AUPRC.
+    base = {"f1": 0.01, "recall": 0.01, "precision": 0.01, "auprc": 0.01, "tau": tau, "tp": 2}
+
+    merged = recompute_metrics_from_scores(base, probs, labels, tau)
+    expected = compute_binary_metrics(probs, labels, tau)
+
+    for key in ("f1", "recall", "precision", "auprc", "auroc", "balanced_accuracy", "mcc", "loss"):
+        assert merged[key] == pytest.approx(expected[key])
+    # Positive-class recall/precision: tp=2, fn=1, fp=2.
+    assert merged["recall"] == pytest.approx(2 / 3)
+    assert merged["precision"] == pytest.approx(2 / 4)
+    # Keys that are not recomputed survive untouched, and the input is not mutated.
+    assert merged["tau"] == tau and merged["tp"] == 2
+    assert base["f1"] == 0.01
+
+
+def test_recompute_metrics_from_scores_keeps_base_when_empty() -> None:
+    base = {"f1": 0.5, "auprc": 0.4}
+    merged = recompute_metrics_from_scores(base, np.array([]), np.array([], dtype=int), 0.5)
+    assert merged == base
