@@ -23,6 +23,7 @@ from .common_metrics import (
     build_cluster_set,
     compute_binary_metrics,
     integrate_trapezoid,
+    recompute_metrics_from_scores,
     sample_cluster_ids,
     _clean_text,
     _coerce_float,
@@ -141,6 +142,25 @@ def _extract_metrics(block: Optional[Mapping[str, Any]]) -> Dict[str, float]:
     return metrics
 
 
+def _recompute_from_frames(
+    metrics: Dict[str, float],
+    frames: Mapping[str, EvalFrame],
+    tau: Optional[float],
+) -> Dict[str, float]:
+    """Replace JSON point estimates with positive-class metrics from the CSV scores.
+
+    Matches the metric definitions used by the bootstrap deltas.
+    """
+
+    if tau is None or not frames:
+        return metrics
+    probs = np.array([frame.prob for frame in frames.values()], dtype=float)
+    labels = np.array([frame.label for frame in frames.values()], dtype=int)
+    return recompute_metrics_from_scores(
+        metrics, probs, labels, float(tau), metric_keys=AGG_METRICS
+    )
+
+
 def _extract_counts(block: Optional[Mapping[str, Any]]) -> Dict[str, int]:
     if not isinstance(block, Mapping):
         return {}
@@ -207,6 +227,10 @@ def load_run(
                 budget_value = pack_spec
     budget = _validate_budget(_normalize_budget(budget_value, fallback=None))
     frames = _frames_to_eval(base_run.frames)
+    primary_metrics = _recompute_from_frames(primary_metrics, frames, tau)
+    sensitivity_metrics = _recompute_from_frames(
+        sensitivity_metrics, frames, sensitivity_tau
+    )
     zero_shot = _load_zero_shot(base_run, payload)
     return FewShotRun(
         model=base_run.model,
@@ -338,6 +362,9 @@ def _load_zero_shot(base_run: CommonRun, payload: Mapping[str, Any]) -> Optional
                 existing_loss is None or not math.isfinite(existing_loss)
             ):
                 metrics.setdefault("loss", float(loss_value))
+    metrics = _recompute_from_frames(
+        metrics, frames, tau if tau is not None else base_run.tau
+    )
     if not metrics and not counts and not frames:
         return None
     zero_sha256 = _extract_zero_shot_csv_sha256(

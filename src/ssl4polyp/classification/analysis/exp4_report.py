@@ -17,7 +17,12 @@ import numpy as np
 from .common_loader import candidate_outputs_csv_paths
 from .exp3_report import FrameRecord, compute_strata_metrics
 from .result_loader import ResultLoader, GuardrailViolation
-from .common_metrics import _coerce_float, _coerce_int, integrate_trapezoid
+from .common_metrics import (
+    _coerce_float,
+    _coerce_int,
+    integrate_trapezoid,
+    recompute_metrics_from_scores,
+)
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
 from .display import (
     format_ci,
@@ -469,6 +474,16 @@ def load_run(metrics_path: Path, *, loader: Optional[ResultLoader] = None) -> Ru
     outputs_path = _resolve_outputs_path(metrics_path)
     frames, cases = _load_outputs(outputs_path, float(tau_value))
     sensitivity_tau_value = sensitivity_metrics.get("tau")
+    # Point estimates must match the bootstrap, which recomputes from the CSV.
+    frame_probs = np.array([record.prob for record in frames], dtype=float)
+    frame_labels = np.array([record.label for record in frames], dtype=int)
+    metrics = recompute_metrics_from_scores(
+        metrics, frame_probs, frame_labels, float(tau_value)
+    )
+    if sensitivity_tau_value is not None and not math.isnan(float(sensitivity_tau_value)):
+        sensitivity_metrics = recompute_metrics_from_scores(
+            sensitivity_metrics, frame_probs, frame_labels, float(sensitivity_tau_value)
+        )
     case_primitives: Dict[str, Dict[str, CaseMetricPrimitives]] = {}
     case_primitives["metrics"] = _compute_case_primitives_for_tau(cases, float(tau_value))
     if sensitivity_tau_value is not None and not math.isnan(float(sensitivity_tau_value)):

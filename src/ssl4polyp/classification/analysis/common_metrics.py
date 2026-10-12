@@ -22,6 +22,7 @@ __all__ = [
     "_coerce_float",
     "_coerce_int",
     "compute_binary_metrics",
+    "recompute_metrics_from_scores",
     "integrate_trapezoid",
     "ClusterSet",
     "build_cluster_set",
@@ -194,6 +195,35 @@ def compute_binary_metrics(
         for key in full_metrics
         if key in metric_set or key not in _DEFAULT_BINARY_METRICS
     }
+
+
+def recompute_metrics_from_scores(
+    base: Dict[str, float],
+    probs: np.ndarray,
+    labels: np.ndarray,
+    tau: float,
+    *,
+    metric_keys: Sequence[str] | None = None,
+) -> Dict[str, float]:
+    """Return ``base`` with its metric entries replaced by positive-class values.
+
+    The ``val``/``test_primary`` blocks written by training report macro-averaged
+    recall/precision/F1 and an AUPRC computed from hard predictions.  Reports that
+    also bootstrap from the per-frame CSV use :func:`compute_binary_metrics`, so
+    point estimates must come from the same function to stay comparable.  Keys
+    that cannot be recomputed (non-finite) keep their original value.
+    """
+
+    merged = dict(base)
+    if probs.size == 0:
+        return merged
+    keys = tuple(metric_keys) if metric_keys is not None else _DEFAULT_BINARY_METRICS
+    fresh = compute_binary_metrics(probs, labels, tau, metric_keys=keys)
+    for key in keys:
+        value = fresh.get(key)
+        if value is not None and math.isfinite(float(value)):
+            merged[key] = float(value)
+    return merged
 
 
 T = TypeVar("T")
