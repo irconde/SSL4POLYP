@@ -216,11 +216,13 @@ def _write_run(
 
 
 def test_generate_report_smoke(tmp_path: Path) -> None:
+    # Every run must list the same test frames in the same order (as on real data),
+    # because the bootstrap draws one set of cases shared by all models and seeds.
     colon_rows = [
         {"case_id": "a", "prob": 0.9, "label": 1, "pred": 1, "morphology": "polypoid"},
-        {"case_id": "a", "prob": 0.1, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "b", "prob": 0.8, "label": 1, "pred": 1, "morphology": "flat"},
         {"case_id": "c", "prob": 0.2, "label": 0, "pred": 0, "morphology": "other"},
+        {"case_id": "d", "prob": 0.1, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "e", "prob": 0.3, "label": 0, "pred": 0, "morphology": "other"},
     ]
     sup_rows = [
@@ -255,6 +257,7 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         {"case_id": "a", "prob": 0.88, "label": 1, "pred": 1, "morphology": "polypoid"},
         {"case_id": "b", "prob": 0.82, "label": 1, "pred": 1, "morphology": "flat"},
         {"case_id": "c", "prob": 0.18, "label": 0, "pred": 0, "morphology": "other"},
+        {"case_id": "d", "prob": 0.12, "label": 0, "pred": 0, "morphology": "unknown"},
         {"case_id": "e", "prob": 0.28, "label": 0, "pred": 0, "morphology": "other"},
     ]
     for seed in EXPECTED_SEEDS:
@@ -264,7 +267,7 @@ def test_generate_report_smoke(tmp_path: Path) -> None:
         ssl_payload = ssl_rows if seed != 47 else alt_ssl_rows
         _write_run(tmp_path, "ssl_imnet", seed=seed, rows=ssl_payload, tau=0.5)
 
-    report = generate_report(tmp_path, bootstrap=2, rng_seed=7)
+    report = generate_report(tmp_path, bootstrap=20, rng_seed=7)
 
     assert "## Metrics at τ_F1(val-morph) — Overall" in report
     assert "Flat + Negs" in report

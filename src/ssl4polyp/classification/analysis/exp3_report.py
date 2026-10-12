@@ -13,6 +13,12 @@ from sklearn.exceptions import UndefinedMetricWarning  # type: ignore[import]
 from .common_loader import get_default_loader, load_common_run
 from .result_loader import ResultLoader
 from .common_metrics import compute_binary_metrics
+from .bootstrap_common import (
+    ClusterSampler,
+    bootstrap_replicates,
+    metric_on_rows,
+    require_aligned,
+)
 from .seed_checks import ensure_expected_seeds
 from .display import (
     PLACEHOLDER,
@@ -89,6 +95,7 @@ __all__ = [
     "compute_strata_metrics",
     "summarise_composition",
     "bootstrap_deltas",
+    "compute_flat_leave_one_case_out",
     "generate_report",
 ]
 
@@ -100,6 +107,7 @@ class FrameRecord:
     pred: int
     case_id: str
     morphology: str
+    frame_id: str = ""
 
 
 @dataclass
@@ -234,6 +242,7 @@ def load_run(
             pred=frame.pred,
             case_id=frame.case_id,
             morphology=morphology,
+            frame_id=frame.frame_id,
         )
         frames.append(record)
         cases[frame.case_id].append(record)
@@ -437,81 +446,69 @@ def bootstrap_deltas(
             point_estimates[stratum][metric] = (
                 float(np.mean(deltas)) if deltas else float("nan")
             )
-    rng = np.random.default_rng(rng_seed)
-    max_attempts = 200
-    for _ in range(max(0, bootstrap)):
-        stratum_values: Dict[str, Dict[str, List[float]]] = {
-            stratum: {metric: [] for metric in metric_keys} for stratum in _STRATA
-        }
-        valid = True
-        for seed in seeds:
-            colon_run = colon_runs[seed]
-            baseline_run = baseline_runs[seed]
-            case_ids = sorted(set(colon_run.cases.keys()) & set(baseline_run.cases.keys()))
-            if not case_ids:
-                valid = False
-                break
-            attempts = 0
-            seed_success = False
-            while attempts < max_attempts:
-                sampled_ids = rng.choice(case_ids, size=len(case_ids), replace=True)
-                colon_sample: List[FrameRecord] = []
-                baseline_sample: List[FrameRecord] = []
-                for cid in sampled_ids:
-                    colon_sample.extend(colon_run.cases[cid])
-                    baseline_sample.extend(baseline_run.cases[cid])
-                colon_tau = colon_run.tau_for_policy(policy)
-                baseline_tau = baseline_run.tau_for_policy(policy)
-                colon_metrics = compute_strata_metrics(colon_sample, colon_tau)
-                baseline_metrics = compute_strata_metrics(baseline_sample, baseline_tau)
-                attempt_valid = True
-                attempt_deltas: Dict[str, Dict[str, float]] = {}
-                for stratum in _STRATA:
-                    if (
-                        stratum not in colon_metrics
-                        or stratum not in baseline_metrics
-                        or colon_metrics[stratum].get("n_pos", 0) <= 0
-                        or baseline_metrics[stratum].get("n_pos", 0) <= 0
-                    ):
-                        attempt_valid = False
-                        break
-                    seed_deltas: Dict[str, float] = {}
-                    for metric in metric_keys:
-                        colon_value = colon_metrics[stratum].get(metric)
-                        baseline_value = baseline_metrics[stratum].get(metric)
-                        if colon_value is None or baseline_value is None:
-                            attempt_valid = False
-                            break
-                        try:
-                            colon_float = float(colon_value)
-                            baseline_float = float(baseline_value)
-                        except (TypeError, ValueError):
-                            attempt_valid = False
-                            break
-                        if math.isnan(colon_float) or math.isnan(baseline_float):
-                            attempt_valid = False
-                            break
-                        seed_deltas[metric] = colon_float - baseline_float
-                    if not attempt_valid:
-                        break
-                    attempt_deltas[stratum] = seed_deltas
-                if attempt_valid:
-                    for stratum, seed_deltas in attempt_deltas.items():
-                        for metric, delta in seed_deltas.items():
-                            stratum_values[stratum][metric].append(delta)
-                    seed_success = True
-                    break
-                attempts += 1
-            if not seed_success:
-                valid = False
-                break
-        if not valid:
-            continue
+    # One class-stratified case draw per replicate, shared by both models, all seeds and
+    # all strata (see bootstrap_common).  Draws that leave a stratum without positives
+    # are repeated (up to ``max_attempts`` times).
+    reference = colon_runs[seeds[0]]
+    runs = {f"colon@{seed}": colon_runs[seed] for seed in seeds}
+    runs.update({f"baseline@{seed}": baseline_runs[seed] for seed in seeds})
+    require_aligned(
+        [record.frame_id for record in reference.frames],
+        {name: [record.frame_id for record in run.frames] for name, run in runs.items()},
+        context="Experiment 3 bootstrap",
+    )
+    sampler = ClusterSampler(
+        [record.label for record in reference.frames],
+        [record.case_id for record in reference.frames],
+    )
+    ref_labels = np.array([record.label for record in reference.frames], dtype=int)
+    morph = np.array([record.morphology for record in reference.frames])
+    pos_mask = ref_labels == 1
+    stratum_masks = {
+        "overall": np.ones_like(pos_mask),
+        "flat_plus_negs": ~pos_mask | (pos_mask & (morph == "flat")),
+        "polypoid_plus_negs": ~pos_mask | (pos_mask & (morph == "polypoid")),
+    }
+    arrays = {
+        name: (
+            np.array([record.prob for record in run.frames], dtype=float),
+            np.array([record.label for record in run.frames], dtype=int),
+        )
+        for name, run in runs.items()
+    }
+    taus = {name: run.tau_for_policy(policy) for name, run in runs.items()}
+
+    def statistic(rows: np.ndarray) -> Optional[Dict[str, float]]:
+        out: Dict[str, float] = {}
         for stratum in _STRATA:
+            sub = rows[stratum_masks[stratum][rows]]
+            if sub.size == 0 or not np.any(ref_labels[sub] == 1):
+                return None
             for metric in metric_keys:
-                values = stratum_values[stratum][metric]
-                if values:
-                    replicates[stratum][metric].append(float(np.mean(values)))
+                deltas: List[float] = []
+                for seed in seeds:
+                    values = []
+                    for prefix in ("colon", "baseline"):
+                        name = f"{prefix}@{seed}"
+                        probs, labels = arrays[name]
+                        values.append(metric_on_rows(probs, labels, taus[name], sub, metric))
+                    if values[0] is None or values[1] is None:
+                        continue
+                    deltas.append(values[0] - values[1])
+                if deltas:
+                    out[f"{stratum}|{metric}"] = float(np.mean(deltas))
+        return out
+
+    drawn = bootstrap_replicates(
+        sampler,
+        statistic,
+        bootstrap=bootstrap,
+        rng_seed=rng_seed,
+        max_attempts=200,
+    )
+    for stratum in _STRATA:
+        for metric in metric_keys:
+            replicates[stratum][metric].extend(drawn.get(f"{stratum}|{metric}", []))
     return point_estimates, replicates
 
 
@@ -909,6 +906,106 @@ def _render_interaction_block(
     lines.extend(sections)
 
 
+_LOO_METRICS = ("auprc", "auroc", "f1", "recall", "balanced_accuracy")
+
+
+def compute_flat_leave_one_case_out(
+    runs_by_model: Mapping[str, Mapping[int, RunDataset]],
+    *,
+    policy: str,
+    metrics: Sequence[str] = _LOO_METRICS,
+    target_model: str = "ssl_colon",
+    baselines: Sequence[str] = ("sup_imnet", "ssl_imnet"),
+) -> Dict[str, Dict[str, Dict[str, object]]]:
+    """Drop one flat positive case at a time from the flat stratum (negatives kept).
+
+    The flat stratum rests on very few cases, so this shows how much each SSL-Colon
+    delta depends on a single case.  Values are the mean over seeds.
+    """
+
+    colon = runs_by_model.get(target_model) or {}
+    if not colon:
+        return {}
+    reference = next(iter(colon.values()))
+    ref_labels = np.array([r.label for r in reference.frames], dtype=int)
+    ref_cases = np.array([r.case_id for r in reference.frames], dtype=object)
+    ref_morph = np.array([r.morphology for r in reference.frames])
+    flat_pos = (ref_labels == 1) & (ref_morph == "flat")
+    stratum = (ref_labels == 0) | flat_pos
+    flat_cases = sorted({str(c) for c in ref_cases[flat_pos]})
+    if len(flat_cases) < 2:
+        return {}
+
+    def mean_metric(model: str, metric: str, dropped: Optional[str]) -> Optional[float]:
+        values: List[float] = []
+        for run in (runs_by_model.get(model) or {}).values():
+            probs = np.array([r.prob for r in run.frames], dtype=float)
+            labels = np.array([r.label for r in run.frames], dtype=int)
+            keep = stratum if dropped is None else stratum & (ref_cases != dropped)
+            value = metric_on_rows(probs, labels, run.tau_for_policy(policy), np.flatnonzero(keep), metric)
+            if value is not None:
+                values.append(value)
+        return float(np.mean(values)) if values else None
+
+    result: Dict[str, Dict[str, Dict[str, object]]] = {}
+    for baseline in baselines:
+        if not runs_by_model.get(baseline):
+            continue
+        per_metric: Dict[str, Dict[str, object]] = {}
+        for metric in metrics:
+            a, b = mean_metric(target_model, metric, None), mean_metric(baseline, metric, None)
+            if a is None or b is None:
+                continue
+            full = a - b
+            by_case: Dict[str, float] = {}
+            for case in flat_cases:
+                ac, bc = mean_metric(target_model, metric, case), mean_metric(baseline, metric, case)
+                if ac is not None and bc is not None:
+                    by_case[case] = ac - bc
+            if not by_case:
+                continue
+            per_metric[metric] = {
+                "full": full,
+                "by_case": by_case,
+                "min": min(by_case.values()),
+                "max": max(by_case.values()),
+                "most_influential": max(by_case, key=lambda c: abs(by_case[c] - full)),
+                "sign_change": bool(full != 0 and any(v * full < 0 for v in by_case.values())),
+            }
+        if per_metric:
+            result[baseline] = per_metric
+    return result
+
+
+def _render_loco_block(
+    lines: List[str],
+    loco: Mapping[str, Mapping[str, Mapping[str, object]]],
+    *,
+    policy: str,
+    n_flat_cases: int,
+) -> None:
+    if not loco:
+        return
+    lines.append(f"## Leave-one-case-out — Flat + Negs ({_POLICY_LABELS.get(policy, policy)})")
+    lines.append("")
+    lines.append(
+        f"Each row drops one of the {n_flat_cases} flat positive cases (negatives kept) and "
+        "recomputes the SSL-Colon delta (mean over seeds)."
+    )
+    lines.append("")
+    lines.append("| Baseline | Metric | Full Δ | Min Δ | Max Δ | Most influential case | Sign flips |")
+    lines.append("| --- | --- | ---: | ---: | ---: | --- | --- |")
+    for baseline, metrics_block in loco.items():
+        for metric, payload in metrics_block.items():
+            lines.append(
+                f"| SSL-Colon − {model_label(baseline)} | {_METRIC_LABELS.get(metric, metric)} | "
+                f"{format_scalar(payload['full'])} | {format_scalar(payload['min'])} | "
+                f"{format_scalar(payload['max'])} | {payload['most_influential']} | "
+                f"{'yes' if payload['sign_change'] else 'no'} |"
+            )
+    lines.append("")
+
+
 def generate_report(
     runs_root: Path,
     *,
@@ -1023,6 +1120,13 @@ def generate_report(
         metrics=_DELTA_METRICS,
         heading_level=2,
     )
+    loco = compute_flat_leave_one_case_out(runs_by_model, policy=primary_policy)
+    if loco:
+        reference_run = next(iter(runs_by_model["ssl_colon"].values()))
+        n_flat_cases = len(
+            {r.case_id for r in reference_run.frames if r.label == 1 and r.morphology == "flat"}
+        )
+        _render_loco_block(lines, loco, policy=primary_policy, n_flat_cases=n_flat_cases)
 
     for policy in appendix_policies:
         appendix_metrics = _collect_metrics(runs_by_model, policy=policy)

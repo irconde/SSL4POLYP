@@ -25,8 +25,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bootstrap",
         type=int,
-        default=1000,
-        help="Number of bootstrap iterations for delta confidence intervals (default: 1000).",
+        default=2000,
+        help="Number of bootstrap iterations for delta confidence intervals (default: 2000).",
     )
     parser.add_argument(
         "--seed",

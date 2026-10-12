@@ -29,6 +29,15 @@ from .common_metrics import (
     _coerce_float,
     _coerce_int,
 )
+from .bootstrap_common import (
+    DEFAULT_BOOTSTRAP,
+    DEFAULT_RNG_SEED,
+    ClusterSampler,
+    bootstrap_scalar,
+    metric_on_rows,
+    percentile_ci,
+    require_aligned,
+)
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
 
 TARGET_MODEL = "ssl_colon"
@@ -551,6 +560,42 @@ def _metrics_for_sample(
     return float(value)
 
 
+def _policy_arrays(run: FewShotRun, policy: str) -> Tuple[List[str], np.ndarray, np.ndarray, float]:
+    frames = _get_policy_frames(run, policy)
+    ids = list(frames)
+    probs = np.array([frames[fid].prob for fid in ids], dtype=float)
+    labels = np.array([frames[fid].label for fid in ids], dtype=int)
+    tau = _get_policy_tau(run, policy)
+    return ids, probs, labels, float(run.tau if tau is None else tau)
+
+
+def _run_sampler(reference: FewShotRun) -> Tuple[ClusterSampler, List[str]]:
+    """Class-stratified sampler (centre / sequence clusters) over one test set."""
+
+    ids = list(reference.frames)
+    sampler = ClusterSampler(
+        [reference.frames[fid].label for fid in ids],
+        [
+            (reference.frames[fid].center_id or reference.frames[fid].sequence_id)
+            if reference.frames[fid].label == 1
+            else (reference.frames[fid].sequence_id or reference.frames[fid].center_id)
+            for fid in ids
+        ],
+    )
+    return sampler, ids
+
+
+def _map_rows(rows: np.ndarray, source_ids: Sequence[str], target_ids: Sequence[str]) -> np.ndarray:
+    """Translate row indices of ``source_ids`` into rows of ``target_ids`` (drops absent frames)."""
+
+    if list(source_ids) == list(target_ids):
+        return rows
+    position = {fid: index for index, fid in enumerate(target_ids)}
+    lookup = np.array([position.get(fid, -1) for fid in source_ids], dtype=int)
+    mapped = lookup[rows]
+    return mapped[mapped >= 0]
+
+
 def _bootstrap_delta_across_seeds(
     colon_runs: Sequence[FewShotRun],
     baseline_runs: Sequence[FewShotRun],
@@ -563,39 +608,36 @@ def _bootstrap_delta_across_seeds(
     if bootstrap <= 0:
         return []
     baseline_by_seed = {run.seed: run for run in baseline_runs}
-    rng = np.random.default_rng(rng_seed)
-    cluster_cache: Dict[int, ClusterSet] = {}
-    replicates: List[float] = []
-    for _ in range(bootstrap):
+    pairs = [(run, baseline_by_seed[run.seed]) for run in colon_runs if run.seed in baseline_by_seed]
+    if not pairs:
+        return []
+    sampler, ref_ids = _run_sampler(pairs[0][0])
+    data = []
+    for colon_run, baseline_run in pairs:
+        c_ids, c_probs, c_labels, c_tau = _policy_arrays(colon_run, policy)
+        b_ids, b_probs, b_labels, b_tau = _policy_arrays(baseline_run, policy)
+        require_aligned(
+            ref_ids,
+            {f"colon@{colon_run.seed}": c_ids, f"baseline@{baseline_run.seed}": b_ids},
+            context="Experiment 5C bootstrap",
+        )
+        data.append(((c_probs, c_labels, c_tau), (b_probs, b_labels, b_tau)))
+
+    def statistic(rows: np.ndarray) -> Optional[float]:
         deltas: List[float] = []
-        for colon_run in colon_runs:
-            baseline_run = baseline_by_seed.get(colon_run.seed)
-            if baseline_run is None:
-                continue
-            if cluster_cache.get(colon_run.seed) is None:
-                cluster_cache[colon_run.seed] = _build_cluster_set(colon_run)
-            clusters = cluster_cache[colon_run.seed]
-            frame_ids = sample_cluster_ids(clusters, rng)
-            colon_value = _metrics_for_sample(colon_run, frame_ids, metric, policy=policy)
-            baseline_value = _metrics_for_sample(baseline_run, frame_ids, metric, policy=policy)
-            if colon_value is None or baseline_value is None:
-                continue
-            deltas.append(colon_value - baseline_value)
-        if deltas:
-            replicates.append(float(np.mean(deltas)))
-    return replicates
+        for (cp, cl, ct), (bp, bl, bt) in data:
+            a = metric_on_rows(cp, cl, ct, rows, metric)
+            b = metric_on_rows(bp, bl, bt, rows, metric)
+            if a is not None and b is not None:
+                deltas.append(a - b)
+        return float(np.mean(deltas)) if deltas else None
+
+    return bootstrap_scalar(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
 
 
 def _compute_ci(samples: Sequence[float], confidence: float = 0.95) -> Dict[str, float]:
-    if not samples:
-        return {"lower": float("nan"), "upper": float("nan")}
-    lower_pct = 50.0 * (1.0 - confidence)
-    upper_pct = 100.0 - lower_pct
-    array = np.array(samples, dtype=float)
-    return {
-        "lower": float(np.percentile(array, lower_pct)),
-        "upper": float(np.percentile(array, upper_pct)),
-    }
+    lower, upper = percentile_ci(samples, confidence)
+    return {"lower": lower, "upper": upper}
 
 
 def _collect_shared_seeds(
@@ -974,53 +1016,59 @@ def _bootstrap_aulc_delta(
     if not shared_budgets:
         return []
     ensure_expected_seeds(
-        { 
+        {
             **{f"colon@b{budget}": colon_runs_per_budget.get(budget, {}) for budget in shared_budgets},
             **{f"baseline@b{budget}": baseline_runs_per_budget.get(budget, {}) for budget in shared_budgets},
         },
         expected_seeds=expected_seeds,
         context="Experiment 5C bootstrap ΔAULC",
     )
-    shared_seeds = list(expected_seeds)
-    rng = np.random.default_rng(rng_seed)
-    cluster_cache: Dict[int, ClusterSet] = {}
-    replicates: List[float] = []
-    for _ in range(bootstrap):
+    seeds = list(expected_seeds)
+    # The test fold changes with the budget (it is the complement of that budget's
+    # support), so the draw is made once over the first budget's test set and mapped to
+    # the frames that each other budget shares with it.  Seeds share the same budget test
+    # set, hence one draw serves all of them.
+    sampler, ref_ids = _run_sampler(colon_runs_per_budget[shared_budgets[0]][seeds[0]])
+    data: Dict[Tuple[int, int], Any] = {}
+    for budget in shared_budgets:
+        for seed in seeds:
+            colon_run = colon_runs_per_budget[budget][seed]
+            baseline_run = baseline_runs_per_budget[budget][seed]
+            c_ids, c_probs, c_labels, c_tau = _policy_arrays(colon_run, policy)
+            b_ids, b_probs, b_labels, b_tau = _policy_arrays(baseline_run, policy)
+            require_aligned(
+                c_ids,
+                {f"baseline@b{budget}@{seed}": b_ids},
+                context="Experiment 5C ΔAULC bootstrap",
+            )
+            data[(budget, seed)] = (
+                c_ids,
+                (c_probs, c_labels, c_tau),
+                (b_probs, b_labels, b_tau),
+            )
+
+    def statistic(rows: np.ndarray) -> Optional[float]:
         deltas: List[float] = []
-        for seed in shared_seeds:
+        for seed in seeds:
             colon_series: List[float] = []
             baseline_series: List[float] = []
-            clusters = cluster_cache.get(seed)
-            if clusters is None:
-                first_budget = shared_budgets[0]
-                colon_reference = colon_runs_per_budget[first_budget][seed]
-                clusters = _build_cluster_set(colon_reference)
-                cluster_cache[seed] = clusters
-            frame_ids = sample_cluster_ids(clusters, rng)
-            valid = True
             for budget in shared_budgets:
-                colon_run = colon_runs_per_budget.get(budget, {}).get(seed)
-                baseline_run = baseline_runs_per_budget.get(budget, {}).get(seed)
-                if colon_run is None or baseline_run is None:
-                    valid = False
-                    break
-                colon_value = _metrics_for_sample(colon_run, frame_ids, metric, policy=policy)
-                baseline_value = _metrics_for_sample(baseline_run, frame_ids, metric, policy=policy)
-                if colon_value is None or baseline_value is None:
-                    valid = False
-                    break
-                colon_series.append(colon_value)
-                baseline_series.append(baseline_value)
-            if not valid:
-                continue
+                ids, (cp, cl, ct), (bp, bl, bt) = data[(budget, seed)]
+                budget_rows = _map_rows(rows, ref_ids, ids)
+                a = metric_on_rows(cp, cl, ct, budget_rows, metric)
+                b = metric_on_rows(bp, bl, bt, budget_rows, metric)
+                if a is None or b is None:
+                    return None
+                colon_series.append(a)
+                baseline_series.append(b)
             colon_aulc = _compute_aulc_from_series(shared_budgets, colon_series)
             baseline_aulc = _compute_aulc_from_series(shared_budgets, baseline_series)
             if not math.isfinite(colon_aulc) or not math.isfinite(baseline_aulc):
-                continue
+                return None
             deltas.append(colon_aulc - baseline_aulc)
-        if deltas:
-            replicates.append(float(np.mean(deltas)))
-    return replicates
+        return float(np.mean(deltas))
+
+    return bootstrap_scalar(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
 
 
 def _compute_pairwise_deltas(
@@ -1393,26 +1441,31 @@ def _bootstrap_gain_across_seeds(
 ) -> List[float]:
     if bootstrap <= 0:
         return []
-    rng = np.random.default_rng(rng_seed)
-    cluster_cache: Dict[int, ClusterSet] = {}
-    replicates: List[float] = []
-    for _ in range(bootstrap):
+    usable = [run for run in runs if run.zero_shot is not None]
+    if not usable:
+        return []
+    sampler, ref_ids = _run_sampler(usable[0])
+    data = []
+    for run in usable:
+        a_ids, a_probs, a_labels, a_tau = _policy_arrays(run, "primary")
+        z_ids, z_probs, z_labels, z_tau = _policy_arrays(run, "zero_shot")
+        require_aligned(
+            ref_ids,
+            {f"adapted@{run.seed}": a_ids, f"zero_shot@{run.seed}": z_ids},
+            context="Experiment 5C gain bootstrap",
+        )
+        data.append(((a_probs, a_labels, a_tau), (z_probs, z_labels, z_tau)))
+
+    def statistic(rows: np.ndarray) -> Optional[float]:
         gains: List[float] = []
-        for run in runs:
-            if run.zero_shot is None:
-                continue
-            if cluster_cache.get(run.seed) is None:
-                cluster_cache[run.seed] = _build_cluster_set(run)
-            clusters = cluster_cache[run.seed]
-            frame_ids = sample_cluster_ids(clusters, rng)
-            adapted = _metrics_for_sample(run, frame_ids, metric, policy="primary")
-            baseline = _metrics_for_sample(run, frame_ids, metric, policy="zero_shot")
-            if adapted is None or baseline is None:
-                continue
-            gains.append(adapted - baseline)
-        if gains:
-            replicates.append(float(np.mean(gains)))
-    return replicates
+        for (ap, al, at), (zp, zl, zt) in data:
+            adapted = metric_on_rows(ap, al, at, rows, metric)
+            baseline = metric_on_rows(zp, zl, zt, rows, metric)
+            if adapted is not None and baseline is not None:
+                gains.append(adapted - baseline)
+        return float(np.mean(gains)) if gains else None
+
+    return bootstrap_scalar(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
 
 
 def _compute_gain_summary(
@@ -1604,8 +1657,8 @@ def _summarize_policy(
 def summarize_runs(
     runs_by_model: Mapping[str, Mapping[int, Mapping[int, FewShotRun]]],
     *,
-    bootstrap: int = 2000,
-    rng_seed: int = 12345,
+    bootstrap: int = DEFAULT_BOOTSTRAP,
+    rng_seed: int = DEFAULT_RNG_SEED,
     target_model: str = TARGET_MODEL,
 ) -> Dict[str, Any]:
     if runs_by_model:

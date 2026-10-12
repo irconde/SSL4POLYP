@@ -23,6 +23,13 @@ from .common_metrics import (
     integrate_trapezoid,
     recompute_metrics_from_scores,
 )
+from .bootstrap_common import (
+    ClusterSampler,
+    bootstrap_scalar,
+    metric_on_rows,
+    percentile_ci,
+    require_aligned,
+)
 from .seed_checks import SeedValidationResult, ensure_expected_seeds
 from .display import (
     format_ci,
@@ -402,7 +409,15 @@ def _load_outputs(outputs_path: Path, tau: float) -> Tuple[List[FrameRecord], Di
             except ValueError as exc:
                 raise ValueError(f"{exc} (row {index} of {outputs_path})") from exc
             morph = _normalise_morphology(row.get("morphology"))
-            record = FrameRecord(prob=float(prob), label=int(label), pred=int(pred_value), case_id=case_id, morphology=morph)
+            frame_id = str(row.get("frame_id") or f"row_{index}")
+            record = FrameRecord(
+                prob=float(prob),
+                label=int(label),
+                pred=int(pred_value),
+                case_id=case_id,
+                morphology=morph,
+                frame_id=frame_id,
+            )
             frames.append(record)
             cases[case_id].append(record)
     return frames, dict(cases)
@@ -931,6 +946,30 @@ def compute_test_composition(
     return {"n_pos": float(reference[0]), "n_neg": float(reference[1]), "prevalence": reference[2]}
 
 
+def _run_arrays(run: RunResult) -> Tuple[np.ndarray, np.ndarray]:
+    return (
+        np.array([record.prob for record in run.frames], dtype=float),
+        np.array([record.label for record in run.frames], dtype=int),
+    )
+
+
+def _shared_sampler(
+    reference: RunResult, others: Mapping[str, RunResult], *, context: str
+) -> ClusterSampler:
+    """Class-stratified case sampler shared by every run compared in a bootstrap."""
+
+    reference_ids = [record.frame_id for record in reference.frames]
+    require_aligned(
+        reference_ids,
+        {name: [record.frame_id for record in run.frames] for name, run in others.items()},
+        context=context,
+    )
+    return ClusterSampler(
+        [record.label for record in reference.frames],
+        [record.case_id for record in reference.frames],
+    )
+
+
 def bootstrap_metric_delta(
     colon_runs: Mapping[int, RunResult],
     baseline_runs: Mapping[int, RunResult],
@@ -967,6 +1006,8 @@ def bootstrap_metric_delta_with_expected(
     log_interval: int = 100,
     log_context: Optional[str] = None,
 ) -> List[float]:
+    """Paired case-level bootstrap of the seed-mean delta (one draw shared by all seeds)."""
+
     if bootstrap <= 0:
         return []
     ensure_expected_seeds(
@@ -975,55 +1016,29 @@ def bootstrap_metric_delta_with_expected(
         context="Experiment 4 bootstrap metric delta",
     )
     seeds = list(expected_seeds)
-    rng = np.random.default_rng(rng_seed)
-    replicates: List[float] = []
-    context_label = log_context or f"metric={metric}"
-    log_every = max(1, int(log_interval))
-    for _ in range(bootstrap):
-        deltas_seed: List[float] = []
-        valid = True
+    runs = {f"colon@{seed}": colon_runs[seed] for seed in seeds}
+    runs.update({f"baseline@{seed}": baseline_runs[seed] for seed in seeds})
+    sampler = _shared_sampler(
+        colon_runs[seeds[0]], runs, context=log_context or f"Experiment 4 {metric}"
+    )
+    arrays = {name: _run_arrays(run) for name, run in runs.items()}
+    taus = {name: _resolve_tau(run, source) for name, run in runs.items()}
+
+    def statistic(rows: np.ndarray) -> Optional[float]:
+        deltas: List[float] = []
         for seed in seeds:
-            colon_run = colon_runs[seed]
-            baseline_run = baseline_runs[seed]
-            case_ids = _validate_case_ids(
-                colon_run,
-                baseline_run,
-                context=f"Experiment 4 bootstrap metric delta (seed {seed})",
-            )
-            if not case_ids:
-                valid = False
-                break
-            sampled_ids = rng.choice(case_ids, size=len(case_ids), replace=True)
-            colon_value = _metric_from_case_ids(colon_run, sampled_ids, metric, source)
-            baseline_value = _metric_from_case_ids(
-                baseline_run, sampled_ids, metric, source
-            )
-            if colon_value is None or baseline_value is None:
-                valid = False
-                break
-            deltas_seed.append(float(colon_value) - float(baseline_value))
-        if not valid or not deltas_seed:
-            continue
-        replicates.append(float(np.mean(deltas_seed)))
-        if logger.isEnabledFor(logging.INFO):
-            completed = len(replicates)
-            if completed % log_every == 0:
-                logger.info(
-                    "Bootstrap metric delta (%s): %d/%d replicates completed",
-                    context_label,
-                    completed,
-                    bootstrap,
-                )
-    if logger.isEnabledFor(logging.INFO) and replicates:
-        completed = len(replicates)
-        if completed % log_every != 0:
-            logger.info(
-                "Bootstrap metric delta (%s): %d/%d replicates completed",
-                context_label,
-                completed,
-                bootstrap,
-            )
-    return replicates
+            values = []
+            for prefix in ("colon", "baseline"):
+                name = f"{prefix}@{seed}"
+                probs, labels = arrays[name]
+                value = metric_on_rows(probs, labels, taus[name], rows, metric)
+                if value is None:
+                    return None
+                values.append(value)
+            deltas.append(values[0] - values[1])
+        return float(np.mean(deltas))
+
+    return bootstrap_scalar(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
 
 
 def bootstrap_aulc_delta(
@@ -1065,82 +1080,47 @@ def bootstrap_aulc_delta_with_expected(
     log_interval: int = 100,
     log_context: Optional[str] = None,
 ) -> List[float]:
+    """Bootstrap of the seed-mean ΔAULC; one case draw is shared by seeds and budgets."""
+
     if bootstrap <= 0:
         return []
-    sorted_seeds = list(expected_seeds)
-    rng = np.random.default_rng(rng_seed)
-    replicates: List[float] = []
-    context_label = log_context or f"metric={metric}"
-    log_every = max(1, int(log_interval))
-    for _ in range(bootstrap):
-        deltas_seed: List[float] = []
-        valid = True
-        for seed in sorted_seeds:
-            colon_values: List[float] = []
-            baseline_values: List[float] = []
+    seeds = list(expected_seeds)
+    runs: Dict[str, RunResult] = {}
+    for percent in percents:
+        for seed in seeds:
+            runs[f"colon@{percent:g}@{seed}"] = colon_runs[percent][seed]
+            runs[f"baseline@{percent:g}@{seed}"] = baseline_runs[percent][seed]
+    reference = colon_runs[percents[0]][seeds[0]]
+    sampler = _shared_sampler(
+        reference, runs, context=log_context or f"Experiment 4 ΔAULC {metric}"
+    )
+    arrays = {name: _run_arrays(run) for name, run in runs.items()}
+    taus = {name: _resolve_tau(run, source) for name, run in runs.items()}
+
+    def statistic(rows: np.ndarray) -> Optional[float]:
+        deltas: List[float] = []
+        for seed in seeds:
+            series: Dict[str, List[float]] = {"colon": [], "baseline": []}
             for percent in percents:
-                colon_run = colon_runs[percent][seed]
-                baseline_run = baseline_runs[percent][seed]
-                case_ids = _validate_case_ids(
-                    colon_run,
-                    baseline_run,
-                    context=(
-                        "Experiment 4 bootstrap ΔAULC "
-                        f"(seed {seed}, percent {percent:g})"
-                    ),
-                )
-                if not case_ids:
-                    valid = False
-                    break
-                sampled_ids = rng.choice(case_ids, size=len(case_ids), replace=True)
-                colon_value = _metric_from_case_ids(colon_run, sampled_ids, metric, source)
-                baseline_value = _metric_from_case_ids(
-                    baseline_run, sampled_ids, metric, source
-                )
-                if colon_value is None or baseline_value is None:
-                    valid = False
-                    break
-                colon_values.append(float(colon_value))
-                baseline_values.append(float(baseline_value))
-            if not valid:
-                break
-            colon_aulc = compute_aulc_from_series(percents, colon_values)
-            baseline_aulc = compute_aulc_from_series(percents, baseline_values)
+                for prefix in series:
+                    name = f"{prefix}@{percent:g}@{seed}"
+                    probs, labels = arrays[name]
+                    value = metric_on_rows(probs, labels, taus[name], rows, metric)
+                    if value is None:
+                        return None
+                    series[prefix].append(value)
+            colon_aulc = compute_aulc_from_series(percents, series["colon"])
+            baseline_aulc = compute_aulc_from_series(percents, series["baseline"])
             if math.isnan(colon_aulc) or math.isnan(baseline_aulc):
-                valid = False
-                break
-            deltas_seed.append(colon_aulc - baseline_aulc)
-        if not valid or not deltas_seed:
-            continue
-        replicates.append(float(np.mean(deltas_seed)))
-        if logger.isEnabledFor(logging.INFO):
-            completed = len(replicates)
-            if completed % log_every == 0:
-                logger.info(
-                    "Bootstrap ΔAULC (%s): %d/%d replicates completed",
-                    context_label,
-                    completed,
-                    bootstrap,
-                )
-    if logger.isEnabledFor(logging.INFO) and replicates:
-        completed = len(replicates)
-        if completed % log_every != 0:
-            logger.info(
-                "Bootstrap ΔAULC (%s): %d/%d replicates completed",
-                context_label,
-                completed,
-                bootstrap,
-            )
-    return replicates
+                return None
+            deltas.append(colon_aulc - baseline_aulc)
+        return float(np.mean(deltas))
+
+    return bootstrap_scalar(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
 
 
 def compute_ci_bounds(samples: Sequence[float]) -> Tuple[float, float]:
-    if not samples:
-        return float("nan"), float("nan")
-    array = np.array(samples, dtype=float)
-    lower = float(np.quantile(array, 0.025))
-    upper = float(np.quantile(array, 0.975))
-    return lower, upper
+    return percentile_ci(samples)
 
 
 def determine_targets(

@@ -37,6 +37,7 @@ write_domain_shift_csv = cast(WriteCsvFn, _exp5a_module.write_domain_shift_csv)
 write_composition_csv = cast(WriteCsvFn, _exp5a_module.write_composition_csv)
 write_seed_metrics_csv = cast(WriteCsvFn, _exp5a_module.write_seed_metrics_csv)
 write_pairwise_csv = cast(WriteCsvFn, _exp5a_module.write_pairwise_csv)
+write_loco_csv = cast(WriteCsvFn, _exp5a_module.write_loco_csv)
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,6 +85,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional path to export SSL-Colon vs baselines pairwise deltas.",
+    )
+    parser.add_argument(
+        "--loco-csv",
+        type=Path,
+        default=None,
+        help="Optional CSV with the leave-one-center-out analysis (metrics and SSL-Colon deltas).",
     )
     parser.add_argument(
         "--models",
@@ -311,6 +318,10 @@ def main() -> None:
         path = args.pairwise_csv.expanduser()
         write_pairwise_csv(summary, path)
         print(f"Wrote pairwise delta table to {_stringify_path(path)}")
+    if args.loco_csv is not None:
+        path = args.loco_csv.expanduser()
+        write_loco_csv(summary, path)
+        print(f"Wrote leave-one-center-out table to {_stringify_path(path)}")
     if args.output_json is None:
         _emit_summary(summary)
 

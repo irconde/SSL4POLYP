@@ -31,6 +31,16 @@ from .common_metrics import (
     _coerce_float,
     _coerce_int,
 )
+from .bootstrap_common import (
+    DEFAULT_BOOTSTRAP,
+    DEFAULT_RNG_SEED,
+    ClusterSampler,
+    bootstrap_replicates,
+    bootstrap_scalar,
+    metric_on_rows,
+    percentile_ci,
+    require_aligned,
+)
 from .seed_checks import ensure_expected_seeds
 
 PRIMARY_METRICS: Tuple[str, ...] = (
@@ -413,13 +423,7 @@ def _compute_composition(
 def _ci_bounds(values: Sequence[float], *, level: float = CI_LEVEL) -> Optional[Dict[str, float]]:
     if not values:
         return None
-    array = np.array(values, dtype=float)
-    if array.size == 0:
-        return None
-    lower_pct = (1.0 - level) / 2.0 * 100.0
-    upper_pct = (1.0 + level) / 2.0 * 100.0
-    lower = float(np.percentile(array, lower_pct))
-    upper = float(np.percentile(array, upper_pct))
+    lower, upper = percentile_ci(values, level)
     return {"lower": lower, "upper": upper}
 
 
@@ -686,6 +690,44 @@ def discover_runs(
     return runs
 
 
+def _center_key(frame: EvalFrame) -> Optional[str]:
+    return frame.center_id or frame.origin
+
+
+def _polyp_sampler(
+    frames: Mapping[str, EvalFrame], centers: Sequence[str]
+) -> Tuple[ClusterSampler, List[str]]:
+    """Class-stratified centre sampler over the frames of the shared centres."""
+
+    keep = set(centers)
+    ids = [fid for fid, frame in frames.items() if _center_key(frame) in keep]
+    sampler = ClusterSampler(
+        [frames[fid].label for fid in ids],
+        [_center_key(frames[fid]) for fid in ids],
+    )
+    return sampler, ids
+
+
+def _sun_sampler(frames: Mapping[str, EvalFrame]) -> Tuple[ClusterSampler, List[str]]:
+    """Class-stratified case sampler over the SUN test frames."""
+
+    ids = list(frames)
+    sampler = ClusterSampler(
+        [frames[fid].label for fid in ids],
+        [frames[fid].case_id or frames[fid].sequence_id for fid in ids],
+    )
+    return sampler, ids
+
+
+def _frame_arrays(
+    frames: Mapping[str, EvalFrame], ids: Sequence[str]
+) -> Tuple[np.ndarray, np.ndarray]:
+    return (
+        np.array([frames[fid].prob for fid in ids], dtype=float),
+        np.array([frames[fid].label for fid in ids], dtype=int),
+    )
+
+
 def _bootstrap_metrics(
     run: Exp5ARun,
     *,
@@ -694,25 +736,16 @@ def _bootstrap_metrics(
     rng_seed: int,
     centers: Sequence[str],
 ) -> Dict[str, List[float]]:
-    results: Dict[str, List[float]] = {metric: [] for metric in metrics}
-    if bootstrap <= 0:
-        return results
-    if not centers:
-        return results
-    if not run.centers:
-        return results
-    rng = np.random.default_rng(rng_seed)
-    for _ in range(bootstrap):
-        sample_ids = _sample_index(run.centers, centers, rng)
-        if not sample_ids:
-            continue
-        metric_values = _as_frames_metrics(run.frames, sample_ids, run.tau)
-        for metric in metrics:
-            value = metric_values.get(metric)
-            if value is None or not math.isfinite(float(value)):
-                continue
-            results[metric].append(float(value))
-    return results
+    if bootstrap <= 0 or not centers or not run.centers:
+        return {metric: [] for metric in metrics}
+    sampler, ids = _polyp_sampler(run.frames, centers)
+    probs, labels = _frame_arrays(run.frames, ids)
+
+    def statistic(rows: np.ndarray) -> Dict[str, Optional[float]]:
+        return {m: metric_on_rows(probs, labels, run.tau, rows, m) for m in metrics}
+
+    drawn = bootstrap_replicates(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
+    return {metric: drawn.get(metric, []) for metric in metrics}
 
 
 def _bootstrap_domain_shift(
@@ -725,42 +758,32 @@ def _bootstrap_domain_shift(
     sun_cases: Optional[Sequence[str]] = None,
 ) -> Dict[str, List[float]]:
     results: Dict[str, List[float]] = {metric: [] for metric in metrics}
-    if bootstrap <= 0:
+    if bootstrap <= 0 or not centers or not run.centers:
         return results
-    if run.sun_frames is None or run.sun_tau is None:
+    if run.sun_frames is None or run.sun_tau is None or run.sun_case_index is None:
         return results
-    if not centers:
+    if not (sun_cases if sun_cases is not None else run.sun_case_ids):
         return results
-    if not run.centers:
-        return results
-    if run.sun_case_index is None:
-        return results
-    sun_case_keys: Sequence[str]
-    if sun_cases is not None:
-        sun_case_keys = tuple(sun_cases)
-    else:
-        sun_case_keys = run.sun_case_ids
-    if not sun_case_keys:
-        return results
-    rng = np.random.default_rng(rng_seed)
-    for _ in range(bootstrap):
-        polyp_ids = _sample_index(run.centers, centers, rng)
-        if not polyp_ids:
-            continue
-        sun_ids = _sample_index(run.sun_case_index, sun_case_keys, rng)
-        if not polyp_ids or not sun_ids:
-            continue
-        polyp_values = _as_frames_metrics(run.frames, polyp_ids, run.tau)
-        sun_values = _as_frames_metrics(run.sun_frames, sun_ids, run.sun_tau)
-        for metric in metrics:
-            polyp_metric = polyp_values.get(metric)
-            sun_metric = sun_values.get(metric)
-            if polyp_metric is None or sun_metric is None:
-                continue
-            if not (math.isfinite(float(polyp_metric)) and math.isfinite(float(sun_metric))):
-                continue
-            results[metric].append(float(polyp_metric) - float(sun_metric))
-    return results
+    polyp_sampler, polyp_ids = _polyp_sampler(run.frames, centers)
+    sun_sampler, sun_ids = _sun_sampler(run.sun_frames)
+    polyp_probs, polyp_labels = _frame_arrays(run.frames, polyp_ids)
+    sun_probs, sun_labels = _frame_arrays(run.sun_frames, sun_ids)
+
+    def statistic(rows: Mapping[str, np.ndarray]) -> Dict[str, Optional[float]]:
+        out: Dict[str, Optional[float]] = {}
+        for m in metrics:
+            a = metric_on_rows(polyp_probs, polyp_labels, run.tau, rows["polyp"], m)
+            b = metric_on_rows(sun_probs, sun_labels, run.sun_tau, rows["sun"], m)
+            out[m] = None if a is None or b is None else a - b
+        return out
+
+    drawn = bootstrap_replicates(
+        {"polyp": polyp_sampler, "sun": sun_sampler},
+        statistic,
+        bootstrap=bootstrap,
+        rng_seed=rng_seed,
+    )
+    return {metric: drawn.get(metric, []) for metric in metrics}
 
 
 def _bootstrap_domain_shift_summary(
@@ -771,45 +794,58 @@ def _bootstrap_domain_shift_summary(
     rng_seed: int,
     centers: Sequence[str],
 ) -> Dict[str, List[float]]:
-    summary_replicates: Dict[str, List[float]] = {metric: [] for metric in metrics}
-    if bootstrap <= 0 or not runs:
-        return summary_replicates
-    if not centers:
-        return summary_replicates
-    prepared: Dict[int, Tuple[Exp5ARun, Sequence[str]]] = {}
-    for seed, run in runs.items():
-        if run.sun_frames is None or run.sun_tau is None:
-            continue
-        if run.sun_case_index is None:
-            continue
-        prepared[seed] = (
-            run,
-            run.sun_case_ids,
-        )
+    empty: Dict[str, List[float]] = {metric: [] for metric in metrics}
+    if bootstrap <= 0 or not runs or not centers:
+        return empty
+    prepared = {
+        seed: run
+        for seed, run in runs.items()
+        if run.sun_frames is not None and run.sun_tau is not None and run.sun_case_index is not None
+    }
     if not prepared:
-        return summary_replicates
-    rng = np.random.default_rng(rng_seed)
-    for _ in range(bootstrap):
-        draw_totals: DefaultDict[str, List[float]] = defaultdict(list)
-        for run, sun_case_ids in prepared.values():
-            polyp_ids = _sample_index(run.centers, centers, rng)
-            if not polyp_ids:
-                continue
-            sun_ids = _sample_index(run.sun_case_index or {}, sun_case_ids, rng)
-            if not sun_ids:
-                continue
-            polyp_values = _as_frames_metrics(run.frames, polyp_ids, run.tau)
-            sun_values = _as_frames_metrics(run.sun_frames, sun_ids, run.sun_tau)
-            for metric in metrics:
-                polyp_metric = _coerce_float(polyp_values.get(metric))
-                sun_metric = _coerce_float(sun_values.get(metric))
-                if polyp_metric is None or sun_metric is None:
-                    continue
-                draw_totals[metric].append(float(polyp_metric - sun_metric))
-        for metric, values in draw_totals.items():
-            if values:
-                summary_replicates[metric].append(float(np.mean(values)))
-    return summary_replicates
+        return empty
+    first = next(iter(prepared.values()))
+    polyp_sampler, polyp_ids = _polyp_sampler(first.frames, centers)
+    sun_sampler, sun_ids = _sun_sampler(first.sun_frames)
+    require_aligned(
+        polyp_ids,
+        {f"seed {s}": _polyp_sampler(r.frames, centers)[1] for s, r in prepared.items()},
+        context="Experiment 5A domain-shift bootstrap (PolypGen)",
+    )
+    require_aligned(
+        sun_ids,
+        {f"seed {s}": list(r.sun_frames) for s, r in prepared.items()},
+        context="Experiment 5A domain-shift bootstrap (SUN)",
+    )
+    arrays = {
+        seed: (
+            _frame_arrays(run.frames, polyp_ids),
+            _frame_arrays(run.sun_frames, sun_ids),
+            run.tau,
+            run.sun_tau,
+        )
+        for seed, run in prepared.items()
+    }
+
+    def statistic(rows: Mapping[str, np.ndarray]) -> Dict[str, Optional[float]]:
+        out: Dict[str, Optional[float]] = {}
+        for m in metrics:
+            deltas: List[float] = []
+            for (pp, pl), (sp, sl), tau, sun_tau in arrays.values():
+                a = metric_on_rows(pp, pl, tau, rows["polyp"], m)
+                b = metric_on_rows(sp, sl, sun_tau, rows["sun"], m)
+                if a is not None and b is not None:
+                    deltas.append(a - b)
+            out[m] = float(np.mean(deltas)) if deltas else None
+        return out
+
+    drawn = bootstrap_replicates(
+        {"polyp": polyp_sampler, "sun": sun_sampler},
+        statistic,
+        bootstrap=bootstrap,
+        rng_seed=rng_seed,
+    )
+    return {metric: drawn.get(metric, []) for metric in metrics}
 
 
 def _resolve_center_alignment(runs: Sequence[Exp5ARun]) -> Tuple[Tuple[str, ...], List[str]]:
@@ -877,31 +913,25 @@ def _bootstrap_pairwise(
     rng_seed: int,
     centers: Sequence[str],
 ) -> List[float]:
-    if bootstrap <= 0:
-        return []
-    if not centers:
+    if bootstrap <= 0 or not centers:
         return []
     if not colon_run.centers or not baseline_run.centers:
         return []
-    rng = np.random.default_rng(rng_seed)
-    replicates: List[float] = []
-    for _ in range(bootstrap):
-        # Paired resampling: same sampled centers for both runs
-        sampled_centers = _sample_keys(centers, rng)
-        colon_ids = _flatten_index(colon_run.centers, sampled_centers)
-        baseline_ids = _flatten_index(baseline_run.centers, sampled_centers)
-        if not colon_ids or not baseline_ids:
-            continue
-        colon_metrics = _as_frames_metrics(colon_run.frames, colon_ids, colon_run.tau)
-        baseline_metrics = _as_frames_metrics(baseline_run.frames, baseline_ids, baseline_run.tau)
-        colon_value = colon_metrics.get(metric)
-        baseline_value = baseline_metrics.get(metric)
-        if colon_value is None or baseline_value is None:
-            continue
-        if not (math.isfinite(float(colon_value)) and math.isfinite(float(baseline_value))):
-            continue
-        replicates.append(float(colon_value) - float(baseline_value))
-    return replicates
+    sampler, ids = _polyp_sampler(colon_run.frames, centers)
+    require_aligned(
+        ids,
+        {"baseline": _polyp_sampler(baseline_run.frames, centers)[1]},
+        context="Experiment 5A pairwise bootstrap",
+    )
+    cp, cl = _frame_arrays(colon_run.frames, ids)
+    bp, bl = _frame_arrays(baseline_run.frames, ids)
+
+    def statistic(rows: np.ndarray) -> Optional[float]:
+        a = metric_on_rows(cp, cl, colon_run.tau, rows, metric)
+        b = metric_on_rows(bp, bl, baseline_run.tau, rows, metric)
+        return None if a is None or b is None else a - b
+
+    return bootstrap_scalar(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
 
 
 def _bootstrap_pairwise_summary(
@@ -913,51 +943,157 @@ def _bootstrap_pairwise_summary(
     rng_seed: int,
     centers: Sequence[str],
 ) -> List[float]:
-    if bootstrap <= 0:
+    if bootstrap <= 0 or not centers:
         return []
-    if not centers:
-        return []
-    prepared: Dict[int, Tuple[Exp5ARun, Exp5ARun]] = {}
-    for seed, colon_run in colon_runs.items():
-        baseline_run = baseline_runs.get(seed)
-        if colon_run is None or baseline_run is None:
-            continue
-        if not colon_run.centers or not baseline_run.centers:
-            continue
-        prepared[seed] = (
-            colon_run,
-            baseline_run,
-        )
+    prepared = {
+        seed: (colon_run, baseline_runs[seed])
+        for seed, colon_run in colon_runs.items()
+        if seed in baseline_runs and colon_run.centers and baseline_runs[seed].centers
+    }
     if not prepared:
         return []
-    rng = np.random.default_rng(rng_seed)
-    replicates: List[float] = []
-    for _ in range(bootstrap):
-        draw_values: List[float] = []
-        # One shared center sample per replicate; reuse across all seeds
-        sampled_centers = _sample_keys(centers, rng)
-        for colon_run, baseline_run in prepared.values():
-            colon_ids = _flatten_index(colon_run.centers, sampled_centers)
-            baseline_ids = _flatten_index(baseline_run.centers, sampled_centers)
-            if not colon_ids or not baseline_ids:
+    first_colon = next(iter(prepared.values()))[0]
+    sampler, ids = _polyp_sampler(first_colon.frames, centers)
+    others: Dict[str, List[str]] = {}
+    for seed, (colon_run, baseline_run) in prepared.items():
+        others[f"colon@{seed}"] = _polyp_sampler(colon_run.frames, centers)[1]
+        others[f"baseline@{seed}"] = _polyp_sampler(baseline_run.frames, centers)[1]
+    require_aligned(ids, others, context="Experiment 5A pairwise summary bootstrap")
+    arrays = {
+        seed: (
+            _frame_arrays(colon_run.frames, ids),
+            _frame_arrays(baseline_run.frames, ids),
+            colon_run.tau,
+            baseline_run.tau,
+        )
+        for seed, (colon_run, baseline_run) in prepared.items()
+    }
+
+    def statistic(rows: np.ndarray) -> Optional[float]:
+        deltas: List[float] = []
+        for (cp, cl), (bp, bl), colon_tau, baseline_tau in arrays.values():
+            a = metric_on_rows(cp, cl, colon_tau, rows, metric)
+            b = metric_on_rows(bp, bl, baseline_tau, rows, metric)
+            if a is not None and b is not None:
+                deltas.append(a - b)
+        return float(np.mean(deltas)) if deltas else None
+
+    return bootstrap_scalar(sampler, statistic, bootstrap=bootstrap, rng_seed=rng_seed)
+
+
+def compute_leave_one_center_out(
+    runs_by_model: Mapping[str, Mapping[int, Exp5ARun]],
+    *,
+    centers: Sequence[str],
+    metrics: Sequence[str] = PRIMARY_METRICS,
+    target_model: str = "ssl_colon",
+    baselines: Sequence[str] = PAIRWISE_BASELINES,
+) -> Dict[str, Any]:
+    """Recompute every model metric and the SSL-Colon deltas dropping one centre at a time.
+
+    Values are the mean over training seeds.  ``pairwise[baseline][metric]`` reports the
+    full-data delta, the delta without each centre, its range, the centre whose removal
+    moves the delta the most, and whether any removal flips its sign.
+    """
+
+    if not centers:
+        return {}
+    keep_centers = list(centers)
+
+    prepared: Dict[str, List[Tuple[np.ndarray, np.ndarray, float, np.ndarray]]] = {}
+    for model, runs in runs_by_model.items():
+        entries = []
+        for run in runs.values():
+            ids = [fid for fid, frame in run.frames.items() if _center_key(frame) in set(keep_centers)]
+            probs, labels = _frame_arrays(run.frames, ids)
+            keys = np.array([_center_key(run.frames[fid]) for fid in ids], dtype=object)
+            entries.append((probs, labels, run.tau, keys))
+        prepared[model] = entries
+
+    def mean_metric(model: str, metric: str, excluded: Optional[str]) -> Optional[float]:
+        values: List[float] = []
+        for probs, labels, tau, keys in prepared.get(model, []):
+            rows = np.flatnonzero(keys != excluded) if excluded is not None else np.arange(keys.size)
+            value = metric_on_rows(probs, labels, tau, rows, metric)
+            if value is not None:
+                values.append(value)
+        return float(np.mean(values)) if values else None
+
+    result: Dict[str, Any] = {
+        "centers": keep_centers,
+        "metrics": list(metrics),
+        "models": {},
+        "pairwise": {},
+    }
+    for model in prepared:
+        result["models"][model] = {
+            "full": {m: mean_metric(model, m, None) for m in metrics},
+            "excluding": {
+                c: {m: mean_metric(model, m, c) for m in metrics} for c in keep_centers
+            },
+        }
+    if target_model in prepared:
+        for baseline in baselines:
+            if baseline not in prepared:
                 continue
-            colon_metrics = _as_frames_metrics(colon_run.frames, colon_ids, colon_run.tau)
-            baseline_metrics = _as_frames_metrics(baseline_run.frames, baseline_ids, baseline_run.tau)
-            colon_value = _coerce_float(colon_metrics.get(metric))
-            baseline_value = _coerce_float(baseline_metrics.get(metric))
-            if colon_value is None or baseline_value is None:
-                continue
-            draw_values.append(float(colon_value - baseline_value))
-        if draw_values:
-            replicates.append(float(np.mean(draw_values)))
-    return replicates
+            per_metric: Dict[str, Any] = {}
+            for m in metrics:
+                a, b = mean_metric(target_model, m, None), mean_metric(baseline, m, None)
+                if a is None or b is None:
+                    continue
+                full = a - b
+                by_center: Dict[str, float] = {}
+                for c in keep_centers:
+                    ac, bc = mean_metric(target_model, m, c), mean_metric(baseline, m, c)
+                    if ac is not None and bc is not None:
+                        by_center[c] = ac - bc
+                if not by_center:
+                    continue
+                influential = max(by_center, key=lambda c: abs(by_center[c] - full))
+                per_metric[m] = {
+                    "full": full,
+                    "by_center": by_center,
+                    "min": min(by_center.values()),
+                    "max": max(by_center.values()),
+                    "most_influential": influential,
+                    "sign_change": any(np.sign(v) != np.sign(full) for v in by_center.values() if v != 0)
+                    if full != 0
+                    else False,
+                }
+            if per_metric:
+                result["pairwise"][baseline] = per_metric
+    return result
+
+
+def write_loco_csv(summary: Mapping[str, Any], output_path: Path) -> None:
+    block = summary.get("loco")
+    if not isinstance(block, Mapping) or not block:
+        raise ValueError("Summary payload does not include a leave-one-center-out block")
+    rows: List[Dict[str, Any]] = []
+    for model, payload in (block.get("models") or {}).items():
+        for metric, value in (payload.get("full") or {}).items():
+            rows.append({"kind": "model", "name": model, "metric": metric, "excluded_center": "none", "value": value})
+        for center, values in (payload.get("excluding") or {}).items():
+            for metric, value in values.items():
+                rows.append({"kind": "model", "name": model, "metric": metric, "excluded_center": center, "value": value})
+    for baseline, metrics_block in (block.get("pairwise") or {}).items():
+        for metric, payload in metrics_block.items():
+            rows.append({"kind": "delta_vs", "name": baseline, "metric": metric, "excluded_center": "none", "value": payload["full"]})
+            for center, value in payload["by_center"].items():
+                rows.append({"kind": "delta_vs", "name": baseline, "metric": metric, "excluded_center": center, "value": value})
+    fieldnames = ["kind", "name", "metric", "excluded_center", "value"]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def summarize_runs(
     runs_by_model: Mapping[str, Mapping[int, Exp5ARun]],
     *,
-    bootstrap: int = 1000,
-    rng_seed: int = 12345,
+    bootstrap: int = DEFAULT_BOOTSTRAP,
+    rng_seed: int = DEFAULT_RNG_SEED,
 ) -> Dict[str, Any]:
     if not runs_by_model:
         raise ValueError("Experiment 5A summary requires at least one discovered run")
@@ -1063,14 +1199,14 @@ def summarize_runs(
                 run,
                 metrics=PRIMARY_METRICS,
                 bootstrap=effective_bootstrap,
-                rng_seed=rng_seed + seed,
+                rng_seed=rng_seed,
                 centers=centers_for_bootstrap,
             )
             delta_ci_replicates = _bootstrap_domain_shift(
                 run,
                 metrics=PRIMARY_METRICS,
                 bootstrap=effective_bootstrap,
-                rng_seed=rng_seed + seed * 7,
+                rng_seed=rng_seed,
                 centers=centers_for_bootstrap,
             )
             metrics_ci = {
@@ -1103,7 +1239,7 @@ def summarize_runs(
             runs,
             metrics=PRIMARY_METRICS,
             bootstrap=effective_bootstrap,
-            rng_seed=rng_seed + len(model) * 17,
+            rng_seed=rng_seed,
             centers=centers_for_bootstrap,
         )
         performance_summary: Dict[str, Dict[str, float]] = {}
@@ -1178,7 +1314,7 @@ def summarize_runs(
                         baseline_run,
                         metric=metric,
                         bootstrap=effective_bootstrap,
-                        rng_seed=rng_seed + seed * 11,
+                        rng_seed=rng_seed,
                         centers=centers_for_bootstrap,
                     )
                     rows.append(
@@ -1194,7 +1330,7 @@ def summarize_runs(
                     baseline_runs,
                     metric=metric,
                     bootstrap=effective_bootstrap,
-                    rng_seed=rng_seed + len(metric) * 29 + PAIRWISE_BASELINES.index(baseline) * 31,
+                    rng_seed=rng_seed,
                     centers=centers_for_bootstrap,
                 )
                 summary_ci = _ci_bounds(summary_replicates)
@@ -1207,6 +1343,9 @@ def summarize_runs(
             if metric_entry:
                 pairwise_summary[metric] = metric_entry
         summary["pairwise"] = pairwise_summary
+        loco = compute_leave_one_center_out(runs_by_model, centers=centers_for_bootstrap)
+        if loco:
+            summary["loco"] = loco
 
     return summary
 

@@ -37,9 +37,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bootstrap",
         type=_positive_int,
-        default=1000,
+        default=2000,
         help=(
-            "Number of bootstrap iterations for confidence intervals (default: 1000). "
+            "Number of bootstrap iterations for confidence intervals (default: 2000). "
             "Must be a positive integer."
         ),
     )
