@@ -1,0 +1,77 @@
+{
+  "environment": "ssl4polyp-ft (torch 2.4.1+cu121, timm 0.4.12)",
+  "v2_code": "commit d678b28",
+  "v3_code": "working tree after v3-cmpb-smoke",
+  "seed": 0,
+  "models": {
+    "sup_imnet": {
+      "v2": {
+        "n_params": 85800194,
+        "layernorm_eps": [
+          1e-06
+        ],
+        "qkv_bias_all_blocks": true,
+        "n_tensors": 152,
+        "class": "VisionTransformer_from_Any"
+      },
+      "v3": {
+        "n_params": 85800194,
+        "layernorm_eps": [
+          1e-06
+        ],
+        "qkv_bias_all_blocks": true,
+        "n_tensors": 152,
+        "class": "VisionTransformer_from_Any"
+      },
+      "state_dict_names_equal": true,
+      "shapes_equal": true,
+      "max_abs_weight_diff": 0.0
+    },
+    "ssl_colon": {
+      "v2": {
+        "n_params": 85901058,
+        "layernorm_eps": [
+          1e-06
+        ],
+        "qkv_bias_all_blocks": true,
+        "n_tensors": 153,
+        "class": "ViT_from_MAE"
+      },
+      "v3": {
+        "n_params": 85901058,
+        "layernorm_eps": [
+          1e-06
+        ],
+        "qkv_bias_all_blocks": true,
+        "n_tensors": 153,
+        "class": "ViT_from_MAE"
+      },
+      "state_dict_names_equal": true,
+      "shapes_equal": true,
+      "max_abs_weight_diff": 0.0
+    },
+    "ssl_imnet": {
+      "v2": {
+        "n_params": 85901058,
+        "layernorm_eps": [
+          1e-06
+        ],
+        "qkv_bias_all_blocks": true,
+        "n_tensors": 153,
+        "class": "ViT_from_MAE"
+      },
+      "v3": {
+        "n_params": 85901058,
+        "layernorm_eps": [
+          1e-06
+        ],
+        "qkv_bias_all_blocks": true,
+        "n_tensors": 153,
+        "class": "ViT_from_MAE"
+      },
+      "state_dict_names_equal": true,
+      "shapes_equal": true,
+      "max_abs_weight_diff": 0.0
+    }
+  }
+}

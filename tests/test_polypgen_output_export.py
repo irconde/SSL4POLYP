@@ -283,7 +283,7 @@ def test_export_frame_outputs_sun_semantics(tmp_path: Path) -> None:
     assert rows[1]["sequence_id"] == "NEG_SUN_case4"
     assert rows[1]["center_id"] == ""
     assert rows[1]["origin"] == "sun"
-    assert rows[1]["negative_source"] == "sequence"
+    assert rows[1]["negative_source"] == "NA"
 
 
 class _DatasetStub:

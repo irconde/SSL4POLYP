@@ -17,20 +17,21 @@ classifiers = [
   "License :: OSI Approved :: BSD License",
   "Operating System :: OS Independent",
 ]
-# Versions of the campaign v3 environment (env/environment.yml, env/pip_freeze.txt).
+# Versions of the campaign v3 fine-tuning environment (env/environment-ft.yml).
 # Install the package with `pip install --no-deps -e .` inside that environment.
 dependencies = [
   "numpy==1.24.4",
   "opencv-python==4.5.5.64",
   "Pillow==10.4.0",
   "scikit-learn==1.0.2",
-  "timm==0.3.2",
+  "timm==0.4.12",
   "torch==2.4.1",
   "torchmetrics==1.1.2",
   "torchvision==0.19.1",
   "PyYAML==6.0.2",
   "tensorboard==2.14.0",
   "lightning-utilities==0.11.9",
+  "matplotlib==3.7.5",
 ]
 
 [project.scripts]

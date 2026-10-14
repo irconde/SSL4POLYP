@@ -632,6 +632,29 @@ def _file_reference(path: Path, args) -> Dict[str, Any]:
     return {"path": _safe_relpath(path, base_dir), "sha256": _compute_file_sha256(path)}
 
 
+def _prune_checkpoints(ckpt_stem: Path, keep: Path, log_path: Path) -> List[str]:
+    """Delete every weight file of the run except the best-epoch checkpoint (spec v3.1, 1.2).
+
+    Keeps ``keep`` and the ``<stem>.pth`` pointer to it; removes the other improving-epoch
+    checkpoints and the last-epoch checkpoint with its pointer.
+    """
+
+    keep_resolved = Path(keep).resolve()
+    removed: List[str] = []
+    candidates = list(ckpt_stem.parent.glob(f"{ckpt_stem.name}_e*.pth")) + list(
+        ckpt_stem.parent.glob(f"{ckpt_stem.name}_last*.pth")
+    )
+    for path in sorted(set(candidates)):
+        if not path.is_symlink() and path.resolve() == keep_resolved:
+            continue
+        path.unlink()
+        removed.append(path.name)
+    lines = [f"Kept best checkpoint {keep_resolved.name}; removed {len(removed)} file(s): {', '.join(removed) or 'none'}"]
+    print(lines[0])
+    _append_log_lines(log_path, lines)
+    return removed
+
+
 def _assert_threshold_matches_weights(
     record: Optional[Mapping[str, Any]],
     *,
@@ -3081,7 +3104,8 @@ def _frame_output_row(
 
     if label is None:
         negative_source = None
-    elif int(label) == 1:
+    elif int(label) == 1 or not is_polypgen:
+        # Only PolypGen negatives are split into isolated / sequence frames.
         negative_source = "NA"
     else:
         negative_source = "sequence" if sequence_id else "isolated"
@@ -8073,6 +8097,11 @@ def train(rank, args):
         _attach_zero_shot_to_payload(last_metrics_payload, args)
         with open(last_metrics_path, "w") as handle:
             json.dump(last_metrics_payload, handle, indent=2)
+        evaluated_block = getattr(args, "evaluated_checkpoint", None)
+        if evaluated_block and evaluated_block.get("path"):
+            _prune_checkpoints(
+                ckpt_stem, Path(args.output_dir).expanduser() / evaluated_block["path"], log_path
+            )
     if distributed:
         dist.destroy_process_group()
 

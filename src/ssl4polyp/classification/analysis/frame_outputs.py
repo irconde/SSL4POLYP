@@ -23,8 +23,8 @@ __all__ = [
 #   center_id       acquisition centre (PolypGen C1..C6); empty when unknown (SUN, PolypGen sequences)
 #   origin          pack store id (``sun``, ``polypgen_clean``)
 #   morphology      SUN positive morphology (flat / polypoid); empty otherwise
-#   negative_source ``sequence`` (negative frame from a video sequence), ``isolated`` (single
-#                   negative frame) or ``NA`` (positive frame)
+#   negative_source PolypGen negatives: ``sequence`` (frame from a negative video sequence) or
+#                   ``isolated`` (single negative frame); ``NA`` for positives and for SUN
 FRAME_OUTPUT_COLUMNS: Tuple[str, ...] = (
     "frame_id",
     "prob",

@@ -1,7 +1,6 @@
 import hashlib
 import os
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -13,6 +12,11 @@ from ssl4polyp._compat import ensure_torch_container_abcs
 ensure_torch_container_abcs()
 
 from timm.models.vision_transformer import VisionTransformer
+
+try:  # timm 0.4.x (fine-tuning environment) provides the Flax .npz loader
+    from timm.models.vision_transformer import _load_weights  # type: ignore
+except ImportError:  # timm 0.3.2 (MAE pretraining environment) does not
+    _load_weights = None
 
 from .mae import models_mae
 
@@ -40,8 +44,8 @@ class VisionTransformer_from_Any(VisionTransformer):
         out_token,
         ImageNet_weights=False,
     ):
-        # qkv_bias and the LayerNorm epsilon are explicit because their defaults changed
-        # between timm releases (0.3.2: False / 1e-5; 0.4.12, used for the v2 runs: True / 1e-6).
+        # qkv_bias and the LayerNorm epsilon are the timm 0.4.12 defaults (v2 runs), set
+        # explicitly because timm 0.3.2 uses different ones (False / 1e-5).
         super().__init__(
             patch_size=16,
             embed_dim=embed_dim,
@@ -75,8 +79,11 @@ class VisionTransformer_from_Any(VisionTransformer):
         checkpoint_path = Path(checkpoint_path)
 
         if checkpoint_path.suffix.lower() == ".npz":
-            with torch.no_grad():
-                _load_npz_weights(self, str(checkpoint_path))
+            if _load_weights is None:
+                raise RuntimeError(
+                    "Loading .npz ViT weights needs timm>=0.4 (use the ssl4polyp-ft environment)."
+                )
+            _load_weights(self, str(checkpoint_path))
             return
 
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -261,64 +268,3 @@ def resolve_sup_imnet_weights(path, expected_sha256=SUP_IMNET_SHA256) -> str:
                 f"SUP-imnet weights at '{weights}' have SHA-256 {digest}, expected {expected_sha256}."
             )
     return str(weights)
-
-
-def _load_npz_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = "") -> None:
-    """Load Google Brain Flax ``.npz`` weights into a non-hybrid ViT.
-
-    Ported from ``timm.models.vision_transformer._load_weights`` (timm 0.4.12, Apache-2.0),
-    which timm 0.3.2 does not provide. Only the non-hybrid path is kept; the classifier and
-    pre-logits weights are skipped because the head is replaced afterwards.
-    """
-
-    def _n2p(w, t=True):
-        if w.ndim == 4 and w.shape[0] == w.shape[1] == w.shape[2] == 1:
-            w = w.flatten()
-        if t:
-            if w.ndim == 4:
-                w = w.transpose([3, 2, 0, 1])
-            elif w.ndim == 3:
-                w = w.transpose([2, 0, 1])
-            elif w.ndim == 2:
-                w = w.transpose([1, 0])
-        return torch.from_numpy(w)
-
-    w = np.load(checkpoint_path)
-    if not prefix and "opt/target/embedding/kernel" in w:
-        prefix = "opt/target/"
-
-    embed_conv_w = _n2p(w[f"{prefix}embedding/kernel"])
-    if embed_conv_w.shape != model.patch_embed.proj.weight.shape:
-        raise ValueError(
-            f"Patch embedding shape mismatch: {tuple(embed_conv_w.shape)} vs "
-            f"{tuple(model.patch_embed.proj.weight.shape)}"
-        )
-    model.patch_embed.proj.weight.copy_(embed_conv_w)
-    model.patch_embed.proj.bias.copy_(_n2p(w[f"{prefix}embedding/bias"]))
-    model.cls_token.copy_(_n2p(w[f"{prefix}cls"], t=False))
-    pos_embed_w = _n2p(w[f"{prefix}Transformer/posembed_input/pos_embedding"], t=False)
-    if pos_embed_w.shape != model.pos_embed.shape:
-        raise ValueError(
-            f"Position embedding shape mismatch: {tuple(pos_embed_w.shape)} vs {tuple(model.pos_embed.shape)}"
-        )
-    model.pos_embed.copy_(pos_embed_w)
-    model.norm.weight.copy_(_n2p(w[f"{prefix}Transformer/encoder_norm/scale"]))
-    model.norm.bias.copy_(_n2p(w[f"{prefix}Transformer/encoder_norm/bias"]))
-    for i, block in enumerate(model.blocks.children()):
-        block_prefix = f"{prefix}Transformer/encoderblock_{i}/"
-        mha_prefix = block_prefix + "MultiHeadDotProductAttention_1/"
-        block.norm1.weight.copy_(_n2p(w[f"{block_prefix}LayerNorm_0/scale"]))
-        block.norm1.bias.copy_(_n2p(w[f"{block_prefix}LayerNorm_0/bias"]))
-        block.attn.qkv.weight.copy_(
-            torch.cat([_n2p(w[f"{mha_prefix}{n}/kernel"], t=False).flatten(1).T for n in ("query", "key", "value")])
-        )
-        block.attn.qkv.bias.copy_(
-            torch.cat([_n2p(w[f"{mha_prefix}{n}/bias"], t=False).reshape(-1) for n in ("query", "key", "value")])
-        )
-        block.attn.proj.weight.copy_(_n2p(w[f"{mha_prefix}out/kernel"]).flatten(1))
-        block.attn.proj.bias.copy_(_n2p(w[f"{mha_prefix}out/bias"]))
-        for r in range(2):
-            getattr(block.mlp, f"fc{r + 1}").weight.copy_(_n2p(w[f"{block_prefix}MlpBlock_3/Dense_{r}/kernel"]))
-            getattr(block.mlp, f"fc{r + 1}").bias.copy_(_n2p(w[f"{block_prefix}MlpBlock_3/Dense_{r}/bias"]))
-        block.norm2.weight.copy_(_n2p(w[f"{block_prefix}LayerNorm_2/scale"]))
-        block.norm2.bias.copy_(_n2p(w[f"{block_prefix}LayerNorm_2/bias"]))
