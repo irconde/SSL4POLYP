@@ -32,3 +32,6 @@ __pycache__/
 .venv/
 .env/
 .DS_Store
+
+# Build metadata from pip install -e
+*.egg-info/
