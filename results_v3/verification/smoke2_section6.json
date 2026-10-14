@@ -1,0 +1,704 @@
+[
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=16 policy=sun_val_frozen vs parent checkpoint epoch=16; evaluated_epoch=16"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLColon_SUNFull_s13_e16_valLoss.pth sha256=d55c4a0cc82cc0ce\u2026 stored=d55c4a0cc82cc0ce\u2026"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "1438 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "pred:SSLColon_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenClean_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenClean_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=12 policy=sun_val_frozen vs parent checkpoint epoch=12; evaluated_epoch=12"
+  },
+  {
+    "run": "SSLImNet_PolypGenClean_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLImNet_SUNFull_s13_e12_valLoss.pth sha256=59f96cfe24a9a4b9\u2026 stored=59f96cfe24a9a4b9\u2026"
+  },
+  {
+    "run": "SSLImNet_PolypGenClean_s13",
+    "criterion": "csv_columns:SSLImNet_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "1438 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_PolypGenClean_s13",
+    "criterion": "pred:SSLImNet_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_PolypGenClean_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_PolypGenClean_s13_test_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenClean_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=3 policy=sun_val_frozen vs parent checkpoint epoch=3; evaluated_epoch=3"
+  },
+  {
+    "run": "SUPImNet_PolypGenClean_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SUPImNet_SUNFull_s13_e03_valLoss.pth sha256=9de29ed22a4af8d3\u2026 stored=9de29ed22a4af8d3\u2026"
+  },
+  {
+    "run": "SUPImNet_PolypGenClean_s13",
+    "criterion": "csv_columns:SUPImNet_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "1438 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_PolypGenClean_s13",
+    "criterion": "pred:SUPImNet_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_PolypGenClean_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_PolypGenClean_s13_test_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/e4_s50_ssl_colon_seed13/polypgen_fewshot/s50/seed13/SSLColon_PolypGenFew50_s13_e05_valLoss.pth' (epoch 5)."
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=16 policy=sun_val_frozen vs parent checkpoint epoch=16; evaluated_epoch=5"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLColon_PolypGenFew50_s13_e05_valLoss.pth sha256=9bcda6b85ce217de\u2026 stored=9bcda6b85ce217de\u2026"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_val_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:zero_shot.test_primary",
+    "passed": true,
+    "evidence": "7 metrics vs SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_A",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_B",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.528404534: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_C",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_D",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_test_outputs.csv at tau=0.698928356: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_B",
+    "passed": true,
+    "evidence": "recomputed=0.528404534 stored=0.528404534 (n_support=50)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_D",
+    "passed": true,
+    "evidence": "recomputed=0.698928356 stored=0.698928356 (n_val=4)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/e4_s50_ssl_imnet_seed13/polypgen_fewshot/s50/seed13/SSLImNet_PolypGenFew50_s13_e23_valLoss.pth' (epoch 23)."
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=12 policy=sun_val_frozen vs parent checkpoint epoch=12; evaluated_epoch=23"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLImNet_PolypGenFew50_s13_e23_valLoss.pth sha256=dd8d74297d616afd\u2026 stored=dd8d74297d616afd\u2026"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLImNet_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "pred:SSLImNet_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_PolypGenFew50_s13_test_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLImNet_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "pred:SSLImNet_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_PolypGenFew50_s13_val_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLImNet_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "pred:SSLImNet_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLImNet_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "pred:SSLImNet_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLImNet_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "pred:SSLImNet_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLImNet_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "pred:SSLImNet_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:zero_shot.test_primary",
+    "passed": true,
+    "evidence": "7 metrics vs SSLImNet_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_A",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_B",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.379911214: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_C",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_PolypGenFew50_s13_test_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_D",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_PolypGenFew50_s13_test_outputs.csv at tau=0.303563654: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_B",
+    "passed": true,
+    "evidence": "recomputed=0.379911214 stored=0.379911214 (n_support=50)"
+  },
+  {
+    "run": "SSLImNet_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_D",
+    "passed": true,
+    "evidence": "recomputed=0.303563654 stored=0.303563654 (n_val=4)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/e4_s50_sup_imnet_seed13/polypgen_fewshot/s50/seed13/SUPImNet_PolypGenFew50_s13_e06_valLoss.pth' (epoch 6)."
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=3 policy=sun_val_frozen vs parent checkpoint epoch=3; evaluated_epoch=6"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SUPImNet_PolypGenFew50_s13_e06_valLoss.pth sha256=06e6381c00c70ecb\u2026 stored=06e6381c00c70ecb\u2026"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SUPImNet_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "pred:SUPImNet_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_PolypGenFew50_s13_test_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SUPImNet_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "pred:SUPImNet_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_PolypGenFew50_s13_val_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SUPImNet_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "pred:SUPImNet_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SUPImNet_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "pred:SUPImNet_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SUPImNet_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "pred:SUPImNet_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "csv_columns:SUPImNet_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "pred:SUPImNet_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:zero_shot.test_primary",
+    "passed": true,
+    "evidence": "7 metrics vs SUPImNet_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_A",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_B",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.12809746: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_C",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_PolypGenFew50_s13_test_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_D",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_PolypGenFew50_s13_test_outputs.csv at tau=0.496912122: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_B",
+    "passed": true,
+    "evidence": "recomputed=0.12809746 stored=0.12809746 (n_support=50)"
+  },
+  {
+    "run": "SUPImNet_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_D",
+    "passed": true,
+    "evidence": "recomputed=0.496912122 stored=0.496912122 (n_val=4)"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/sun_full_ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13_e16_valLoss.pth' (epoch 16)."
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=16 policy=f1_opt_on_val vs evaluated checkpoint epoch=16; evaluated_epoch=16"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLColon_SUNFull_s13_e16_valLoss.pth sha256=d55c4a0cc82cc0ce\u2026 stored=d55c4a0cc82cc0ce\u2026"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "csv_columns:SSLColon_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "pred:SSLColon_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_SUNFull_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "csv_columns:SSLColon_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "pred:SSLColon_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_SUNFull_s13_val_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "tau:primary",
+    "passed": true,
+    "evidence": "recomputed=0.687906384 stored=0.687906384"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/sun_full_ssl_imnet_seed13/sun_baselines/SSLImNet_SUNFull_s13_e12_valLoss.pth' (epoch 12)."
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=12 policy=f1_opt_on_val vs evaluated checkpoint epoch=12; evaluated_epoch=12"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLImNet_SUNFull_s13_e12_valLoss.pth sha256=59f96cfe24a9a4b9\u2026 stored=59f96cfe24a9a4b9\u2026"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "csv_columns:SSLImNet_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "pred:SSLImNet_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_SUNFull_s13_test_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "csv_columns:SSLImNet_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "pred:SSLImNet_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.357448131)"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SSLImNet_SUNFull_s13_val_outputs.csv at tau=0.357448131: max |diff|=0"
+  },
+  {
+    "run": "SSLImNet_SUNFull_s13",
+    "criterion": "tau:primary",
+    "passed": true,
+    "evidence": "recomputed=0.357448131 stored=0.357448131"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/sun_full_sup_imnet_seed13/sun_baselines/SUPImNet_SUNFull_s13_e03_valLoss.pth' (epoch 3)."
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=3 policy=f1_opt_on_val vs evaluated checkpoint epoch=3; evaluated_epoch=3"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SUPImNet_SUNFull_s13_e03_valLoss.pth sha256=9de29ed22a4af8d3\u2026 stored=9de29ed22a4af8d3\u2026"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "csv_columns:SUPImNet_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "pred:SUPImNet_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_SUNFull_s13_test_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "csv_columns:SUPImNet_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "pred:SUPImNet_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.352875739)"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SUPImNet_SUNFull_s13_val_outputs.csv at tau=0.352875739: max |diff|=0"
+  },
+  {
+    "run": "SUPImNet_SUNFull_s13",
+    "criterion": "tau:primary",
+    "passed": true,
+    "evidence": "recomputed=0.352875739 stored=0.352875739"
+  }
+]
