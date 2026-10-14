@@ -1,3 +1,0 @@
-[console_scripts]
-polypdb = ssl4polyp.polypdb.cli:main
-ssl4polyp-train = ssl4polyp.classification.train_classification:main
