@@ -33,3 +33,23 @@ sun_full, sun_subsets (p05–p100), sun_morphology, polypgen_clean_test and poly
 `config/data/*.yaml` where declared), counts equal to the manifests, all images present with the
 recorded size, PolypGen image SHA-1 equal to `data/polypgen/manifests/frames.csv`. The 24 distinct
 CSV hashes stored in the v2 run snapshots equal the current packs.
+
+### 2026-10-14: smoke test (partition k = 1), tag `v3-cmpb-smoke` (commit `d166ee2`)
+
+GPU 1 (`CUDA_VISIBLE_DEVICES=1`), `CUBLAS_WORKSPACE_CONFIG=:4096:8`, `scripts/v3/run_smoke.sh`.
+Weights in `checkpoints_v3/classification/k1/` (8.7 GB), records in `results_v3/smoke/k1/`.
+
+| Run | Start | Duration | Notes |
+|---|---|---|---|
+| a) sun_full, SSL-colon, seed 13 | 12:52:02 | 429 s (7.2 min) | early stop after epoch 24, best epoch 16, τ = 0.687906 |
+| b) E3, polypgen_clean_test | 12:59:11 | 9 s | parent epoch 16, frozen τ |
+| c) E4 s50, arms A–D | 12:59:20 | 30 s | early stop after epoch 13, best epoch 5 |
+
+Section 6 smoke criteria: all 44 checks pass (`results_v3/smoke/k1/verification_section6.json`,
+`scripts/v3/verify_run_outputs.py`): best-checkpoint reload logged, τ epoch = weights epoch,
+evaluated checkpoint SHA-256 matches, val/test (and E4 support) CSVs with all spec 1.3 columns,
+JSON metrics = CSV recomputation (max |diff| = 0), τ recomputed from the CSVs = stored τ
+(sun_full primary, E4 arms B and D).
+
+Incidents: none during the runs. Open points for phase 1 are listed in the smoke report
+(environment differs from v2; checkpoint disk use).
