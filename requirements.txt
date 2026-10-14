@@ -1,10 +1,14 @@
-numpy==1.21.6
+# Campaign v3 environment (see env/README.md). torch/torchvision wheels from PyPI are CUDA 12.1 builds.
+# timm 0.3.2 needs the torch._six patch described in env/README.md.
+numpy==1.24.4
 opencv-python==4.5.5.64
 Pillow==10.4.0
 scikit-learn==1.0.2
-timm==0.4.12
-torch==1.9.0+cu111
-torchvision==0.10.0+cu111
+scipy==1.10.1
+pandas==2.0.3
+timm==0.3.2
+torch==2.4.1
+torchvision==0.19.1
 torchmetrics==1.1.2
 tensorboard==2.14.0
 PyYAML==6.0.2

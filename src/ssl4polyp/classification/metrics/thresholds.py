@@ -22,7 +22,6 @@ from sklearn.metrics import roc_curve
 ThresholdMap = Dict[str, float]
 
 _EPS = 1e-12
-_MAX_THRESHOLD_CANDIDATES = 200
 
 
 @dataclass(frozen=True)
@@ -194,20 +193,15 @@ def compute_threshold_from_loader(
 
 
 def _prepare_candidate_thresholds(scores: np.ndarray) -> np.ndarray:
-    """Return deterministic candidate thresholds capped to a fixed budget."""
+    """Return every unique validation score as a candidate threshold.
+
+    The search is exact (spec v3.1, 1.5): all unique scores, no subsampling and no
+    synthetic 0/1 endpoints.
+    """
 
     if scores.ndim != 1:
         raise ValueError("Scores array must be one-dimensional")
-    base = np.unique(scores)
-    base = np.concatenate(([0.0], base, [1.0]))
-    base = np.clip(base, 0.0, 1.0)
-    base = np.unique(base)
-    if base.size <= _MAX_THRESHOLD_CANDIDATES:
-        return base.astype(float, copy=False)
-    indices = np.linspace(0, base.size - 1, num=_MAX_THRESHOLD_CANDIDATES, dtype=int)
-    indices[0] = 0
-    indices[-1] = base.size - 1
-    return base[indices].astype(float, copy=False)
+    return np.unique(scores).astype(float, copy=False)
 
 
 def _compute_confusion_arrays(

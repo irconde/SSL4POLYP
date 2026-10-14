@@ -4,6 +4,11 @@ weight_decay: 0.05
 batch_size: 128
 epochs: 100
 amp: true
+# TF32 is set explicitly (spec v3.1). Before this was added the code relied on the torch
+# defaults: torch 1.9 (v2 runs, A40) matmul=true/cudnn=true; torch>=1.12 matmul=false/cudnn=true.
+tf32:
+  matmul: true
+  cudnn: true
 scheduler:
   name: cosine
   warmup_epochs: 5

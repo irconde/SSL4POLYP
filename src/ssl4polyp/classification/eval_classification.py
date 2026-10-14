@@ -813,7 +813,7 @@ def build(args):
                 f"Checkpoint not found at {ckpt_path}. Adjust filters or --checkpoint-dir."
             )
 
-    checkpoint = torch.load(str(ckpt_path), map_location="cpu")
+    checkpoint = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
 

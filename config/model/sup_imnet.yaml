@@ -3,4 +3,8 @@ model:
   name: SUP-imnet
   arch: vit_b
   pretraining: ImageNet_class
+  # AugReg ViT-B/16 (ImageNet-21k, fine-tuned on ImageNet-1k), downloaded once from
+  # https://storage.googleapis.com/vit_models/augreg/<file name below>
+  checkpoint: checkpoints/pretrained/vit_b/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz
+  checkpoint_sha256: ac104c0df8158c46754510e50495536fa6de9647e572e38b5659dc54f260b124
   frozen: false

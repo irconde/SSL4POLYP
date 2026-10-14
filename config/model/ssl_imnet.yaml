@@ -4,5 +4,6 @@ model:
   arch: vit_b
   pretraining: ImageNet_self
   checkpoint: checkpoints/pretrained/vit_b/mae_imagenet.pth
+  checkpoint_sha256: aec5f0b68e5f3193a00b07bc65a37440db549c15b36b8bea242606cc40c4bc5d
   frozen: false
   ss_framework: mae

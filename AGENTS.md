@@ -10,7 +10,9 @@ This repository hosts the reference implementation for the paper *Evaluating Dom
 - `checkpoints/`, `data/`, `outputs/`, `results/`: Git-ignored working directories seeded with README files describing expected content. Command-line tools resolve relative paths against these folders by default.
 - `scripts/`: Shell helpers for orchestrating experiments.
 - `tests/`: Automated tests for key components.
-- `requirements*.txt`, `environment.yml`: Locked environments for reproducibility.
+- `requirements*.txt`, `environment.yml`: Locked environments for reproducibility (`env/` holds the campaign v3 environment).
+- `docs/v3/`: Campaign v3 retraining specification and pre-registered statistical analysis plan.
+- `checkpoints_v3/`, `results_v3/`: Campaign v3 weights and run records (`results_v3/RUNLOG.md` is the phase log); nothing from earlier campaigns is written there.
 
 ## Source Tree Breakdown (`src/ssl4polyp`)
 - `classification/`: Fine-tuning and evaluation pipelines for classification experiments.
@@ -35,7 +37,7 @@ This repository hosts the reference implementation for the paper *Evaluating Dom
 - Downstream tooling expects held-out metrics to live under `test_*` keys. Treat any legacy packs that label the remainder split as `eval` as referring to the same test set when wiring configs or reports.
 
 ## Running Workflows
-1. Install dependencies via the locked `requirements.txt` (or `requirements-pip.txt` for tooling extras) and register the package in editable mode with `pip install --no-deps -e .`.
+1. Create the environment from `env/environment.yml` (or `requirements.txt`) and register the package in editable mode with `pip install --no-deps -e .`. `env/README.md` documents the timm 0.3.2 patch; `requirements-pip.txt` / `requirements.lock.txt` record the v2 (A40) environment.
 2. Set `CUBLAS_WORKSPACE_CONFIG=:4096:8` before training when deterministic algorithms are enabled.
 3. Launch experiments using the CLIs:
    - Pretraining MAE on HyperKvasir: `python -m ssl4polyp.models.mae.run_hyperkvasir_pretraining ...`
