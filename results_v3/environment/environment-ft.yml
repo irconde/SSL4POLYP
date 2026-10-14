@@ -1,4 +1,4 @@
-name: ssl4polyp
+name: ssl4polyp-ft
 channels:
   - conda-forge
 dependencies:
@@ -75,17 +75,23 @@ dependencies:
       - cachetools==5.5.2
       - certifi==2025.8.3
       - charset-normalizer==3.4.3
+      - contourpy==1.1.1
+      - cycler==0.12.1
       - filelock==3.16.1
+      - fonttools==4.57.0
       - fsspec==2025.3.0
       - google-auth==2.40.3
       - google-auth-oauthlib==1.0.0
       - grpcio==1.70.0
       - idna==3.10
+      - importlib-resources==6.4.5
       - jinja2==3.1.6
       - joblib==1.4.2
+      - kiwisolver==1.4.7
       - lightning-utilities==0.11.9
       - markdown==3.7
       - markupsafe==2.1.5
+      - matplotlib==3.7.5
       - mpmath==1.3.0
       - networkx==3.1
       - numpy==1.24.4
@@ -109,6 +115,7 @@ dependencies:
       - protobuf==5.29.5
       - pyasn1==0.6.1
       - pyasn1-modules==0.4.2
+      - pyparsing==3.1.4
       - pytz==2026.5
       - pyyaml==6.0.2
       - requests==2.32.4
@@ -121,7 +128,7 @@ dependencies:
       - tensorboard==2.14.0
       - tensorboard-data-server==0.7.2
       - threadpoolctl==3.5.0
-      - timm==0.3.2
+      - timm==0.4.12
       - torch==2.4.1
       - torchmetrics==1.1.2
       - torchvision==0.19.1
