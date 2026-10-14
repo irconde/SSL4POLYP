@@ -167,6 +167,20 @@ from ssl4polyp.classification.train_classification import (
 )
 
 
+SHARED_COLUMNS = [
+    "frame_id",
+    "prob",
+    "label",
+    "pred",
+    "case_id",
+    "sequence_id",
+    "center_id",
+    "origin",
+    "morphology",
+    "negative_source",
+]
+
+
 @pytest.mark.parametrize(
     "dataset_name",
     [
@@ -178,9 +192,7 @@ from ssl4polyp.classification.train_classification import (
         "PolypGen_Clean_Test",
     ],
 )
-def test_export_frame_outputs_polypgen_adjusts_columns(
-    tmp_path: Path, dataset_name: str
-) -> None:
+def test_export_frame_outputs_polypgen_semantics(tmp_path: Path, dataset_name: str) -> None:
     path = tmp_path / "polypgen.csv"
     metadata_rows = [
         {
@@ -197,74 +209,81 @@ def test_export_frame_outputs_polypgen_adjusts_columns(
             "store_id": "polypgen_clean",
             "frame_id": "NEGSEQ.seq15_neg.00017",
         },
+        {
+            "dataset": "PolypGen",
+            "case_id": "C4",
+            "store_id": "polypgen_clean",
+            "frame_id": "POLYPGEN_NOCASE.001056",
+        },
     ]
     _export_frame_outputs(
         path,
         metadata_rows=metadata_rows,
-        probabilities=[0.9, 0.1],
-        targets=[1, 0],
-        preds=[1, 0],
+        probabilities=[0.9, 0.1, 0.2],
+        targets=[1, 0, 0],
+        preds=[1, 0, 0],
         dataset_name=dataset_name,
     )
 
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        assert reader.fieldnames == [
-            "frame_id",
-            "prob",
-            "label",
-            "pred",
-            "origin",
-            "center_id",
-            "sequence_id",
-        ]
+        assert reader.fieldnames == SHARED_COLUMNS
         rows = list(reader)
 
     assert rows[0]["center_id"] == "C2"
     assert rows[0]["sequence_id"] == ""
-    assert rows[1]["center_id"] == "None"
+    assert rows[0]["case_id"] == ""
+    assert rows[0]["negative_source"] == "NA"
+    assert rows[1]["center_id"] == ""
     assert rows[1]["sequence_id"] == "15"
     assert rows[1]["origin"] == "polypgen_clean"
+    assert rows[1]["negative_source"] == "sequence"
+    assert rows[2]["center_id"] == "C4"
+    assert rows[2]["negative_source"] == "isolated"
 
 
-def test_export_frame_outputs_preserves_columns_for_other_datasets(tmp_path: Path) -> None:
+def test_export_frame_outputs_sun_semantics(tmp_path: Path) -> None:
     path = tmp_path / "sun.csv"
     metadata_rows = [
         {
             "dataset": "SUN",
-            "case_id": "caseA",
-            "sequence_id": "seq1",
-            "origin": "sun",
+            "case_id": "SUN_0001",
+            "source_case_id": "SUN_0001",
+            "store_id": "sun",
             "frame_id": "frame0",
-            "morphology": "flat",
-        }
+            "morphology": "Flat",
+        },
+        {
+            "dataset": "SUN",
+            "case_id": "NEG_SUN_case4_v295",
+            "source_case_id": "NEG_SUN_case4",
+            "store_id": "sun",
+            "frame_id": "frame1",
+            "morphology": "",
+        },
     ]
     _export_frame_outputs(
         path,
         metadata_rows=metadata_rows,
-        probabilities=[0.75],
-        targets=[1],
-        preds=[1],
+        probabilities=[0.75, 0.2],
+        targets=[1, 0],
+        preds=[1, 0],
         dataset_name="sun_test",
     )
 
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
-        assert reader.fieldnames == [
-            "frame_id",
-            "prob",
-            "label",
-            "pred",
-            "case_id",
-            "origin",
-            "center_id",
-            "sequence_id",
-            "morphology",
-        ]
+        assert reader.fieldnames == SHARED_COLUMNS
         rows = list(reader)
 
-    assert rows[0]["case_id"] == "caseA"
+    assert rows[0]["case_id"] == "SUN_0001"
     assert rows[0]["morphology"] == "flat"
+    assert rows[0]["negative_source"] == "NA"
+    assert rows[1]["case_id"] == "NEG_SUN_case4_v295"
+    assert rows[1]["sequence_id"] == "NEG_SUN_case4"
+    assert rows[1]["center_id"] == ""
+    assert rows[1]["origin"] == "sun"
+    assert rows[1]["negative_source"] == "sequence"
 
 
 class _DatasetStub:

@@ -4,5 +4,6 @@ model:
   arch: vit_b
   pretraining: Hyperkvasir
   checkpoint: checkpoints/pretrained/vit_b/mae_hyperkvasir.pth
+  checkpoint_sha256: faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f
   frozen: false
   ss_framework: mae

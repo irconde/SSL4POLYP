@@ -1,0 +1,34 @@
+Wed Oct 14 12:47:11 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA RTX 6000 Ada Gene...    Off |   00000000:01:00.0  On |                  Off |
+| 38%   66C    P2             90W /  300W |    2338MiB /  49140MiB |     13%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA RTX 6000 Ada Gene...    Off |   00000000:41:00.0 Off |                  Off |
+| 30%   45C    P8             28W /  300W |      21MiB /  49140MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A           20812      G   /usr/bin/gnome-shell                    797MiB |
+|    0   N/A  N/A           21222    C+G   ...exec/xdg-desktop-portal-gnome         14MiB |
+|    0   N/A  N/A           21941    C+G   /usr/bin/nautilus                        62MiB |
+|    0   N/A  N/A           22606    C+G   ...bin/snapd-desktop-integration         14MiB |
+|    0   N/A  N/A           22715      G   /usr/bin/Xwayland                        11MiB |
+|    0   N/A  N/A           35650    C+G   /usr/bin/ptyxis                          67MiB |
+|    0   N/A  N/A           44983    C+G   ...88185955192 --disable-logging        186MiB |
+|    0   N/A  N/A           92698      G   rustdesk                                151MiB |
+|    0   N/A  N/A          160166      C   /usr/share/rustdesk/rustdesk            538MiB |
+|    0   N/A  N/A          160784      G   /usr/share/rustdesk/rustdesk             55MiB |
+|    1   N/A  N/A           20812      G   /usr/bin/gnome-shell                      6MiB |
++-----------------------------------------------------------------------------------------+

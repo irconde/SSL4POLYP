@@ -16,6 +16,14 @@
 !/results/.gitignore
 !/results/README.md
 
+# Campaign v3: weights and run outputs stay local; the run log, environment record and
+# verification summaries are versioned.
+/checkpoints_v3/
+/results_v3/*
+!/results_v3/RUNLOG.md
+!/results_v3/environment/
+!/results_v3/verification/
+
 # Python cache and virtual environment files
 __pycache__/
 *.py[cod]

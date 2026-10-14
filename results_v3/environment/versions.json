@@ -1,0 +1,24 @@
+{
+  "python": "3.8.20",
+  "platform": "Linux-7.0.0-38-generic-x86_64-desconocido-with-glibc2.17",
+  "torch": "2.4.1+cu121",
+  "torch_cuda": "12.1",
+  "cudnn": 90100,
+  "torchvision": "0.19.1+cu121",
+  "timm": "0.3.2",
+  "timm_patch": "timm/models/layers/helpers.py: torch._six container_abcs import replaced by collections.abc",
+  "numpy": "1.24.4",
+  "scikit_learn": "1.0.2",
+  "pillow": "10.4.0",
+  "pyyaml": "6.0.2",
+  "gpus": [
+    "NVIDIA RTX 6000 Ada Generation",
+    "NVIDIA RTX 6000 Ada Generation"
+  ],
+  "nvidia_driver": "595.91.07",
+  "torch_default_tf32": {
+    "matmul": false,
+    "cudnn": true
+  },
+  "git_commit": "d678b286b5aaff87519488ae3dc9cb41634e2bbb"
+}
