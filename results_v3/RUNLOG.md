@@ -45,7 +45,7 @@ Weights in `checkpoints_v3/classification/k1/` (8.7 GB), records in `results_v3/
 | b) E3, polypgen_clean_test | 12:59:11 | 9 s | parent epoch 16, frozen τ |
 | c) E4 s50, arms A–D | 12:59:20 | 30 s | early stop after epoch 13, best epoch 5 |
 
-Section 6 smoke criteria: all 44 checks pass (`results_v3/smoke/k1/verification_section6.json`,
+Section 6 smoke criteria: all 39 checks pass (`results_v3/smoke/k1/verification_section6.json`,
 `scripts/v3/verify_run_outputs.py`): best-checkpoint reload logged, τ epoch = weights epoch,
 evaluated checkpoint SHA-256 matches, val/test (and E4 support) CSVs with all spec 1.3 columns,
 JSON metrics = CSV recomputation (max |diff| = 0), τ recomputed from the CSVs = stored τ
