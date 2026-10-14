@@ -53,3 +53,47 @@ JSON metrics = CSV recomputation (max |diff| = 0), τ recomputed from the CSVs =
 
 Incidents: none during the runs. Open points for phase 1 are listed in the smoke report
 (environment differs from v2; checkpoint disk use).
+
+### 2026-10-14: environments split
+
+- `ssl4polyp-pretrain`: `conda create --clone` of the original environment, unchanged (timm 0.3.2); MAE
+  pretraining of SSL-imnet-matched only. (`mamba create --clone` dropped the pip packages.)
+- `ssl4polyp-ft`: clone of `ssl4polyp-pretrain` + `timm==0.4.12` (`--no-deps`) + matplotlib 3.7.5.
+  All fine-tuning and evaluation runs. Original `ssl4polyp` environment removed.
+- Networks built by the v2 code (`d678b28`) and the current code in `ssl4polyp-ft` are identical for the
+  three regimes (`results_v3/verification/network_v2_vs_v3.json`).
+- Code (tag `v3-cmpb-smoke2`, commit `e5f0d67`): timm .npz loader, only the best-epoch checkpoint kept,
+  `negative_source = NA` for SUN.
+
+### 2026-10-14: extended smoke test (k = 1, seed 13, three regimes), tag `v3-cmpb-smoke2`
+
+`ssl4polyp-ft`, GPU 1, `scripts/v3/run_smoke.sh` (SMOKE_TAG=smoke2). Weights in
+`checkpoints_v3/smoke2/` (4.0 GB, best-epoch checkpoints only), records in `results_v3/smoke2/k1/`.
+
+| Model | sun_full | E3 | E4 s50 |
+|---|---|---|---|
+| SUP-imnet | 202 s (best epoch 3) | 8 s | 30 s |
+| SSL-imnet | 358 s (best epoch 12) | 8 s | 34 s |
+| SSL-colon | 428 s (best epoch 16) | 9 s | 29 s |
+
+Section 6 criteria: 117/117 checks pass (`results_v3/verification/smoke2_section6.json`).
+
+Comparison with v2 seed 13 (`results_v3/verification/smoke2_comparison_v2.csv`): |ΔAUROC| or |ΔAP| > 0.02
+in SUP-imnet (sun_full, E3, E4 A/C), SSL-imnet (E4 A/C AUROC, +0.021/+0.022) and SSL-colon (E4 A/C).
+Investigation (`results_v3/verification/smoke2_investigation_controls.sh`, runs in
+`checkpoints_v3/investigation/`):
+- evaluation frames, order and labels identical to v2 in every compared CSV;
+- networks and initial weights identical to v2 code (above);
+- v3 is deterministic: an identical repeat of SUP-imnet sun_full gives bit-identical val/test CSVs;
+- TF32 off changes nothing in training (AMP fp16); for SSL-colon it only perturbs fp32 evaluation
+  at ~1e-5 in the val loss, with no change in test metrics;
+- epoch-1 train loss v2 vs v3: SSL-colon 0.4789/0.4793, SSL-imnet 0.6550/0.6597 (same data order and
+  initialisation), then the trajectories diverge and the best epoch changes (SSL-colon 11→16,
+  SSL-imnet 9→12, SUP-imnet 5→3). SUP-imnet's first epoch is unstable in v2 itself (train loss
+  1.40/1.47/1.95 across seeds; v3 1.70);
+- most flagged differences are within the v2 between-seed range; exceptions: SUP-imnet sun_full AUROC
+  (−0.040 vs range 0.033, and v2 sun_full used last-epoch weights) and SSL-colon E4 AP (−0.127 vs
+  range 0.071).
+Conclusion: no code or data difference found; the gaps come from different trained weights under
+torch 2.4.1 / RTX 6000 Ada versus torch 1.9.0 / A40 (fp16 kernels), amplified by training. v2 runs
+cannot be reproduced seed by seed in this environment.
