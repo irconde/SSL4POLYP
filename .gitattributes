@@ -1,2 +1,4 @@
 *.ipynb -linguist-detectable
 * text=auto
+# Pack CSVs are hashed byte for byte by their manifests: store them unconverted.
+data_packs/**/*.csv -text
