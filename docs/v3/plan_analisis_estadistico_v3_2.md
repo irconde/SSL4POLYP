@@ -1,4 +1,4 @@
-# Plan de análisis estadístico (SAP), campaña v3, versión v3.2
+# Plan de análisis estadístico (SAP), campaña v3, versión v3.2 (revisión c)
 
 Este plan se fija antes de lanzar las ejecuciones de la campaña v3. La versión v3.2 sustituye a la v3.1 (`plan_analisis_estadistico_v3_1.md`), que a su vez sustituyó a la v3 (`plan_analisis_estadistico_v3.md`). La v3.1 añadió la sección 10 y la desviación 9.1; la v3.2 cambia la construcción de las particiones, los subsets y los packs few-shot (sección 1), el diseño de E2 (sección 1.1), la selección de learning rate de SSL-imnet-matched (sección 10) y añade la desviación 9.2. Su versión final se guarda en el repositorio y su hash SHA-256 se registra en `RUNLOG.md` antes de la fase 1. Cualquier cambio posterior a la obtención de resultados se documenta como desviación (sección 9).
 
@@ -82,6 +82,8 @@ Se mantiene como medida de la incertidumbre del muestreo del test.
   - leave-one-center-out en E3 y en la descomposición por origen de negativos;
   - leave-one-case-out en el estrato plano de E2, por partición;
   - H1 a H4 restringidas a la partición k = 1, para comparar con la versión anterior.
+  - H6 y H7 repetidas excluyendo el presupuesto s500 (media de los presupuestos 50, 100 y 200), porque el split de evaluación de s500 no contiene negativos aislados y su prevalencia varía entre packs (revisión c).
+- **AP en E4 (revisión c):** la AP de E4 solo se compara dentro de cada pack, es decir, entre brazos y entre regímenes sobre el mismo split de evaluación; nunca entre packs ni entre presupuestos, porque la prevalencia del split de evaluación cambia entre ellos.
 
 ## 7. Reglas de redacción
 
