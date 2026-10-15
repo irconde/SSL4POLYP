@@ -165,3 +165,15 @@ E2 evaluated per stratum on each partition's sun_full models, without its own tr
 nested `sun_subsets` per partition (`subsets-canonical`, seed 13); few-shot pack seed 1000·k + s.
 Declared deviation: the v3.1 learning-rate sweep used the validation split of the v2 `sun_full`,
 which shares cases with the new k = 1.
+
+### 2026-10-15: SAP v3.2 revised (section 10 scope)
+
+| Document | Path | SHA-256 | Commit |
+|---|---|---|---|
+| SAP v3.2 (revision b) | `docs/v3/plan_analisis_estadistico_v3_2.md` | `d32d53ff2a7b4f9c983524c3346f2055a712001f84a68d4b6305c53218d0e2c1` | `ec5a405` |
+
+Supersedes the v3.2 hash `38f8ab05…2375c70` (tag `v3-cmpb-sap32`, kept as published). Only change:
+section 10 "Alcance" now states that E2 and E3 use the sun_full models without further training and so
+inherit their learning rate, and that E4 adapts those models with its own staged schedule, which the
+sweep does not change. Confirmed: SSL-imnet-matched's sweep uses the v2 sun_full validation split, as
+for the other three regimes. New tag `v3-cmpb-sap32b`.
