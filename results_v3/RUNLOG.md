@@ -204,3 +204,8 @@ for the other three regimes. New tag `v3-cmpb-sap32b`.
   polypgen_clean_test), 159 isolated and 3,190 sequence negatives; none has fewer than 120 isolated
   negatives. s500 evaluation splits contain no isolated negatives (all 184 go to the support) and
   302–1,031 sequence negatives depending on the pack.
+- Incident (same day): the pack CSVs (v2 and v3) are CRLF and their manifests/index hash those bytes,
+  but `* text=auto` stored them as LF, so a fresh clone had mismatching SHA-256 (already true for the v2
+  packs). Fixed in `93ffdcb`: `data_packs/**/*.csv -text` in `.gitattributes` and the 248 CSVs re-added
+  unconverted. Verified on a fresh clone: 221/221 index hashes and 247/247 manifest hashes match. The
+  published tag `v3-cmpb-packs` (`b0d78b5`) predates the fix and is kept; use `v3-cmpb-packs2`.
