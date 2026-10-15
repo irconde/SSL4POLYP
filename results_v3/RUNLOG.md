@@ -209,3 +209,17 @@ for the other three regimes. New tag `v3-cmpb-sap32b`.
   packs). Fixed in `93ffdcb`: `data_packs/**/*.csv -text` in `.gitattributes` and the 248 CSVs re-added
   unconverted. Verified on a fresh clone: 221/221 index hashes and 247/247 manifest hashes match. The
   published tag `v3-cmpb-packs` (`b0d78b5`) predates the fix and is kept; use `v3-cmpb-packs2`.
+
+## SAP v3.2c
+
+### 2026-10-15: SAP v3.2 revision c registered (before the campaign)
+
+| Document | Path | SHA-256 | Commit |
+|---|---|---|---|
+| SAP v3.2 (revision c) | `docs/v3/plan_analisis_estadistico_v3_2.md` | `a387aed06f6901affca6c523a4f9ea3b1fca9b34f9e1c7ec69be3ebd36874d47` | `3a38993` |
+
+Supersedes revision b (`d32d53ff…218d0e2c1`). Added to section 6 (secondary analyses): H6 and H7
+repeated without the s500 budget as a sensitivity analysis (s500 evaluation splits have no isolated
+negatives and their prevalence varies between packs); E4 AP compared only within a pack (between arms
+and regimes on the same evaluation split), never between packs or budgets. Reference packs:
+`v3-cmpb-packs2`.
