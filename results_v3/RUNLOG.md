@@ -223,3 +223,9 @@ repeated without the s500 budget as a sensitivity analysis (s500 evaluation spli
 negatives and their prevalence varies between packs); E4 AP compared only within a pack (between arms
 and regimes on the same evaluation split), never between packs or budgets. Reference packs:
 `v3-cmpb-packs2`.
+
+## Campaign: three regimes (SUP-imnet, SSL-imnet, SSL-colon)
+
+Environment `ssl4polyp-ft`, packs `v3-cmpb-packs2`, SAP v3.2c, launcher `scripts/v3/run_campaign.py`
+(one run per GPU, GPUs 0 and 1, shared queue), outputs `checkpoints_v3/campaign/`, logs and events
+`results_v3/campaign/<phase>/`, verification `scripts/v3/verify_phase.py`.

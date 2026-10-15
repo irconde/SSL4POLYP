@@ -74,7 +74,9 @@ def main() -> int:
 
     if timm.__version__ != "0.4.12":
         sys.exit("timm 0.4.12 required: activate ssl4polyp-ft")
-    dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True).stdout.strip()
+    status = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True).stdout
+    # Run records under results_v3/ (RUNLOG, verification) may change during the campaign; code may not.
+    dirty = "\n".join(l for l in status.splitlines() if not l[3:].startswith("results_v3/")).strip()
     if dirty:
         sys.exit(f"Tracked files modified; commit before running the campaign:\n{dirty}")
     commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
