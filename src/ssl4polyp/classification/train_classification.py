@@ -2281,6 +2281,10 @@ def _build_run_metadata(
     tf32_state = getattr(args, "tf32_state", None)
     if isinstance(tf32_state, Mapping):
         run_block["tf32"] = dict(tf32_state)
+    lr_value = getattr(args, "lr", None)
+    if lr_value is not None:
+        run_block["lr"] = float(lr_value)
+        run_block["lr_source"] = str(getattr(args, "lr_source", "experiment config"))
     init_ckpt = getattr(args, "ckpt", None)
     if init_ckpt:
         run_block["init_checkpoint"] = str(init_ckpt)
@@ -4552,6 +4556,20 @@ def apply_experiment_config(
         args.frozen = args.finetune_mode == "none"
     else:
         args.finetune_schedule_spec = []
+    # SAP v3.1, section 10: per-regime fine-tuning learning rate from the model config. It
+    # applies to full fine-tuning (sun_full, E1, E2) only; staged schedules (E4) keep their own
+    # rates and an explicit ``--override lr=...`` keeps precedence.
+    override_keys = set((resolved_overrides or {}).keys()) if isinstance(resolved_overrides, dict) else set()
+    model_lr = selected_model.get("finetune_lr")
+    if schedule_spec:
+        args.lr_source = "finetune_schedule"
+    elif "lr" in override_keys:
+        args.lr_source = "override"
+    elif model_lr is not None:
+        args.lr = float(model_lr)
+        args.lr_source = f"model config ({selected_model.get('key')})"
+    else:
+        args.lr_source = "experiment config"
     args.curve_export_spec = _sanitize_curve_export_config(protocol_cfg.get("export_curves"))
     morphology_eval_cfg = protocol_cfg.get("morphology_eval")
     if morphology_eval_cfg is not None:

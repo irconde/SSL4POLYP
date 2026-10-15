@@ -8,3 +8,6 @@ model:
   checkpoint: checkpoints/pretrained/vit_b/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz
   checkpoint_sha256: ac104c0df8158c46754510e50495536fa6de9647e572e38b5659dc54f260b124
   frozen: false
+  # Fine-tuning learning rate (sun_full, E1, E2) chosen by the SAP v3.1 section 10 sweep
+  # (results_v3/verification/lr_sweep_decision.json). E4 keeps its staged schedule.
+  finetune_lr: 3.0e-4

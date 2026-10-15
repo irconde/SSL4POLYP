@@ -117,3 +117,34 @@ comparison table reproduces exactly.
 
 Supersedes SAP v3 (`f2120a09…cc0474`); adds section 10 (learning-rate selection) and deviation 9.1
 (`results_v3/SAP_deviations.md`). Registered before any sweep run.
+
+### 2026-10-15: learning-rate sweep (SAP v3.1 section 10), validation only
+
+`ssl4polyp-ft`, commit `213efe5`, `scripts/v3/run_lr_sweep.sh` on GPUs 0 and 1 (shared queue),
+sun_full k = 1, `--skip-test-eval` (no test split scored; no test CSV exists). 27/27 runs ok,
+08:08–09:36 (81.7 min wall, 2.67 GPU-hours). The lr 1e-3 / seed 13 runs reproduce the smoke2
+validation CSVs bit for bit (one on the other GPU). Summary: `scripts/v3/summarize_lr_sweep.py` →
+`results_v3/verification/lr_sweep_{runs,summary}.csv`, `lr_sweep_decision.json`.
+
+Validation AP of the best-epoch weights (seeds 13 / 29 / 47):
+
+| Regime | lr | Mean AP ± SD | Per seed | Epoch-1 train loss | Best epoch | Best epoch < 6 |
+|---|---|---|---|---|---|---|
+| SUP-imnet | 1e-4 | 0.9509 ± 0.0114 | 0.9434 / 0.9453 / 0.9640 | 0.752 / 0.628 / 0.545 | 7 / 4 / 3 | 2 |
+| SUP-imnet | **3e-4** | **0.9798 ± 0.0104** | 0.9905 / 0.9696 / 0.9792 | 1.171 / 1.074 / 1.083 | 9 / 9 / 13 | 0 |
+| SUP-imnet | 1e-3 | 0.7576 ± 0.0303 | 0.7227 / 0.7771 / 0.7729 | 1.700 / 1.571 / 1.979 | 3 / 10 / 3 | 2 |
+| SSL-imnet | 1e-4 | 0.9974 ± 0.0021 | 0.9994 / 0.9953 / 0.9976 | 0.481 / 0.518 / 0.495 | 13 / 12 / 12 | 0 |
+| SSL-imnet | **3e-4** | **0.9985 ± 0.0008** | 0.9988 / 0.9991 / 0.9976 | 0.435 / 0.518 / 0.468 | 12 / 11 / 16 | 0 |
+| SSL-imnet | 1e-3 | 0.8470 ± 0.0829 | 0.8037 / 0.7948 / 0.9426 | 0.660 / 0.663 / 0.691 | 12 / 1 / 30 | 1 |
+| SSL-colon | **1e-4** | **0.9908 ± 0.0066** | 0.9897 / 0.9979 / 0.9848 | 0.628 / 0.663 / 0.625 | 11 / 18 / 19 | 0 |
+| SSL-colon | 3e-4 | 0.9850 ± 0.0082 | 0.9760 / 0.9870 / 0.9921 | 0.538 / 0.571 / 0.542 | 8 / 5 / 20 | 1 |
+| SSL-colon | 1e-3 | 0.9751 ± 0.0005 | 0.9752 / 0.9746 / 0.9755 | 0.479 / 0.491 / 0.489 | 16 / 16 / 11 | 0 |
+
+No run stopped before epoch 6 (patience 8
+makes the earliest possible stop epoch 9).
+
+Decision (rule applied as written): 1e-3 does not win for any regime → per-regime learning rates for
+the whole campaign: SUP-imnet 3e-4, SSL-imnet 3e-4, SSL-colon 1e-4, SSL-imnet-matched 3e-4 (= SSL-imnet).
+Implemented as `finetune_lr` in `config/model/*.yaml` (sun_full, E1, E2); E4 keeps its staged
+schedule; an explicit `--override lr=` keeps precedence. Each run records `run.lr` and `run.lr_source`.
+Note: SSL-imnet 3e-4 vs 1e-4 differ by 0.0011 in mean AP (within one SD).
