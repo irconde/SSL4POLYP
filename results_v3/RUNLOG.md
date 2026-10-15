@@ -97,3 +97,12 @@ Investigation (`results_v3/verification/smoke2_investigation_controls.sh`, runs 
 Conclusion: no code or data difference found; the gaps come from different trained weights under
 torch 2.4.1 / RTX 6000 Ada versus torch 1.9.0 / A40 (fp16 kernels), amplified by training. v2 runs
 cannot be reproduced seed by seed in this environment.
+
+### 2026-10-15: power outages during the investigation
+
+Several power cuts on 2026-10-14 interrupted the investigation control runs twice (partial outputs
+deleted and the runs relaunched from scratch; one cut left `run_controls.sh` empty and it was
+rewritten). The final control runs completed. Integrity check afterwards: `git fsck` clean, local
+branch equal to `origin/refactoring`, `ssl4polyp-ft` loads torch/timm with CUDA, section 6 checks
+re-run on all smoke2 and investigation runs (205/205 pass), the 11 kept checkpoints load, and the v2
+comparison table reproduces exactly.
