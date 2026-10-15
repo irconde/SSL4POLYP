@@ -148,3 +148,20 @@ the whole campaign: SUP-imnet 3e-4, SSL-imnet 3e-4, SSL-colon 1e-4, SSL-imnet-ma
 Implemented as `finetune_lr` in `config/model/*.yaml` (sun_full, E1, E2); E4 keeps its staged
 schedule; an explicit `--override lr=` keeps precedence. Each run records `run.lr` and `run.lr_source`.
 Note: SSL-imnet 3e-4 vs 1e-4 differ by 0.0011 in mean AP (within one SD).
+
+## SAP v3.2
+
+### 2026-10-15: SAP v3.2 registered (before generating any partition)
+
+| Document | Path | SHA-256 | Commit |
+|---|---|---|---|
+| SAP v3.2 | `docs/v3/plan_analisis_estadistico_v3_2.md` | `38f8ab0535ab024c4f292ea17a95d1288f0e7602e2e74e2ae742d2fdd2375c70` | `6154994` |
+
+Supersedes SAP v3.1 (`a2fc1b83…18e7bd`). Changes (deviation 9.2, `results_v3/SAP_deviations.md`):
+SSL-imnet-matched goes through the same learning-rate sweep instead of inheriting SSL-imnet's rate;
+K = 5 independent partitions from `polypdb sun morph` (k = 1 = current `sun_morphology`, seed 47;
+k = 2–5 = first 4 seeds of 101–120 passing the constructor assertions; test sets may overlap);
+E2 evaluated per stratum on each partition's sun_full models, without its own training (H3 kept);
+nested `sun_subsets` per partition (`subsets-canonical`, seed 13); few-shot pack seed 1000·k + s.
+Declared deviation: the v3.1 learning-rate sweep used the validation split of the v2 `sun_full`,
+which shares cases with the new k = 1.
