@@ -1,0 +1,28 @@
+# config/exp/v3/e4_budgets/s50.yaml (same schedule as exp5c)
+defaults:
+  - ../e4.yaml
+
+dataset:
+  size: 50
+
+epochs: 30
+protocol:
+  finetune_schedule:
+    - name: head_warmup
+      mode: none # encoder frozen
+      epochs: 10
+      head_lr: 5.0e-4
+    - name: head1_refine
+      mode: head+1  # unfreeze head + last encoder block
+      epochs: 20 
+      head_lr: 5.0e-4
+      backbone_lr: 5.0e-6
+
+early_stop:
+  monitor: val_loss
+  patience: 8
+  min_delta: 5.0e-5
+  min_epochs: 3
+  
+scheduler:
+  warmup_epochs: 6

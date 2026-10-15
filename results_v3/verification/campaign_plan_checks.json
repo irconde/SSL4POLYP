@@ -1,0 +1,26 @@
+{
+  "sap": {
+    "name": "SAP v3.2 (revision b)",
+    "path": "docs/v3/plan_analisis_estadistico_v3_2.md",
+    "registered_sha256": "d32d53ff2a7b4f9c983524c3346f2055a712001f84a68d4b6305c53218d0e2c1",
+    "file_sha256": "d32d53ff2a7b4f9c983524c3346f2055a712001f84a68d4b6305c53218d0e2c1",
+    "match": true
+  },
+  "runs": {
+    "sun_full": 45,
+    "E1": 225,
+    "E2": 45,
+    "E3": 45,
+    "E4": 180
+  },
+  "total_runs": 540,
+  "run_failures": [],
+  "partition_check_failures": [],
+  "pending_regimes": [
+    {
+      "regime": "ssl_imnet_matched",
+      "status": "pending: no model config until the MAE pretraining and its learning-rate sweep (SAP section 10, rule 4)"
+    }
+  ],
+  "fewshot_s50_lt120_isolated": []
+}

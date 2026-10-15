@@ -1,0 +1,172 @@
+name: polypgen_fewshot_s200
+version: 1.0.0
+policy:
+  unit_of_split: frame
+  fewshot_budget_S: 200
+  parent_pack: polypgen_clean_test_extended
+  target_train_size: 200
+  target_class_balance:
+    pos: 100
+    neg: 100
+  class_ratio_per_split:
+    train:
+      pos: 80
+      neg: 80
+    val:
+      pos: 20
+      neg: 20
+    test:
+      pos: 1154
+      neg: 3274
+  realized_train_size: 160
+  realized_train_counts:
+    pos: 80
+    neg: 80
+  balance_relaxed: false
+  val_fraction_target: 0.2
+  val_fraction_realized:
+    overall: 0.2
+    pos: 0.2
+    neg: 0.2
+  val_fraction_rule:
+    size_lt_100: 0.1
+    size_100_to_199: 0.15
+    size_gte_200: 0.2
+  neg_sampling:
+    strategy: pool_first_sequence_cap_single_pass
+    pool_first: true
+    max_frames_per_sequence: 5
+    sequence_level_disjointness: true
+    phase_counts:
+      base_pool: 100
+      sequence: 0
+    sequences_in_train: 0
+  negatives_source:
+    train:
+      base: 80
+      sequence: 0
+    val:
+      base: 20
+      sequence: 0
+    test:
+      base: 84
+      sequence: 3190
+  max_frames_per_sequence_train: 5
+  sequence_disjointness_across:
+  - train
+  - val
+  - test
+  sampling: pos:frame_id; neg:frame_pool_then_sequence(cap=5); seed=3013
+row_schema:
+  fields:
+  - name: dataset
+    type: string
+    desc: constant 'polypgen_clean'
+  - name: split
+    type: string
+    desc: train|val|test (frame-level)
+  - name: case_id
+    type: string
+  - name: frame_id
+    type: string
+  - name: frame_path
+    type: path
+  - name: label
+    type: int
+selection_keys:
+  train: hmac_sha256(frame_id,3013)
+  val: hmac_sha256(unit_key=frame_id|sequence_id_or_frame_id,3013)
+  test: complement of train|val with neg-sequence exclusion within polypgen-clean-test-extended
+counts:
+  train:
+    frames: 160
+    pos: 80
+    neg: 80
+    neg_frame: 80
+    neg_seq_frames: 0
+    neg_seq_sequences: 0
+  val:
+    frames: 40
+    pos: 20
+    neg: 20
+    neg_frame: 20
+    neg_seq_frames: 0
+    neg_seq_sequences: 0
+  test:
+    frames: 4428
+    pos: 1154
+    neg: 3274
+    neg_frame: 84
+    neg_seq_frames: 3190
+    neg_seq_sequences: 18
+summary_by_split:
+- split: train
+  frames: 160
+  pos_frames: 80
+  neg_frames: 80
+  neg_frame: 80
+  neg_seq_frames: 0
+  neg_seq_sequences: 0
+- split: val
+  frames: 40
+  pos_frames: 20
+  neg_frames: 20
+  neg_frame: 20
+  neg_seq_frames: 0
+  neg_seq_sequences: 0
+- split: test
+  frames: 4428
+  pos_frames: 1154
+  neg_frames: 3274
+  neg_frame: 84
+  neg_seq_frames: 3190
+  neg_seq_sequences: 18
+notes:
+  excluded_sequences_in_test: []
+roots:
+  polypgen_clean: /workspace/code/SSL4POLYP/data/polypgen
+parent_pack:
+  name: polypgen-clean-test-extended
+  path: /workspace/data_packs_v3_staging/_parent/polypgen_clean_test_extended
+  manifest_sha256: a794b8ff1219f2afb7243d64ed0d3f2713a694a4ee3ba09f2689d46f6bdb0aa4
+  hashes:
+    test: 32d8ed6a5fb8494014ff8d4a3a693dc378852f2671274ffa9e07104295c72f4a
+generator:
+  repo: polyp-db-analysis
+  git_commit: d78ed76e6a70d22631aace92bfe9bf9689f2b496
+  command: polypdb polypgen fewshot --pack /workspace/data_packs_v3_staging/_parent/polypgen_clean_test_extended
+    --sizes 200 --seeds 3013 --out /workspace/data_packs_v3_staging/k3/polypgen_fewshot/seed13
+    --dir-template s{size}
+  seed: 3013
+  git_dirty: false
+  environment:
+    python: 3.14.7
+    pandas: 2.3.3
+    numpy: 2.3.5
+generated_at: '2026-10-15T07:52:48.583681+00:00'
+hashes:
+  train: 96dc9362cc9ed989b8aac0bc7cd16b2ce9aaca54efdeab8218d8aca5f36cf1ca
+  val: 9aefe65728443d5365642e9c5132454effa008f38be67bf4efae9bea2254a059
+  test: bec7ed0b8a00e01b035f8853f92655f3dc3c98b841608444041eece041c4ad5b
+case_lengths:
+  7: 1
+  43: 1
+  57: 1
+  17: 1
+  21: 1
+  15: 1
+  9: 2
+  12: 1
+  2: 1
+  3: 1
+  5: 1
+  233: 2
+  387: 1
+  172: 1
+  161: 1
+  52: 1
+  3190: 1
+inputs:
+  polypgen_clean:
+    frames_parquet_sha256: 1098b9c410941b4d764a525493068d25cbd15426b51c49c722777af368c32f32
+    cases_parquet_sha256: 5a3f3c377ca5b55b3e54f620741b5d53093fb689b7ad9ba81cc6ec6806f34191

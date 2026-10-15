@@ -1,0 +1,11 @@
+# Campaign v3 (SAP v3.2): base pack of SUN partition k (morphology-stratified, `polypdb sun morph`).
+# {partition} is resolved from --partition. Pack hashes: data_packs/v3/index.yaml.
+dataset:
+  name: sun_full
+  pack: v3/k{partition}/base
+  splits:
+    train: train
+    val: val
+    test: test
+  frames_per_case: 33
+  manifest: v3/k{partition}/base/manifest.yaml

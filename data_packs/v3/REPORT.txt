@@ -1,0 +1,50 @@
+k1 check {'train': True, 'val': True, 'test': True, 'polypgen_clean_test_extended': True} failed seeds []
+
+== k1 seed 47  validate_pack 18/18 ok []  dirty={False} commit={'d78ed76'}
+  train flat=24 polypoid=46 negcases=70 videos=['NEG_SUN_case12', 'NEG_SUN_case13', 'NEG_SUN_case7'] frames=4620
+  val   flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case2', 'NEG_SUN_case8', 'NEG_SUN_case9'] frames=990
+  test  flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case1', 'NEG_SUN_case3', 'NEG_SUN_case4'] frames=990
+  subsets [('sun_p05', 264), ('sun_p10', 462), ('sun_p100', 4620), ('sun_p25', 1188), ('sun_p50', 2310)]
+  fewshot packs 12
+
+== k2 seed 101  validate_pack 18/18 ok []  dirty={False} commit={'d78ed76'}
+  train flat=24 polypoid=46 negcases=70 videos=['NEG_SUN_case1', 'NEG_SUN_case11', 'NEG_SUN_case12'] frames=4620
+  val   flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case13', 'NEG_SUN_case2', 'NEG_SUN_case4'] frames=990
+  test  flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case3', 'NEG_SUN_case5', 'NEG_SUN_case9'] frames=990
+  subsets [('sun_p05', 264), ('sun_p10', 462), ('sun_p100', 4620), ('sun_p25', 1188), ('sun_p50', 2310)]
+  fewshot packs 12
+
+== k3 seed 102  validate_pack 18/18 ok []  dirty={False} commit={'d78ed76'}
+  train flat=24 polypoid=46 negcases=70 videos=['NEG_SUN_case3', 'NEG_SUN_case7', 'NEG_SUN_case8'] frames=4620
+  val   flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case11', 'NEG_SUN_case5', 'NEG_SUN_case9'] frames=990
+  test  flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case1', 'NEG_SUN_case12', 'NEG_SUN_case4'] frames=990
+  subsets [('sun_p05', 264), ('sun_p10', 462), ('sun_p100', 4620), ('sun_p25', 1188), ('sun_p50', 2310)]
+  fewshot packs 12
+
+== k4 seed 103  validate_pack 18/18 ok []  dirty={False} commit={'d78ed76'}
+  train flat=24 polypoid=46 negcases=70 videos=['NEG_SUN_case6', 'NEG_SUN_case8', 'NEG_SUN_case9'] frames=4620
+  val   flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case1', 'NEG_SUN_case10', 'NEG_SUN_case5'] frames=990
+  test  flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case11', 'NEG_SUN_case2', 'NEG_SUN_case3'] frames=990
+  subsets [('sun_p05', 264), ('sun_p10', 462), ('sun_p100', 4620), ('sun_p25', 1188), ('sun_p50', 2310)]
+  fewshot packs 12
+
+== k5 seed 104  validate_pack 18/18 ok []  dirty={False} commit={'d78ed76'}
+  train flat=24 polypoid=46 negcases=70 videos=['NEG_SUN_case1', 'NEG_SUN_case3', 'NEG_SUN_case8'] frames=4620
+  val   flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case10', 'NEG_SUN_case12', 'NEG_SUN_case13'] frames=990
+  test  flat= 5 polypoid=10 negcases=15 videos=['NEG_SUN_case5', 'NEG_SUN_case6', 'NEG_SUN_case9'] frames=990
+  subsets [('sun_p05', 264), ('sun_p10', 462), ('sun_p100', 4620), ('sun_p25', 1188), ('sun_p50', 2310)]
+  fewshot packs 12
+
+test overlap (all cases / positives / negative videos)
+ k1-k2: cases 1/30  pos 1/15  neg videos ['NEG_SUN_case3']
+ k1-k3: cases 3/30  pos 3/15  neg videos ['NEG_SUN_case1', 'NEG_SUN_case4']
+ k1-k4: cases 0/30  pos 0/15  neg videos ['NEG_SUN_case3']
+ k1-k5: cases 3/30  pos 3/15  neg videos []
+ k2-k3: cases 2/30  pos 2/15  neg videos []
+ k2-k4: cases 3/30  pos 3/15  neg videos ['NEG_SUN_case3']
+ k2-k5: cases 1/30  pos 1/15  neg videos ['NEG_SUN_case5', 'NEG_SUN_case9']
+ k3-k4: cases 4/30  pos 4/15  neg videos []
+ k3-k5: cases 1/30  pos 1/15  neg videos []
+ k4-k5: cases 2/30  pos 2/15  neg videos []
+
+CSV in index: 221

@@ -1,0 +1,22 @@
+# Campaign v3: sun_full of partition k (parent of E2, E3 and E4). Learning rate per regime from
+# config/model/*.yaml (finetune_lr, SAP v3.2 section 10).
+defaults:
+  - base
+  - data/v3/sun_full
+reporting:
+  inputs_subdir: v3_sun_full
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+protocol:
+  finetune: full
+  eval_split: test
+  early_stop_split: val
+  thresholds:
+    primary: f1_opt_on_val
+    sensitivity: youden_on_val
+  export_curves:
+    splits: [test]
+    points: 200
+threshold_policy: f1_opt_on_val

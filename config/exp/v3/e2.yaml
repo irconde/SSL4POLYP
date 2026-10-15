@@ -1,0 +1,21 @@
+# Campaign v3: E2 (SAP v3.2, section 1.1). No training: the sun_full model of the same partition,
+# seed and regime (--parent-checkpoint) is evaluated per morphology stratum on the partition's test
+# split with its own validation τ.
+defaults:
+  - base
+  - data/v3/sun_strata_eval
+reporting:
+  inputs_subdir: v3_e2_morphology
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+protocol:
+  init_from: explicit_parent
+  finetune: none
+  eval_split: test
+  morphology_eval: [flat, polypoid]
+  morphology_eval_enabled: true
+  thresholds:
+    primary: sun_val_frozen
+threshold_policy: sun_val_frozen

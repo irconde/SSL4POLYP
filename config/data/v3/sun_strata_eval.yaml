@@ -1,0 +1,9 @@
+# Campaign v3 (SAP v3.2, section 1.1): E2 evaluates the test split of partition k per morphology
+# stratum with the partition's sun_full models; no training split.
+dataset:
+  name: sun_morphology
+  pack: v3/k{partition}/base
+  splits:
+    test: test
+  frames_per_case: 33
+  manifest: v3/k{partition}/base/manifest.yaml
