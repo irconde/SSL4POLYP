@@ -1,0 +1,19 @@
+# Campaign v3: E4, few-shot adaptation of the sun_full model of the same partition, seed and
+# regime (--parent-checkpoint) on the pack of that partition and seed. Budgets in e4_budgets/.
+defaults:
+  - base
+  - data/v3/polypgen_fewshot
+reporting:
+  inputs_subdir: v3_e4_polypgen_fewshot
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+protocol:
+  init_from: explicit_parent
+  eval_split: test
+  thresholds:
+    primary: sun_val_frozen
+    sensitivity: val_opt_youden
+threshold_policy: sun_val_frozen
+weight_decay: 0.01

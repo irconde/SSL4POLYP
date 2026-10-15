@@ -1,0 +1,13 @@
+# Campaign v3 (SAP v3.2): nested sun_subsets of partition k (`subsets-canonical`, seed 13);
+# validation and test come from the partition's base pack.
+dataset:
+  name: sun_subsets
+  base_pack: v3/k{partition}/base
+  train_pattern: v3/k{partition}/sun_subsets/sun_p{percent:02d}
+  available_percents: [5, 10, 25, 50, 100]
+  seeds: [13]
+  splits:
+    train: train
+    val: val
+    test: test
+  manifest_pattern: v3/k{partition}/sun_subsets/sun_p{percent:02d}/manifest.yaml

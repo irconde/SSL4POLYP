@@ -177,3 +177,30 @@ section 10 "Alcance" now states that E2 and E3 use the sun_full models without f
 inherit their learning rate, and that E4 adapts those models with its own staged schedule, which the
 sweep does not change. Confirmed: SSL-imnet-matched's sweep uses the v2 sun_full validation split, as
 for the other three regimes. New tag `v3-cmpb-sap32b`.
+
+## Packs v3
+
+### 2026-10-15: packs copied to `data_packs/v3/` and campaign configs
+
+- Source `/workspace/data_packs_v3_staging/` (index.yaml, REPORT.txt, `_parent/`, k1–k5) copied unchanged
+  (`diff -r` identical). 221/221 CSV SHA-256 equal to `index.yaml` (none extra or missing); 91 manifests
+  with their own `hashes` matching; 31,694 distinct images present (PolypGen SHA-1 and SUN sizes checked).
+  k1 base = current `sun_morphology` (train/val/test); `_parent/polypgen_clean_test_extended` = current pack.
+- Partition seeds: k1 47, k2 101, k3 102, k4 103, k5 104 (`failed_partition_seeds: []`); subset seed 13;
+  few-shot pack seed 1000·k + s.
+- Configs: `config/data/v3/` (sun_full, sun_subsets, sun_strata_eval, polypgen_fewshot) and
+  `config/exp/v3/` (sun_full, e1, e2, e3, e4 + `e4_budgets/` with the exp5c schedules). New
+  `--partition` resolves `{partition}`; few-shot packs are selected by the training seed;
+  `init_from: explicit_parent` refuses to run without `--parent-checkpoint`; E2 evaluates the partition
+  test split per stratum with the sun_full model and frozen τ, without training.
+- Dry run (`scripts/v3/campaign_plan.py`, no training): 540 runs (sun_full 45, E1 225, E2 45, E3 45,
+  E4 180) resolved through `prepare_run` and checked against SAP v3.2 revision b
+  (`d32d53ff…218d0e2c1`, file hash matches): 0 failures; partition checks (seeds, k1 = sun_morphology,
+  no case leakage, 5 flat / 10 polypoid test cases, nested subsets inside each train, p100 = base train)
+  pass. SSL-imnet-matched pending (no model config until pretraining and its sweep). Negative controls
+  (wrong partition, lr override, wrong parent, missing parent) are detected.
+  Outputs: `results_v3/verification/campaign_plan.csv`, `campaign_plan_checks.json`, `fewshot_composition.csv`.
+- Few-shot composition: every s50 evaluation split has 1,229 positives (all common with
+  polypgen_clean_test), 159 isolated and 3,190 sequence negatives; none has fewer than 120 isolated
+  negatives. s500 evaluation splits contain no isolated negatives (all 184 go to the support) and
+  302–1,031 sequence negatives depending on the pack.

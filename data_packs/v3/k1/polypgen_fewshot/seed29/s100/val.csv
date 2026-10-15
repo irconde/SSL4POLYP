@@ -1,0 +1,15 @@
+dataset,split,case_id,frame_id,frame_path,label,store_id,morphology,source_video,frame_index,width,height,variant,synthetic_case_id,source_case_id,chunk_start,chunk_end,split_unit,synthetic_case,orig_frame_id,perturbation_id,rng_seed,render_in_pipeline,blur_sigma,jpeg_q,brightness,contrast,bbox_area_frac
+PolypGen,val,C5,POLYPGEN_NOCASE.001231,images/POLYPGEN_NOCASE.001231.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C4,POLYPGEN_NOCASE.001161,images/POLYPGEN_NOCASE.001161.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C6,POLYPGEN_NOCASE.001397,images/POLYPGEN_NOCASE.001397.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C1,POLYPGEN_NOCASE.000080,images/POLYPGEN_NOCASE.000080.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C2,POLYPGEN_NOCASE.000309,images/POLYPGEN_NOCASE.000309.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C3,POLYPGEN_NOCASE.000648,images/POLYPGEN_NOCASE.000648.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C6,POLYPGEN_NOCASE.001423,images/POLYPGEN_NOCASE.001423.jpg,1,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C3,POLYPGEN_NOCASE.000936,images/POLYPGEN_NOCASE.000936.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C3,POLYPGEN_NOCASE.000933,images/POLYPGEN_NOCASE.000933.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C3,POLYPGEN_NOCASE.000944,images/POLYPGEN_NOCASE.000944.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C4,POLYPGEN_NOCASE.001010,images/POLYPGEN_NOCASE.001010.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C3,POLYPGEN_NOCASE.000929,images/POLYPGEN_NOCASE.000929.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C2,POLYPGEN_NOCASE.000267,images/POLYPGEN_NOCASE.000267.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0
+PolypGen,val,C1,POLYPGEN_NOCASE.000156,images/POLYPGEN_NOCASE.000156.jpg,0,polypgen_clean,,,-1,572,455,,,,-1,-1,case,False,,,-1,False,-1.0,-1,-1.0,-1.0,-1.0

@@ -2281,6 +2281,9 @@ def _build_run_metadata(
     tf32_state = getattr(args, "tf32_state", None)
     if isinstance(tf32_state, Mapping):
         run_block["tf32"] = dict(tf32_state)
+    partition_value = getattr(args, "partition", None)
+    if partition_value is not None:
+        run_block["partition"] = int(partition_value)
     lr_value = getattr(args, "lr", None)
     if lr_value is not None:
         run_block["lr"] = float(lr_value)
@@ -4351,6 +4354,21 @@ def apply_experiment_config(
     dataset_cfg = extract_dataset_config(experiment_cfg)
     dataset_cfg = copy.deepcopy(dataset_cfg)
 
+    # Campaign v3: dataset configs name their packs with a ``{partition}`` placeholder
+    # (``v3/k{partition}/...``), resolved from ``--partition``.
+    partition = getattr(args, "partition", None)
+    templated_keys = [
+        key for key, value in dataset_cfg.items() if isinstance(value, str) and "{partition}" in value
+    ]
+    if templated_keys:
+        if partition is None:
+            raise ValueError(
+                f"Dataset config '{dataset_cfg.get('name')}' needs --partition (templated keys: {templated_keys})."
+            )
+        for key in templated_keys:
+            dataset_cfg[key] = dataset_cfg[key].replace("{partition}", str(int(partition)))
+    args.partition = int(partition) if partition is not None else None
+
     cli_percent = getattr(args, "dataset_percent", None)
     cli_seed = getattr(args, "dataset_seed", None)
     cli_size = getattr(args, "dataset_size", None)
@@ -4393,6 +4411,12 @@ def apply_experiment_config(
             dataset_seed_value = preferred_seed
     if dataset_seed_value is None and dataset_seed_candidates:
         dataset_seed_value = dataset_seed_candidates[0]
+    if dataset_cfg.get("pack_seed_from_training_seed"):
+        # One few-shot pack per (partition, training seed): the pack directory is selected by
+        # the training seed itself, never by a dataset-level default.
+        if cli_seed_value is None:
+            raise ValueError("This dataset config selects its pack by training seed; pass --seed.")
+        dataset_seed_value = int(cli_seed_value)
     if dataset_seed_value is not None:
         dataset_cfg["seed"] = int(dataset_seed_value)
 
@@ -4577,7 +4601,11 @@ def apply_experiment_config(
         cli_requested = bool(cli_morphology)
         if cli_requested:
             args.morphology_eval = list(cli_morphology)
-        elif contains_exp3_source or override_requests_morphology:
+        elif (
+            contains_exp3_source
+            or override_requests_morphology
+            or bool(protocol_cfg.get("morphology_eval_enabled"))
+        ):
             args.morphology_eval = list(morphology_eval_cfg)
     args.ss_framework = selected_model.get("ss_framework", args.ss_framework)
     args.dataset = dataset_cfg.get("name", args.dataset)
@@ -4618,11 +4646,15 @@ def apply_experiment_config(
             args.parent_checkpoint = str(parent_path)
 
     init_key_lower = str(protocol_cfg.get("init_from", "")).strip().lower()
+    if init_key_lower == "explicit_parent" and not getattr(args, "parent_checkpoint", None):
+        # Campaign v3: parents are always passed explicitly so a v2 checkpoint can never be
+        # picked up by the canonical-path fallback.
+        raise ValueError("This experiment config requires --parent-checkpoint (init_from: explicit_parent).")
     dataset_name_lower = str(dataset_cfg.get("name", "")).strip().lower()
     args.is_exp5a = (
         dataset_name_lower == "polypgen_clean_test"
         and args.finetune_mode == "none"
-        and init_key_lower == "canonical_sun_models"
+        and init_key_lower in {"canonical_sun_models", "explicit_parent"}
     )
 
     dataset_resolved = _resolve_dataset_specs(
@@ -8377,6 +8409,12 @@ def get_args():
         ),
     )
     parser.add_argument(
+        "--partition",
+        type=int,
+        default=None,
+        help="Campaign v3 SUN partition k (resolves {partition} in dataset configs).",
+    )
+    parser.add_argument(
         "--skip-test-eval",
         action="store_true",
         help="Never evaluate the test split (validation-only runs such as the learning-rate sweep).",
@@ -8416,8 +8454,12 @@ def get_args():
     return parsed
 
 
-def main():
-    args = get_args()
+def prepare_run(args) -> Dict[str, Any]:
+    """Resolve config, packs, seeds and output layout for ``args`` without touching the GPU.
+
+    Shared by :func:`main` and the campaign dry run (``scripts/v3/campaign_plan.py``).
+    """
+
     overrides = _flatten_override_args(getattr(args, "overrides", None))
     args.overrides = overrides
     resolved_overrides: Dict[str, Any] = {}
@@ -8543,6 +8585,24 @@ def main():
     args.model_tag = layout.get("model_tag")
     thresholds_root = Path(layout.get("base_dir", "checkpoints")).expanduser()
     args.thresholds_root = str(thresholds_root.parent / "thresholds")
+
+    return {
+        "experiment_cfg": experiment_cfg,
+        "dataset_cfg": dataset_cfg,
+        "dataset_resolved": dataset_resolved,
+        "selected_model": selected_model,
+        "resolved_overrides": resolved_overrides,
+    }
+
+
+def main():
+    args = get_args()
+    prepared = prepare_run(args)
+    experiment_cfg = prepared["experiment_cfg"]
+    dataset_cfg = prepared["dataset_cfg"]
+    dataset_resolved = prepared["dataset_resolved"]
+    selected_model = prepared["selected_model"]
+    resolved_overrides = prepared["resolved_overrides"]
 
     set_determinism(_get_active_seed(args))
     output_dir = Path(args.output_dir)

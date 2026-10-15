@@ -1,0 +1,13 @@
+# Campaign v3 (SAP v3.2): one few-shot pack per partition k and training seed s
+# (pack seed 1000*k + s, recorded in each manifest). The pack directory is selected by --seed.
+dataset:
+  name: polypgen_fewshot
+  pack_pattern: v3/k{partition}/polypgen_fewshot/seed{seed}/s{size}
+  pack_seed_from_training_seed: true
+  sizes: [50, 100, 200, 500]
+  splits:
+    train: train
+    val: val
+    test: test
+  manifest_pattern: v3/k{partition}/polypgen_fewshot/seed{seed}/s{size}/manifest.yaml
+  reference_eval_pack: polypgen_clean_test

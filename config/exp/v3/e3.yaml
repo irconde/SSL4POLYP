@@ -1,0 +1,18 @@
+# Campaign v3: E3, zero-shot on polypgen_clean_test with the sun_full model and τ of the same
+# partition, seed and regime (--parent-checkpoint).
+defaults:
+  - base
+  - data/polypgen_clean_test
+reporting:
+  inputs_subdir: v3_e3_polypgen
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+protocol:
+  init_from: explicit_parent
+  finetune: none
+  eval_split: test
+  thresholds:
+    primary: sun_val_frozen
+threshold_policy: sun_val_frozen

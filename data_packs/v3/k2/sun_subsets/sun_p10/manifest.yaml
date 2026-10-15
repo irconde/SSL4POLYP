@@ -1,0 +1,750 @@
+name: sun_p10
+version: '0.0'
+generator:
+  repo: polyp-db-analysis
+  git_commit: d78ed76e6a70d22631aace92bfe9bf9689f2b496
+  command: polypdb sun subsets-canonical --pack /workspace/data_packs_v3_staging/k2/base
+    --percents 5 10 25 50 100 --seed 13 --out /workspace/data_packs_v3_staging/k2/sun_subsets
+  seed: 13
+  git_dirty: false
+  environment:
+    python: 3.14.7
+    pandas: 2.3.3
+    numpy: 2.3.5
+  percent_seed_map:
+    5: 13
+    10: 13
+    25: 13
+    50: 13
+    100: 13
+policy:
+  unit_of_split: case
+  negative_split_unit: case
+  frames_per_case: 33
+  balance: cases_pos=70,cases_neg=70,stratify=morphology
+  selection: hmac_sha256(case_id,seed)
+  selection_scope: case
+row_schema:
+  fields:
+  - name: dataset
+    type: string
+    desc: constant 'sun'
+  - name: split
+    type: string
+    desc: train|val|test (by case)
+  - name: case_id
+    type: string
+  - name: frame_id
+    type: string
+  - name: frame_path
+    type: path
+  - name: label
+    type: int
+    desc: 0=neg, 1=pos
+  - name: morphology
+    type: string
+    enum:
+    - flat
+    - polypoid
+    nullable: true
+  - name: width
+    type: int
+  - name: height
+    type: int
+  - name: split_unit
+    type: string
+    desc: case
+  - name: synthetic_case
+    type: bool
+    desc: true for virtual negatives
+  - name: source_case_id
+    type: string
+    nullable: true
+  - name: chunk_start
+    type: int
+    nullable: true
+  - name: chunk_end
+    type: int
+    nullable: true
+frame_sampling:
+  selection: hmac_sha256(frame_path,salt)
+  path_normalization: posix,no-leading-slash,single-slash
+  path_is_relative_to: roots.sun
+  salt_id: seed-101
+  tie_break: frame_path
+  frames_per_case: 33
+  resampled_with_replacement: false
+  selection_scope: frame
+roots:
+  sun: /workspace/code/SSL4POLYP/data/sun
+assertions:
+  no_case_leakage_across_splits: true
+  split_targets_met:
+    train:
+      pos_cases: 70
+      neg_cases: 70
+      frames: 4620
+    val:
+      pos_cases: 15
+      neg_cases: 15
+      frames: 990
+    test:
+      pos_cases: 15
+      neg_cases: 15
+      frames: 990
+  all_cases_have_33_frames: true
+  negative_case_targets:
+    expected:
+      train: 70
+      val: 15
+      test: 15
+    actual:
+      train: 70
+      val: 15
+      test: 15
+  no_negative_case_leakage: true
+  neg_sources_per_split:
+    train: 3
+    val: 3
+    test: 3
+  morphology_targets:
+    expected:
+      train:
+        flat: 24
+        polypoid: 46
+      val:
+        flat: 5
+        polypoid: 10
+      test:
+        flat: 5
+        polypoid: 10
+    actual:
+      train:
+        flat: 24
+        polypoid: 46
+      val:
+        flat: 5
+        polypoid: 10
+      test:
+        flat: 5
+        polypoid: 10
+  subset_train_from_parent_train: true
+  subset_train_pos_eq_neg: true
+  val_test_hash_match_parent: true
+morphology_map:
+  SUN_0030: flat
+  SUN_0067: flat
+  SUN_0091: flat
+  SUN_0044: flat
+  SUN_0082: flat
+  SUN_0064: flat
+  SUN_0022: flat
+  SUN_0011: flat
+  SUN_0019: flat
+  SUN_0040: flat
+  SUN_0051: flat
+  SUN_0086: flat
+  SUN_0098: flat
+  SUN_0052: flat
+  SUN_0036: flat
+  SUN_0041: flat
+  SUN_0049: flat
+  SUN_0100: flat
+  SUN_0005: flat
+  SUN_0020: flat
+  SUN_0039: flat
+  SUN_0085: flat
+  SUN_0060: flat
+  SUN_0003: flat
+  SUN_0063: polypoid
+  SUN_0073: polypoid
+  SUN_0001: polypoid
+  SUN_0034: polypoid
+  SUN_0012: polypoid
+  SUN_0038: polypoid
+  SUN_0071: polypoid
+  SUN_0095: polypoid
+  SUN_0013: polypoid
+  SUN_0037: polypoid
+  SUN_0035: polypoid
+  SUN_0081: polypoid
+  SUN_0076: polypoid
+  SUN_0074: polypoid
+  SUN_0017: polypoid
+  SUN_0023: polypoid
+  SUN_0084: polypoid
+  SUN_0080: polypoid
+  SUN_0050: polypoid
+  SUN_0008: polypoid
+  SUN_0027: polypoid
+  SUN_0079: polypoid
+  SUN_0070: polypoid
+  SUN_0072: polypoid
+  SUN_0048: polypoid
+  SUN_0055: polypoid
+  SUN_0043: polypoid
+  SUN_0018: polypoid
+  SUN_0002: polypoid
+  SUN_0068: polypoid
+  SUN_0004: polypoid
+  SUN_0031: polypoid
+  SUN_0087: polypoid
+  SUN_0093: polypoid
+  SUN_0024: polypoid
+  SUN_0029: polypoid
+  SUN_0047: polypoid
+  SUN_0015: polypoid
+  SUN_0009: polypoid
+  SUN_0056: polypoid
+  SUN_0099: polypoid
+  SUN_0094: polypoid
+  SUN_0083: polypoid
+  SUN_0028: polypoid
+  SUN_0032: polypoid
+  SUN_0062: polypoid
+  SUN_0046: flat
+  SUN_0058: flat
+  SUN_0007: flat
+  SUN_0097: flat
+  SUN_0021: flat
+  SUN_0033: polypoid
+  SUN_0042: polypoid
+  SUN_0088: polypoid
+  SUN_0078: polypoid
+  SUN_0090: polypoid
+  SUN_0096: polypoid
+  SUN_0016: polypoid
+  SUN_0057: polypoid
+  SUN_0026: polypoid
+  SUN_0045: polypoid
+  SUN_0065: flat
+  SUN_0006: flat
+  SUN_0010: flat
+  SUN_0069: flat
+  SUN_0014: flat
+  SUN_0059: polypoid
+  SUN_0089: polypoid
+  SUN_0025: polypoid
+  SUN_0066: polypoid
+  SUN_0054: polypoid
+  SUN_0053: polypoid
+  SUN_0077: polypoid
+  SUN_0061: polypoid
+  SUN_0092: polypoid
+  SUN_0075: polypoid
+morphology_counts:
+  overall:
+    flat_cases: 34
+    polypoid_cases: 66
+    flat_frames: 1122
+    polypoid_frames: 2178
+  train:
+    flat_cases: 24
+    polypoid_cases: 46
+    flat_frames: 792
+    polypoid_frames: 1518
+  val:
+    flat_cases: 5
+    polypoid_cases: 10
+    flat_frames: 165
+    polypoid_frames: 330
+  test:
+    flat_cases: 5
+    polypoid_cases: 10
+    flat_frames: 165
+    polypoid_frames: 330
+splits:
+  train:
+    pos_cases:
+    - SUN_0013
+    - SUN_0055
+    - SUN_0060
+    - SUN_0071
+    - SUN_0082
+    - SUN_0091
+    - SUN_0099
+    neg_cases:
+    - NEG_SUN_case11_v034
+    - NEG_SUN_case11_v043
+    - NEG_SUN_case12_v030
+    - NEG_SUN_case12_v094
+    - NEG_SUN_case12_v116
+    - NEG_SUN_case1_v058
+    - NEG_SUN_case1_v079
+  val:
+    pos_flat_cases:
+    - SUN_0046
+    - SUN_0058
+    - SUN_0007
+    - SUN_0097
+    - SUN_0021
+    pos_polypoid_cases:
+    - SUN_0033
+    - SUN_0042
+    - SUN_0088
+    - SUN_0078
+    - SUN_0090
+    - SUN_0096
+    - SUN_0016
+    - SUN_0057
+    - SUN_0026
+    - SUN_0045
+    neg_cases:
+    - NEG_SUN_case13_v137
+    - NEG_SUN_case13_v159
+    - NEG_SUN_case13_v169
+    - NEG_SUN_case13_v037
+    - NEG_SUN_case13_v142
+    - NEG_SUN_case13_v096
+    - NEG_SUN_case4_v068
+    - NEG_SUN_case4_v370
+    - NEG_SUN_case4_v077
+    - NEG_SUN_case4_v352
+    - NEG_SUN_case4_v038
+    - NEG_SUN_case4_v402
+    - NEG_SUN_case2_v165
+    - NEG_SUN_case2_v280
+    - NEG_SUN_case2_v119
+  test:
+    pos_flat_cases:
+    - SUN_0065
+    - SUN_0006
+    - SUN_0010
+    - SUN_0069
+    - SUN_0014
+    pos_polypoid_cases:
+    - SUN_0059
+    - SUN_0089
+    - SUN_0025
+    - SUN_0066
+    - SUN_0054
+    - SUN_0053
+    - SUN_0077
+    - SUN_0061
+    - SUN_0092
+    - SUN_0075
+    neg_cases:
+    - NEG_SUN_case9_v173
+    - NEG_SUN_case9_v205
+    - NEG_SUN_case9_v032
+    - NEG_SUN_case9_v008
+    - NEG_SUN_case9_v178
+    - NEG_SUN_case9_v091
+    - NEG_SUN_case5_v172
+    - NEG_SUN_case5_v191
+    - NEG_SUN_case5_v006
+    - NEG_SUN_case5_v001
+    - NEG_SUN_case5_v180
+    - NEG_SUN_case5_v093
+    - NEG_SUN_case3_v030
+    - NEG_SUN_case3_v149
+    - NEG_SUN_case3_v009
+neg_sources:
+- source_case_id: NEG_SUN_case1
+  split: train
+  synthetic_case_ids:
+  - NEG_SUN_case1_v058
+  - NEG_SUN_case1_v098
+  - NEG_SUN_case1_v115
+  - NEG_SUN_case1_v117
+  - NEG_SUN_case1_v232
+  - NEG_SUN_case1_v113
+  - NEG_SUN_case1_v138
+  - NEG_SUN_case1_v118
+  - NEG_SUN_case1_v244
+  - NEG_SUN_case1_v157
+  - NEG_SUN_case1_v141
+  - NEG_SUN_case1_v154
+  - NEG_SUN_case1_v243
+  - NEG_SUN_case1_v044
+  - NEG_SUN_case1_v099
+  - NEG_SUN_case1_v241
+  - NEG_SUN_case1_v122
+  - NEG_SUN_case1_v128
+  - NEG_SUN_case1_v203
+  - NEG_SUN_case1_v245
+  - NEG_SUN_case1_v235
+  - NEG_SUN_case1_v066
+  - NEG_SUN_case1_v079
+  - NEG_SUN_case1_v137
+  - NEG_SUN_case1_v174
+  - NEG_SUN_case1_v188
+  - NEG_SUN_case1_v247
+  - NEG_SUN_case1_v273
+  chunk_spans:
+  - - 1915
+    - 1947
+  - - 3235
+    - 3267
+  - - 3796
+    - 3828
+  - - 3862
+    - 3894
+  - - 7657
+    - 7689
+  - - 3730
+    - 3762
+  - - 4555
+    - 4587
+  - - 3895
+    - 3927
+  - - 8053
+    - 8085
+  - - 5182
+    - 5214
+  - - 4654
+    - 4686
+  - - 5083
+    - 5115
+  - - 8020
+    - 8052
+  - - 1453
+    - 1485
+  - - 3268
+    - 3300
+  - - 7954
+    - 7986
+  - - 4027
+    - 4059
+  - - 4225
+    - 4257
+  - - 6700
+    - 6732
+  - - 8086
+    - 8118
+  - - 7756
+    - 7788
+  - - 2179
+    - 2211
+  - - 2608
+    - 2640
+  - - 4522
+    - 4554
+  - - 5743
+    - 5775
+  - - 6205
+    - 6237
+  - - 8152
+    - 8184
+  - - 9010
+    - 9042
+- source_case_id: NEG_SUN_case11
+  split: train
+  synthetic_case_ids:
+  - NEG_SUN_case11_v086
+  - NEG_SUN_case11_v116
+  - NEG_SUN_case11_v014
+  - NEG_SUN_case11_v074
+  - NEG_SUN_case11_v053
+  - NEG_SUN_case11_v001
+  - NEG_SUN_case11_v061
+  - NEG_SUN_case11_v113
+  - NEG_SUN_case11_v043
+  - NEG_SUN_case11_v022
+  - NEG_SUN_case11_v072
+  - NEG_SUN_case11_v093
+  - NEG_SUN_case11_v034
+  - NEG_SUN_case11_v120
+  chunk_spans:
+  - - 2839
+    - 2871
+  - - 3829
+    - 3861
+  - - 463
+    - 495
+  - - 2443
+    - 2475
+  - - 1750
+    - 1782
+  - - 34
+    - 66
+  - - 2014
+    - 2046
+  - - 3730
+    - 3762
+  - - 1420
+    - 1452
+  - - 727
+    - 759
+  - - 2377
+    - 2409
+  - - 3070
+    - 3102
+  - - 1123
+    - 1155
+  - - 3961
+    - 3993
+- source_case_id: NEG_SUN_case12
+  split: train
+  synthetic_case_ids:
+  - NEG_SUN_case12_v008
+  - NEG_SUN_case12_v011
+  - NEG_SUN_case12_v052
+  - NEG_SUN_case12_v150
+  - NEG_SUN_case12_v156
+  - NEG_SUN_case12_v092
+  - NEG_SUN_case12_v128
+  - NEG_SUN_case12_v130
+  - NEG_SUN_case12_v108
+  - NEG_SUN_case12_v062
+  - NEG_SUN_case12_v179
+  - NEG_SUN_case12_v146
+  - NEG_SUN_case12_v171
+  - NEG_SUN_case12_v169
+  - NEG_SUN_case12_v070
+  - NEG_SUN_case12_v046
+  - NEG_SUN_case12_v094
+  - NEG_SUN_case12_v076
+  - NEG_SUN_case12_v087
+  - NEG_SUN_case12_v022
+  - NEG_SUN_case12_v140
+  - NEG_SUN_case12_v167
+  - NEG_SUN_case12_v148
+  - NEG_SUN_case12_v098
+  - NEG_SUN_case12_v030
+  - NEG_SUN_case12_v048
+  - NEG_SUN_case12_v113
+  - NEG_SUN_case12_v116
+  chunk_spans:
+  - - 265
+    - 297
+  - - 364
+    - 396
+  - - 1717
+    - 1749
+  - - 4951
+    - 4983
+  - - 5149
+    - 5181
+  - - 3037
+    - 3069
+  - - 4225
+    - 4257
+  - - 4291
+    - 4323
+  - - 3565
+    - 3597
+  - - 2047
+    - 2079
+  - - 5908
+    - 5940
+  - - 4819
+    - 4851
+  - - 5644
+    - 5676
+  - - 5578
+    - 5610
+  - - 2311
+    - 2343
+  - - 1519
+    - 1551
+  - - 3103
+    - 3135
+  - - 2509
+    - 2541
+  - - 2872
+    - 2904
+  - - 727
+    - 759
+  - - 4621
+    - 4653
+  - - 5512
+    - 5544
+  - - 4885
+    - 4917
+  - - 3235
+    - 3267
+  - - 991
+    - 1023
+  - - 1585
+    - 1617
+  - - 3730
+    - 3762
+  - - 3829
+    - 3861
+- source_case_id: NEG_SUN_case13
+  split: val
+  synthetic_case_ids:
+  - NEG_SUN_case13_v137
+  - NEG_SUN_case13_v159
+  - NEG_SUN_case13_v169
+  - NEG_SUN_case13_v037
+  - NEG_SUN_case13_v142
+  - NEG_SUN_case13_v096
+  chunk_spans:
+  - - 4522
+    - 4554
+  - - 5248
+    - 5280
+  - - 5578
+    - 5610
+  - - 1222
+    - 1254
+  - - 4687
+    - 4719
+  - - 3169
+    - 3201
+- source_case_id: NEG_SUN_case2
+  split: val
+  synthetic_case_ids:
+  - NEG_SUN_case2_v165
+  - NEG_SUN_case2_v280
+  - NEG_SUN_case2_v119
+  chunk_spans:
+  - - 5446
+    - 5478
+  - - 9241
+    - 9273
+  - - 3928
+    - 3960
+- source_case_id: NEG_SUN_case3
+  split: test
+  synthetic_case_ids:
+  - NEG_SUN_case3_v030
+  - NEG_SUN_case3_v149
+  - NEG_SUN_case3_v009
+  chunk_spans:
+  - - 991
+    - 1023
+  - - 4918
+    - 4950
+  - - 298
+    - 330
+- source_case_id: NEG_SUN_case4
+  split: val
+  synthetic_case_ids:
+  - NEG_SUN_case4_v068
+  - NEG_SUN_case4_v370
+  - NEG_SUN_case4_v077
+  - NEG_SUN_case4_v352
+  - NEG_SUN_case4_v038
+  - NEG_SUN_case4_v402
+  chunk_spans:
+  - - 2245
+    - 2277
+  - - 12211
+    - 12243
+  - - 2542
+    - 2574
+  - - 11617
+    - 11649
+  - - 1255
+    - 1287
+  - - 13267
+    - 13299
+- source_case_id: NEG_SUN_case5
+  split: test
+  synthetic_case_ids:
+  - NEG_SUN_case5_v172
+  - NEG_SUN_case5_v191
+  - NEG_SUN_case5_v006
+  - NEG_SUN_case5_v001
+  - NEG_SUN_case5_v180
+  - NEG_SUN_case5_v093
+  chunk_spans:
+  - - 5677
+    - 5709
+  - - 6304
+    - 6336
+  - - 199
+    - 231
+  - - 34
+    - 66
+  - - 5941
+    - 5973
+  - - 3070
+    - 3102
+- source_case_id: NEG_SUN_case9
+  split: test
+  synthetic_case_ids:
+  - NEG_SUN_case9_v173
+  - NEG_SUN_case9_v205
+  - NEG_SUN_case9_v032
+  - NEG_SUN_case9_v008
+  - NEG_SUN_case9_v178
+  - NEG_SUN_case9_v091
+  chunk_spans:
+  - - 5710
+    - 5742
+  - - 6766
+    - 6798
+  - - 1057
+    - 1089
+  - - 265
+    - 297
+  - - 5875
+    - 5907
+  - - 3004
+    - 3036
+generated_at: '2026-10-15T07:52:30.525896+00:00'
+hashes:
+  train: e82d2f21deb69303031fe4a0820f551d5877157497afe8a32e7c27ec609fcdc5
+  val: 5382a7e11a16c0f0331321da679493819ca65a9927e986218484ec2eb3de0533
+  test: 3fa73fb536ac6e85ddb1ae9872bfbb28515143eaff5892ee58c32907c66872bd
+counts:
+  train:
+    frames: 462
+    pos: 231
+    neg: 231
+    pos_cases: 7
+    neg_cases: 7
+  val:
+    frames: 990
+    pos: 495
+    neg: 495
+    pos_cases: 15
+    neg_cases: 15
+  test:
+    frames: 990
+    pos: 495
+    neg: 495
+    pos_cases: 15
+    neg_cases: 15
+summary_by_split:
+- split: val
+  pos_cases: 15
+  neg_cases: 15
+  frames: 990
+  pos_frames: 495
+  neg_frames: 495
+  label_counts:
+    pos: 495
+    neg: 495
+  flat_cases: 5
+  polypoid_cases: 10
+- split: test
+  pos_cases: 15
+  neg_cases: 15
+  frames: 990
+  pos_frames: 495
+  neg_frames: 495
+  label_counts:
+    pos: 495
+    neg: 495
+  flat_cases: 5
+  polypoid_cases: 10
+- split: train
+  pos_cases: 7
+  neg_cases: 7
+  frames: 462
+  pos_frames: 231
+  neg_frames: 231
+case_lengths:
+  33: 74
+inputs:
+  sun:
+    frames_parquet_sha256: c290806870b84979cfb5fbcdb21757f4a7aab6b06a9742c0f566af673c5158e4
+    cases_parquet_sha256: 6b54655e8fef9aecf1618ff159d146e618c4033d2f0c1823dc5958fb6c915565
+parent_pack:
+  name: sun_full
+  path: /workspace/data_packs_v3_staging/k2/base
+  manifest_sha256: b4b9786e9b9e66de5c301aec97afbb2a8843420be8fd80f9d247228186800403
+  hashes:
+    test: 3fa73fb536ac6e85ddb1ae9872bfbb28515143eaff5892ee58c32907c66872bd
+    train: 788d7e7ef939781dcf70117cc90672aab34443cbb794f2caf0f395f411d2018d
+    val: 5382a7e11a16c0f0331321da679493819ca65a9927e986218484ec2eb3de0533
+subset:
+  percent: 10
+  seed: 13
+  source_pool: train
+  canonical: true
