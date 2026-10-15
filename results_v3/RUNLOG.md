@@ -106,3 +106,14 @@ rewritten). The final control runs completed. Integrity check afterwards: `git f
 branch equal to `origin/refactoring`, `ssl4polyp-ft` loads torch/timm with CUDA, section 6 checks
 re-run on all smoke2 and investigation runs (205/205 pass), the 11 kept checkpoints load, and the v2
 comparison table reproduces exactly.
+
+## Learning-rate selection (SAP v3.1)
+
+### 2026-10-15: SAP v3.1 registered before the sweep
+
+| Document | Path | SHA-256 |
+|---|---|---|
+| SAP v3.1 | `docs/v3/plan_analisis_estadistico_v3_1.md` | `a2fc1b8325885216a15b410792f689acf9805267f43342e8fb9b28968818e7bd` |
+
+Supersedes SAP v3 (`f2120a09…cc0474`); adds section 10 (learning-rate selection) and deviation 9.1
+(`results_v3/SAP_deviations.md`). Registered before any sweep run.

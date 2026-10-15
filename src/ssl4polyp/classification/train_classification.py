@@ -4398,7 +4398,7 @@ def apply_experiment_config(
     if "optimizer" in experiment_cfg and experiment_cfg["optimizer"].lower() != "adamw":
         raise ValueError("Only AdamW optimizer is currently supported")
 
-    args.lr = experiment_cfg.get("lr", args.lr)
+    args.lr = float(experiment_cfg.get("lr", args.lr))  # YAML 1.1 reads "1e-4" as a string
     args.weight_decay = experiment_cfg.get("weight_decay", getattr(args, "weight_decay", 0.05))
     args.batch_size = experiment_cfg.get("batch_size", args.batch_size)
     args.epochs = experiment_cfg.get("epochs", args.epochs)
@@ -7674,28 +7674,36 @@ def train(rank, args):
         if best_epoch is not None:
             final_eval_epoch = int(best_epoch)
 
-        test_outputs_path = ckpt_stem.parent / f"{ckpt_stem.name}_test_outputs.csv"
-        final_test_metrics = test(
-            model_to_test,
-            rank,
-            test_dataloader,
-            final_eval_epoch,
-            perf_fn,
-            log_path,
-            metric_fns=aux_metric_fns,
-            loss_fn=loss_fn,
-            loss_mode=loss_mode,
-            split_name="Test",
-            return_outputs=True,
-            tau=final_tau,
-            tau_info=final_tau_info,
-            max_batches=args.limit_test_batches,
-            morphology_eval=morphology_eval,
-            eval_context=eval_context_lookup.get("Test"),
-            save_outputs_path=test_outputs_path,
-        )
-        _record_test_outputs_digest(args, test_outputs_path)
-        args.test_outputs = _file_reference(test_outputs_path, args)
+        skip_test_eval = bool(getattr(args, "skip_test_eval", False))
+        if skip_test_eval:
+            # Validation-only runs (e.g. the learning-rate sweep): the test split is never scored.
+            skip_line = "Test evaluation skipped (--skip-test-eval); no test metrics or outputs are produced."
+            print(skip_line)
+            _append_log_lines(log_path, [skip_line])
+            final_test_metrics = {}
+        else:
+            test_outputs_path = ckpt_stem.parent / f"{ckpt_stem.name}_test_outputs.csv"
+            final_test_metrics = test(
+                model_to_test,
+                rank,
+                test_dataloader,
+                final_eval_epoch,
+                perf_fn,
+                log_path,
+                metric_fns=aux_metric_fns,
+                loss_fn=loss_fn,
+                loss_mode=loss_mode,
+                split_name="Test",
+                return_outputs=True,
+                tau=final_tau,
+                tau_info=final_tau_info,
+                max_batches=args.limit_test_batches,
+                morphology_eval=morphology_eval,
+                eval_context=eval_context_lookup.get("Test"),
+                save_outputs_path=test_outputs_path,
+            )
+            _record_test_outputs_digest(args, test_outputs_path)
+            args.test_outputs = _file_reference(test_outputs_path, args)
 
         # Validation scores of the evaluated (best) weights, exported per frame (spec v3.1, 1.3).
         final_val_metrics: Optional[Dict[str, Any]] = None
@@ -7723,7 +7731,7 @@ def train(rank, args):
             args.val_outputs = _file_reference(val_outputs_path, args)
 
         e4_unadapted = getattr(args, "e4_arms_unadapted", None)
-        if isinstance(e4_unadapted, Mapping) and final_val_metrics is not None:
+        if isinstance(e4_unadapted, Mapping) and final_val_metrics is not None and not skip_test_eval:
             # E4 arms C and D (spec v3.1, 3.5) on the same evaluation split as arms A and B.
             train_outputs_path = ckpt_stem.parent / f"{ckpt_stem.name}_train_outputs.csv"
             test(
@@ -8349,6 +8357,11 @@ def get_args():
             "Maximum number of validation batches per epoch for smoke tests. "
             "Values <= 0 disable this cap."
         ),
+    )
+    parser.add_argument(
+        "--skip-test-eval",
+        action="store_true",
+        help="Never evaluate the test split (validation-only runs such as the learning-rate sweep).",
     )
     parser.add_argument(
         "--limit-test-batches",
