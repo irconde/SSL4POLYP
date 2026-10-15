@@ -1,0 +1,21 @@
+{
+  "phase": "sun_full",
+  "expected_runs": 45,
+  "complete_runs": 45,
+  "checks": 495,
+  "checks_passed": 495,
+  "checks_by_criterion": {
+    "reload": 45,
+    "epoch": 45,
+    "ckpt_sha": 45,
+    "csv_columns": 90,
+    "pred": 90,
+    "json_vs_csv": 90,
+    "tau": 45,
+    "partition_seed": 45
+  },
+  "git_commits": {
+    "8fdbb6b6a5124b3cda1f5251695b28fc161a4640": 45
+  },
+  "problems": []
+}

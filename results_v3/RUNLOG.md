@@ -229,3 +229,51 @@ and regimes on the same evaluation split), never between packs or budgets. Refer
 Environment `ssl4polyp-ft`, packs `v3-cmpb-packs2`, SAP v3.2c, launcher `scripts/v3/run_campaign.py`
 (one run per GPU, GPUs 0 and 1, shared queue), outputs `checkpoints_v3/campaign/`, logs and events
 `results_v3/campaign/<phase>/`, verification `scripts/v3/verify_phase.py`.
+
+### Phase a: sun_full (2026-10-15)
+
+- 10:23:41 → 12:53:53 (2 h 30 min wall), GPUs 0 (23 runs) and 1 (22 runs), 4.94 GPU-hours, commit `8fdbb6b`.
+- 45/45 runs complete, 45 attempts, no failures, no retries, no interrupted runs.
+- Section 6 checks (`results_v3/campaign/sun_full/verification.json`): 495/495 pass (reload, threshold
+  epoch = evaluated epoch, checkpoint SHA-256, CSV columns and `pred`, JSON = CSV recomputation,
+  primary τ recomputed from the val CSV, partition/seed). One best-epoch checkpoint kept per run (45).
+- Incidents: none.
+
+### Phase b: E2 and E3 evaluations (2026-10-15)
+
+- 12:55:03 → 13:01:33 (6.5 min wall), GPUs 0 (45) and 1 (45), 0.22 GPU-hours, commit `8fdbb6b`.
+- 90/90 runs complete (E2 45, E3 45), no failures, no retries.
+- Section 6 checks (`results_v3/campaign/e2e3/verification.json`): 540/540 pass (threshold epoch = parent
+  checkpoint epoch, parent checkpoint SHA-256, CSV columns and `pred`, JSON = CSV recomputation,
+  partition/seed). No training, so no reload check applies.
+- Extra integrity check: the E2 test scores equal the sun_full test scores of the same model for 45/45 runs.
+- Incidents: none.
+
+### Phase c: E1 (2026-10-15)
+
+- 13:02:45 → 20:06:33 (7 h 04 min wall), GPUs 0 (107 runs) and 1 (118 runs), 14.01 GPU-hours, commit `8fdbb6b`.
+- 225/225 runs complete, 225 attempts, no failures, no retries, no interrupted runs.
+- Section 6 checks (`results_v3/campaign/e1/verification.json`): 2,475/2,475 pass. One best-epoch
+  checkpoint kept per run (225). Disk: `checkpoints_v3/campaign` 260 GB, 1.3 TB free.
+- Incidents: none.
+
+### Phase d: E4, four arms (2026-10-15)
+
+- 20:10:04 → 20:58:00 (48 min wall), GPUs 0 (92 runs) and 1 (88 runs), 1.59 GPU-hours, commit `8fdbb6b`.
+- 180/180 runs complete, 180 attempts, no failures, no retries, no interrupted runs.
+- Section 6 checks (`results_v3/campaign/e4/verification.json`): 4,500/4,500 pass, including the JSON =
+  CSV recomputation of arms A–D and the recomputed τ of arms B and D. Arm D kept the inherited τ
+  (single-class support validation) in 0/180 runs.
+- Incidents: none.
+
+### Campaign (three regimes) closed
+
+- 540/540 runs (sun_full 45, E2 45, E3 45, E1 225, E4 180) on commit `8fdbb6b`; 8,010/8,010 section 6
+  checks pass; 0 failed attempts, 0 retries, 0 interrupted runs; 20.76 GPU-hours, 10:23–20:58 (10 h 35 min
+  wall, including verification between phases).
+- Records: `results_v3/verification/campaign3_runs.csv` (one row per run: GPU, attempt, duration,
+  evaluated checkpoint, epoch and SHA-256), `campaign3_results_manifest.csv` (path, size and SHA-256 of the
+  8,370 result files: metrics JSONs, per-frame CSVs, logs, configs; 539 MB kept under
+  `checkpoints_v3/campaign/`, not in git), per-phase `campaign3_<phase>_verification.json` and `_events.jsonl`.
+  Weights: 450 best-epoch checkpoints in `checkpoints_v3/campaign/` (not in git).
+- No metric was computed or reported; the analysis follows SAP v3.2c in a later phase.
