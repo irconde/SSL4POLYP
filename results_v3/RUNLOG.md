@@ -685,3 +685,14 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   unlabelled images; the per-iteration half-cycle cosine schedule (`lr_sched.adjust_learning_rate` at
   `epoch + iter / 776`, lr 1e-3, min_lr 0, 40 warmup epochs, 400 epochs) is therefore the same. The
   HyperKvasir training logs are not available, so this follows from the stored arguments and dataset size.
+
+### 2026-10-16: SSL-imnet-matched MAE pretraining launched
+
+- Commit `fdb1ee1` (code `32ca324`), `ssl4polyp-pretrain` (torch 2.4.1, timm 0.3.2), GPU 1,
+  `checkpoints_v3/pretrain/mae_imnet_matched/launch.sh` (confirmed arguments; `resume` empty, `start_epoch` 0),
+  outputs `checkpoints_v3/pretrain/mae_imnet_matched/{ckpts,tb,train.log}`. The failed launch log was moved to
+  `failed_launch_20261016_torch_six.log`. Start 12:08:08; TF32 matmul = True, cuDNN = True; actual lr 1.00e-03,
+  effective batch 256.
+- Epoch 0: 776 iterations, 2 min 39 s (0.205 s/it); mean train loss 1.212950 (equal to the scratch probe,
+  1.2130, run with the same seed). Estimated duration: 400 × ~2.65 min ≈ 17.7 h plus checkpoint saves,
+  about 18 h (expected end around 06:00 on 2026-10-17).
