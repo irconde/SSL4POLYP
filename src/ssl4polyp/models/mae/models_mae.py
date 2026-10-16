@@ -16,7 +16,10 @@ import torch.nn as nn
 
 from timm.models.vision_transformer import PatchEmbed, Block
 
-from .util.pos_embed import get_2d_sincos_pos_embed
+try:  # imported as part of the ssl4polyp package
+    from .util.pos_embed import get_2d_sincos_pos_embed
+except ImportError:  # main_pretrain.py run as a script (util/ on sys.path)
+    from util.pos_embed import get_2d_sincos_pos_embed
 
 
 class MaskedAutoencoderViT(nn.Module):

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
-from torch._six import inf
+from math import inf  # torch._six (removed in torch 2.x) exposed the same float("inf")
 
 
 class SmoothedValue(object):
