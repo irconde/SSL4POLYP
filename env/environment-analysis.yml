@@ -1,0 +1,18 @@
+# Campaign v3 statistical analysis (SAP v3.2c): analysis/v3/. No torch, no GPU.
+# Exact solved versions: environment-analysis.lock.yml, pip_freeze-analysis.txt, r_packages-analysis.txt.
+name: ssl4polyp-analysis
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy=1.26.4
+  - pandas=2.2.3
+  - scipy=1.17.1
+  - matplotlib=3.9.4
+  - scikit-learn=1.5.2
+  - pyyaml
+  - pytest
+  - r-base=4.4.3
+  - r-lme4=2.0.6
+  - r-lmertest=3.2.1
+  - r-jsonlite

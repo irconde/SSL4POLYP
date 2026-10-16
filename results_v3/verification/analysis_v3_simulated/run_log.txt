@@ -1,0 +1,10 @@
+[load] 720 runs; regimes=['sup_imnet', 'ssl_imnet', 'ssl_colon', 'ssl_imnet_matched']; partitions=[1, 2, 3, 4, 5]; seeds=[13, 29, 47] (4s)
+[metrics] 3060 views (51s)
+[models] 2313 fits (93s)
+[bootstrap] e1: 246 contrasts, units {('sun', 1): {'y0': 15, 'y1': 15}, ('sun', 2): {'y0': 15, 'y1': 15}, ('sun', 3): {'y0': 15, 'y1': 15}, ('sun', 4): {'y0': 15, 'y1': 15}, ('sun', 5): {'y0': 15, 'y1': 15}} (186s)
+[bootstrap] e2: 108 contrasts, units {('sun', 1): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 2): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 3): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 4): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 5): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}} (238s)
+[bootstrap] e3: 29 contrasts, units {'polypgen': {'y0': 6, 'y1': 6}} (248s)
+[bootstrap] e4: 1356 contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (850s)
+[bootstrap] neg: 31 contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (905s)
+[bootstrap] sun_full: 33 contrasts, units {('sun', 1): {'y0': 15, 'y1': 15}, ('sun', 2): {'y0': 15, 'y1': 15}, ('sun', 3): {'y0': 15, 'y1': 15}, ('sun', 4): {'y0': 15, 'y1': 15}, ('sun', 5): {'y0': 15, 'y1': 15}} (924s)
+report: results_v3/verification/analysis_v3_simulated/report.md

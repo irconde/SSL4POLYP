@@ -1,0 +1,42 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.17, pytest-9.1.1, pluggy-1.7.0 -- /home/irconde/miniforge3/envs/ssl4polyp-analysis/bin/python
+rootdir: /home/irconde/workspace/code/SSL4POLYP
+configfile: pyproject.toml
+collecting ... collected 23 items
+
+analysis/v3/tests/test_metrics_and_design.py::test_binary_module_is_the_campaign_file PASSED [  4%]
+analysis/v3/tests/test_metrics_and_design.py::test_view_metrics_equal_binary_on_the_csv PASSED [  8%]
+analysis/v3/tests/test_metrics_and_design.py::test_e2_strata_and_negative_source_views PASSED [ 13%]
+analysis/v3/tests/test_metrics_and_design.py::test_aulc_weights_equal_normalised_trapezoid PASSED [ 17%]
+analysis/v3/tests/test_metrics_and_design.py::test_per_polyp_counts_bootstrap_copies_as_distinct_cases PASSED [ 21%]
+analysis/v3/tests/test_metrics_and_design.py::test_bootstrap_is_reproducible_and_independent_of_workers PASSED [ 26%]
+analysis/v3/tests/test_mixed_and_rules.py::test_lmer_matches_balanced_anova_satterthwaite PASSED [ 30%]
+analysis/v3/tests/test_mixed_and_rules.py::test_fallback_when_partition_variance_is_zero PASSED [ 34%]
+analysis/v3/tests/test_mixed_and_rules.py::test_single_partition_uses_seed_t_test_and_constant_data_is_flagged PASSED [ 39%]
+analysis/v3/tests/test_mixed_and_rules.py::test_holm_matches_r_p_adjust PASSED [ 43%]
+analysis/v3/tests/test_mixed_and_rules.py::test_double_rule_and_holm_family_of_seven PASSED [ 47%]
+analysis/v3/tests/test_mixed_and_rules.py::test_holm_over_six_while_h2_is_pending PASSED [ 52%]
+analysis/v3/tests/test_simulated_analysis.py::test_h2_pending_without_matched_regime PASSED [ 56%]
+analysis/v3/tests/test_simulated_analysis.py::test_h2_and_holm_over_seven_with_matched_regime PASSED [ 60%]
+analysis/v3/tests/test_simulated_analysis.py::test_a_effects_recovered_within_intervals PASSED [ 65%]
+analysis/v3/tests/test_simulated_analysis.py::test_b_null_scenario_does_not_confirm_systematically PASSED [ 69%]
+analysis/v3/tests/test_simulated_analysis.py::test_c_holm_and_double_rule_applied_in_every_repetition PASSED [ 73%]
+analysis/v3/tests/test_simulated_analysis.py::test_d_fallback_rule_follows_singularity PASSED [ 78%]
+analysis/v3/tests/test_structure.py::test_all_runs_load_and_checks_pass PASSED [ 82%]
+analysis/v3/tests/test_structure.py::test_matched_regime_in_separate_root PASSED [ 86%]
+analysis/v3/tests/test_structure.py::test_csv_columns_and_files PASSED   [ 91%]
+analysis/v3/tests/test_structure.py::test_split_sizes_match_the_real_packs PASSED [ 95%]
+analysis/v3/tests/test_structure.py::test_same_layout_and_headers_as_the_real_campaign PASSED [100%]
+
+============================= slowest 10 durations =============================
+3969.71s setup    analysis/v3/tests/test_simulated_analysis.py::test_a_effects_recovered_within_intervals
+110.34s call     analysis/v3/tests/test_simulated_analysis.py::test_h2_and_holm_over_seven_with_matched_regime
+83.79s call     analysis/v3/tests/test_simulated_analysis.py::test_h2_pending_without_matched_regime
+26.06s setup    analysis/v3/tests/test_metrics_and_design.py::test_view_metrics_equal_binary_on_the_csv
+11.43s call     analysis/v3/tests/test_metrics_and_design.py::test_view_metrics_equal_binary_on_the_csv
+11.23s setup    analysis/v3/tests/test_simulated_analysis.py::test_h2_pending_without_matched_regime
+10.59s call     analysis/v3/tests/test_metrics_and_design.py::test_e2_strata_and_negative_source_views
+3.24s call     analysis/v3/tests/test_structure.py::test_all_runs_load_and_checks_pass
+2.44s call     analysis/v3/tests/test_structure.py::test_split_sizes_match_the_real_packs
+1.11s call     analysis/v3/tests/test_mixed_and_rules.py::test_fallback_when_partition_variance_is_zero
+======================= 23 passed in 4233.64s (1:10:33) ========================

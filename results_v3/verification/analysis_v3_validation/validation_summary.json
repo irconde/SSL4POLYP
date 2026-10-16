@@ -1,0 +1,263 @@
+{
+ "effects": {
+  "reps": 6,
+  "family_wise_any_confirmed": 1.0,
+  "confirmations_per_test": 1.0,
+  "clipped_targets_total": 0,
+  "per_hypothesis": {
+   "H1": {
+    "reps": 6,
+    "effect": 0.04,
+    "mean_estimate": 0.04028802493374251,
+    "bias": 0.00028802493374250937,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.0
+   },
+   "H2": {
+    "reps": 6,
+    "effect": 0.03,
+    "mean_estimate": 0.027222657231738907,
+    "bias": -0.002777342768261089,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 0.6666666666666666,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.3333333333333333
+   },
+   "H3": {
+    "reps": 6,
+    "effect": 0.07,
+    "mean_estimate": 0.07023841104649185,
+    "bias": 0.00023841104649184827,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.6666666666666666
+   },
+   "H4": {
+    "reps": 6,
+    "effect": 0.05,
+    "mean_estimate": 0.05196270485172089,
+    "bias": 0.001962704851720877,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 0.6666666666666666,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.3333333333333333
+   },
+   "H5": {
+    "reps": 6,
+    "effect": -0.08,
+    "mean_estimate": -0.0771732274810237,
+    "bias": 0.0028267725189763,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.0
+   },
+   "H6": {
+    "reps": 6,
+    "effect": 0.04,
+    "mean_estimate": 0.04009696195932097,
+    "bias": 9.696195932096946e-05,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 0.8333333333333334,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.16666666666666666
+   },
+   "H7": {
+    "reps": 6,
+    "effect": 0.08,
+    "mean_estimate": 0.08055356117749342,
+    "bias": 0.0005535611774934238,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.0
+   }
+  }
+ },
+ "no_partition_variance": {
+  "reps": 4,
+  "family_wise_any_confirmed": 1.0,
+  "confirmations_per_test": 1.0,
+  "clipped_targets_total": 0,
+  "per_hypothesis": {
+   "H1": {
+    "reps": 4,
+    "effect": 0.04,
+    "mean_estimate": 0.03859325764810533,
+    "bias": -0.001406742351894667,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.5
+   },
+   "H2": {
+    "reps": 4,
+    "effect": 0.03,
+    "mean_estimate": 0.027542540060618202,
+    "bias": -0.0024574599393817967,
+    "model_ci_coverage": 0.75,
+    "boot_ci_coverage": 0.75,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.5
+   },
+   "H3": {
+    "reps": 4,
+    "effect": 0.07,
+    "mean_estimate": 0.06765962656871749,
+    "bias": -0.0023403734312825285,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.0
+   },
+   "H4": {
+    "reps": 4,
+    "effect": 0.05,
+    "mean_estimate": 0.04772626147054063,
+    "bias": -0.002273738529459368,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.25
+   },
+   "H5": {
+    "reps": 4,
+    "effect": -0.08,
+    "mean_estimate": -0.07975713436747126,
+    "bias": 0.00024286563252875343,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.5
+   },
+   "H6": {
+    "reps": 4,
+    "effect": 0.04,
+    "mean_estimate": 0.040947067518146994,
+    "bias": 0.0009470675181469951,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.5
+   },
+   "H7": {
+    "reps": 4,
+    "effect": 0.08,
+    "mean_estimate": 0.07950657059768738,
+    "bias": -0.0004934294023126139,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 1.0,
+    "holm_significant_rate": 1.0,
+    "fallback_rate": 0.5
+   }
+  }
+ },
+ "null": {
+  "reps": 20,
+  "family_wise_any_confirmed": 0.15,
+  "confirmations_per_test": 0.02142857142857143,
+  "clipped_targets_total": 0,
+  "per_hypothesis": {
+   "H1": {
+    "reps": 20,
+    "effect": 0.0,
+    "mean_estimate": 0.0003696398624289851,
+    "bias": 0.0003696398624289851,
+    "model_ci_coverage": 0.85,
+    "boot_ci_coverage": 0.45,
+    "confirmation_rate": 0.1,
+    "holm_significant_rate": 0.1,
+    "fallback_rate": 0.25
+   },
+   "H2": {
+    "reps": 20,
+    "effect": 0.0,
+    "mean_estimate": 0.0007035420100145556,
+    "bias": 0.0007035420100145556,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 0.5,
+    "confirmation_rate": 0.0,
+    "holm_significant_rate": 0.0,
+    "fallback_rate": 0.15
+   },
+   "H3": {
+    "reps": 20,
+    "effect": 0.0,
+    "mean_estimate": 0.0015184573002754755,
+    "bias": 0.0015184573002754755,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 0.9,
+    "confirmation_rate": 0.0,
+    "holm_significant_rate": 0.0,
+    "fallback_rate": 0.4
+   },
+   "H4": {
+    "reps": 20,
+    "effect": 0.0,
+    "mean_estimate": 0.0007934175854656435,
+    "bias": 0.0007934175854656435,
+    "model_ci_coverage": 1.0,
+    "boot_ci_coverage": 0.6,
+    "confirmation_rate": 0.0,
+    "holm_significant_rate": 0.0,
+    "fallback_rate": 0.25
+   },
+   "H5": {
+    "reps": 20,
+    "effect": 0.0,
+    "mean_estimate": 0.00019520454963483828,
+    "bias": 0.00019520454963483828,
+    "model_ci_coverage": 0.95,
+    "boot_ci_coverage": 1.0,
+    "confirmation_rate": 0.0,
+    "holm_significant_rate": 0.0,
+    "fallback_rate": 0.2
+   },
+   "H6": {
+    "reps": 20,
+    "effect": 0.0,
+    "mean_estimate": -0.0005104324296721808,
+    "bias": -0.0005104324296721808,
+    "model_ci_coverage": 0.95,
+    "boot_ci_coverage": 0.05,
+    "confirmation_rate": 0.0,
+    "holm_significant_rate": 0.0,
+    "fallback_rate": 0.1
+   },
+   "H7": {
+    "reps": 20,
+    "effect": 0.0,
+    "mean_estimate": 0.0016358651153345377,
+    "bias": 0.0016358651153345377,
+    "model_ci_coverage": 0.85,
+    "boot_ci_coverage": 0.2,
+    "confirmation_rate": 0.05,
+    "holm_significant_rate": 0.05,
+    "fallback_rate": 0.15
+   }
+  }
+ },
+ "settings": {
+  "B": 200,
+  "null_reps": 20,
+  "effect_reps": 6,
+  "nopart_reps": 4
+ }
+}
