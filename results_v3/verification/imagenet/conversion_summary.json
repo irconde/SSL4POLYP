@@ -1,0 +1,55 @@
+{
+  "images_in_parquet": 1281167,
+  "class_folders": 1000,
+  "files_on_disk": 1281167,
+  "labels": 1000,
+  "label_to_synset_one_to_one": true,
+  "label_order_is_sorted_synsets": true,
+  "known_classes": {
+    "0": {
+      "expected": "n01440764",
+      "found": "n01440764",
+      "name": "tench",
+      "ok": true
+    },
+    "1": {
+      "expected": "n01443537",
+      "found": "n01443537",
+      "name": "goldfish",
+      "ok": true
+    },
+    "2": {
+      "expected": "n01484850",
+      "found": "n01484850",
+      "name": "great white shark",
+      "ok": true
+    },
+    "207": {
+      "expected": "n02099601",
+      "found": "n02099601",
+      "name": "golden retriever",
+      "ok": true
+    },
+    "999": {
+      "expected": "n15075141",
+      "found": "n15075141",
+      "name": "toilet tissue",
+      "ok": true
+    }
+  },
+  "names_without_original": 0,
+  "write_status": {
+    "ok": 1281167
+  },
+  "pil_formats": {
+    "JPEG": 1281166,
+    "PNG": 1
+  },
+  "pil_modes": {
+    "RGB": 1261196,
+    "L": 19970,
+    "RGBA": 1
+  },
+  "pil_status_ok": 1281167,
+  "problems": []
+}
