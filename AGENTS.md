@@ -13,6 +13,7 @@ This repository hosts the reference implementation for the paper *Evaluating Dom
 - `requirements*.txt`, `environment.yml`: Locked environments for reproducibility (`env/` holds the campaign v3 environment).
 - `docs/v3/`: Campaign v3 retraining specification and pre-registered statistical analysis plan.
 - `checkpoints_v3/`, `results_v3/`: Campaign v3 weights and run records (`results_v3/RUNLOG.md` is the phase log); nothing from earlier campaigns is written there.
+- `analysis/v3/`: Campaign v3 statistical analysis (SAP v3.2c), simulator and its tests; runs in the separate `ssl4polyp-analysis` environment (`env/environment-analysis.yml`), see `analysis/v3/README.md`.
 
 ## Source Tree Breakdown (`src/ssl4polyp`)
 - `classification/`: Fine-tuning and evaluation pipelines for classification experiments.

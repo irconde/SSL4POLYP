@@ -701,3 +701,24 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   by lexicographic name order, so from epoch 100 on (`checkpoint-105` sorts before `checkpoint-99`) recent
   non-milestone checkpoints are removed and only milestones (49, 99, 149, …, 399) and 95–99 remain. An
   interruption after epoch 100 would resume from the latest surviving checkpoint (up to ~50 epochs back).
+
+## Analysis code (SAP v3.2c), simulated data only
+
+### 2026-10-16: analysis code, environment and validation, tag `v3-cmpb-analysis-code`
+
+- Prepared during the SSL-imnet-matched pretraining; no GPU used. No analysis was run on the real results; the
+  real campaign files were read only for their file names and CSV headers.
+- Environment `ssl4polyp-analysis` (new; `ssl4polyp-ft` and `ssl4polyp-pretrain` untouched): Python 3.11.17,
+  R 4.4.3, lme4 2.0-6, lmerTest 3.2-1 (`env/environment-analysis.yml`, lock, pip freeze and R package list;
+  `env/README.md`).
+- Code `analysis/v3/` (`analysis/v3/README.md`): H1–H7 as in SAP sections 3–5 (paired differences, `lmer` with
+  Satterthwaite df, fallback t-test when singular or not converged, Holm, cluster bootstrap B = 2000 seed 12345,
+  double confirmation rule), all section 6 secondary and sensitivity analyses, tables and figures. Metrics from
+  `metrics/binary.py`. H2 is reported as pending (Holm over six, provisional) until SSL-imnet-matched runs exist.
+- Tests `analysis/v3/tests`: 23/23 pass (1 h 11 min), including a Monte Carlo on simulated campaigns with the
+  real structure (`results_v3/verification/analysis_v3_validation/VALIDATION.md`): effects recovered (|bias| ≤ 0.003,
+  model CI coverage 1.00, all confirmed in 6/6); null scenario 3/140 false confirmations per test and 3/20
+  repetitions with at least one (exact 95 % CI 0.03–0.38, not conclusive about the nominal 0.05); fallback used
+  in every singular fit.
+- Full run on one simulated campaign (effects scenario, B = 2000, 924 s):
+  `results_v3/verification/analysis_v3_simulated/`.

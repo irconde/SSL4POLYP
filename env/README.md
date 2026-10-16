@@ -6,7 +6,7 @@ Python 3.8.20, torch 2.4.1+cu121, torchvision 0.19.1+cu121, numpy 1.24.4 and sci
 | Environment | Files | Use | timm | Extra |
 |---|---|---|---|---|
 | `ssl4polyp-pretrain` | `environment-pretrain.yml`, `pip_freeze-pretrain.txt` | MAE pretraining of the SSL-imnet-matched regime only | 0.3.2 (patched, see below) | — |
-| `ssl4polyp-ft` | `environment-ft.yml`, `pip_freeze-ft.txt` | All fine-tuning and evaluation runs (sun_full, E1–E4) and the analysis | 0.4.12 | matplotlib 3.7.5 |
+| `ssl4polyp-ft` | `environment-ft.yml`, `pip_freeze-ft.txt` | All fine-tuning and evaluation runs (sun_full, E1–E4) | 0.4.12 | matplotlib 3.7.5 |
 
 `ssl4polyp-ft` is a clone of `ssl4polyp-pretrain` with `pip install --no-deps timm==0.4.12` and
 `pip install matplotlib==3.7.5` (which added contourpy, cycler, fonttools, importlib_resources,
@@ -69,3 +69,35 @@ Never downloaded at run time; every run checks the SHA-256 in `config/model/*.ya
   SHA-256 `ac104c0df8158c46754510e50495536fa6de9647e572e38b5659dc54f260b124`.
 - SSL-colon: `checkpoints/pretrained/vit_b/mae_hyperkvasir.pth`, `faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f`.
 - SSL-imnet: `checkpoints/pretrained/vit_b/mae_imagenet.pth`, `aec5f0b68e5f3193a00b07bc65a37440db549c15b36b8bea242606cc40c4bc5d`.
+
+## Analysis environment (`ssl4polyp-analysis`)
+
+Separate environment for the SAP v3.2c statistical analysis (`analysis/v3/`); it has no torch and uses no
+GPU. Created 2026-10-16 from conda-forge only, without touching `ssl4polyp-ft` or `ssl4polyp-pretrain`:
+
+```bash
+mamba create -n ssl4polyp-analysis -c conda-forge --override-channels python=3.11 numpy=1.26 pandas=2.2 \
+    scipy matplotlib=3.9 scikit-learn=1.5 pyyaml pytest r-base=4.4 r-lme4 r-lmertest r-jsonlite
+# or: conda env create -f env/environment-analysis.yml
+```
+
+| Component | Version |
+|---|---|
+| Python | 3.11.17 |
+| numpy / pandas / scipy | 1.26.4 / 2.2.3 / 1.17.1 |
+| scikit-learn / matplotlib | 1.5.2 / 3.9.4 |
+| R | 4.4.3 (OpenBLAS 0.3.34) |
+| lme4 / lmerTest / Matrix / numDeriv | 2.0-6 / 3.2-1 / 1.7-5 / 2016.8-1.1 |
+| pytest | 9.1.1 |
+
+Records: `environment-analysis.yml` (pinned spec), `environment-analysis.lock.yml` (full solved export),
+`pip_freeze-analysis.txt`, `r_packages-analysis.txt` (all installed R packages).
+
+- The mixed models run in R (`analysis/v3/R/fit_mixed.R`, `lmerTest::lmer`, REML, Satterthwaite df), called
+  from Python through the environment's `Rscript`.
+- All metrics come from `src/ssl4polyp/classification/metrics/binary.py`, loaded from its file
+  (`analysis/v3/metrics.py`) because the package's `metrics/__init__.py` imports torch. scikit-learn
+  differs from the campaign (1.0.2 there). Check on a simulated 4,578-frame CSV (2026-10-16): all
+  `binary.py` outputs (metrics at τ, counts, Brier, ECE) are bit-identical between the two environments
+  except AP, which differs by 1.1e-16 (floating-point summation order).
+- The package itself is not installed in this environment; run with `PYTHONPATH=.` from the repository root.
