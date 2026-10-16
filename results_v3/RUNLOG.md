@@ -639,3 +639,14 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   this block is unchanged since 2024-03-23 (same in `27e99ac` and HEAD), so it is the one used for HyperKvasir.
 - Not launched: running requires a code change to the timm version guard (or using the fine-tuning
   environment); decision requested.
+
+### 2026-10-16: timm version guard relaxed (decision: option A)
+
+- Commit `dfb766d`: `main_pretrain.py` now asserts `timm.__version__ in ("0.3.2", "0.4.12")`; nothing else changed.
+- Reason: `ad3fd41` (2025-09-27) had replaced the 0.3.2 guard by 0.4.12, which blocks the designated MAE
+  pretraining environment `ssl4polyp-pretrain` (timm 0.3.2), the version used for the HyperKvasir
+  (SSL-colon) pretraining.
+- Equivalence check (CPU, `mae_vit_base_patch16`, seed 0) between timm 0.3.2 and 0.4.12: same parameter
+  names and order (111,907,840 parameters); bit-identical initial weights (max |diff| = 0); identical
+  weight-decay groups (167 parameters without decay, 85 with 0.05); identical loss (1.864511489868164) and
+  gradients (max |diff| = 0) for one fixed forward/backward pass (fixed input and mask seeds).
