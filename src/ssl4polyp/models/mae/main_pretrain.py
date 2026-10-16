@@ -154,6 +154,11 @@ def main(args):
     cudnn.deterministic = True
     # warn_only=True logs when ops fall back to non-deterministic versions
     utils.enable_deterministic_algorithms()
+    # TF32 set explicitly (as in fine-tuning, config/base.yaml): on for matmul and cuDNN, the torch 1.9
+    # default; torch >= 1.12 leaves matmul TF32 off unless set.
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    print("TF32: matmul={}, cudnn={}".format(torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32))
 
     # simple augmentation
     transform_train = transforms.Compose([
