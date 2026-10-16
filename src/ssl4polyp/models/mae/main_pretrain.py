@@ -34,7 +34,10 @@ ensure_torch_container_abcs()
 
 import timm
 
-assert timm.__version__ == "0.4.12"  # version check
+# timm 0.3.2 (MAE pretraining environment, used for SSL-colon) and 0.4.12 (fine-tuning
+# environment) build the same MAE: identical parameters, initial weights, weight-decay groups,
+# loss and gradients (checked 2026-10-16, results_v3/RUNLOG.md).
+assert timm.__version__ in ("0.3.2", "0.4.12"), timm.__version__  # version check
 import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
