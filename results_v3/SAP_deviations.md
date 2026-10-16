@@ -24,3 +24,27 @@
 - **Deviation:** the v3.1 learning-rate sweep used the validation split of the v2 `sun_full`, which shares
   cases with the new k = 1. No test split was used in the sweep.
 - **Effect:** no change to H1–H7, metrics, statistical model or confirmation rules.
+
+## 2026-10-16: SSL-imnet-matched pretraining environment and code
+
+- Commit `32ca324` (authorised 2026-10-16), four changes to the MAE pretraining code:
+  1. `util/misc.py`: `from math import inf` replaces `from torch._six import inf` (same `float("inf")`,
+     used only in the gradient-norm helper).
+  2. `models_mae.py`: `pos_embed` imported relative to the package, falling back to `util.pos_embed`
+     when `main_pretrain.py` runs as a script.
+  3. `engine_pretrain.py`: `getattr(log_writer, "log_dir", None)` in a log message.
+  4. `main_pretrain.py`: TF32 set explicitly to matmul = True, cuDNN = True, as in fine-tuning.
+  None of the code changes alters the training computation. Changes 1–3 only make the script run; change 4
+  sets TF32 to the torch 1.9 default (it acts only on fp32 operations; AMP fp16 operations are unaffected),
+  i.e. it aligns the numerical setting with the SSL-colon pretraining rather than changing the algorithm.
+- PyTorch version: the `torch._six` import shows that SSL-colon (HyperKvasir) was pretrained with an earlier
+  PyTorch, probably 1.9 (RunPod documentation; the v2 environment record is torch 1.9.0+cu111). The
+  SSL-imnet-matched regime is pretrained with torch 2.4.1 (`ssl4polyp-pretrain`, timm 0.3.2) because torch
+  1.9 does not support the current GPUs (RTX 6000 Ada).
+- Iterations per epoch and learning-rate schedule: with 99,417 images, batch size 128 and `drop_last=True`
+  there are 776 iterations per epoch (observed in the probe), the same as for the 99,417 HyperKvasir
+  unlabelled images; the per-iteration half-cycle cosine schedule (`lr_sched.adjust_learning_rate` at
+  `epoch + iter / 776`, lr 1e-3, min_lr 0, 40 warmup epochs, 400 epochs) is therefore the same. The
+  HyperKvasir training logs are not available, so this follows from the stored arguments and dataset size.
+- **Effect on the SAP:** none on hypotheses, metrics or rules; the matched regime differs from SSL-colon in
+  the PyTorch version used for pretraining (2.4.1 vs, probably, 1.9), declared as a limitation.
