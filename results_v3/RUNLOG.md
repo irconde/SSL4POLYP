@@ -696,3 +696,8 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
 - Epoch 0: 776 iterations, 2 min 39 s (0.205 s/it); mean train loss 1.212950 (equal to the scratch probe,
   1.2130, run with the same seed). Estimated duration: 400 × ~2.65 min ≈ 17.7 h plus checkpoint saves,
   about 18 h (expected end around 06:00 on 2026-10-17).
+- Checkpoint management note (no effect on the computation): checkpoints go to `ckpts/ckpts/` every 10 epochs
+  and every 15 min (mid-epoch saves are named after the running epoch). `_cleanup_checkpoints` keeps the "last 5"
+  by lexicographic name order, so from epoch 100 on (`checkpoint-105` sorts before `checkpoint-99`) recent
+  non-milestone checkpoints are removed and only milestones (49, 99, 149, …, 399) and 95–99 remain. An
+  interruption after epoch 100 would resume from the latest surviving checkpoint (up to ~50 epochs back).
