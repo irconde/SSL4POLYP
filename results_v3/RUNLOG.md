@@ -615,3 +615,27 @@ b6b0afcf627311319967762cc760235e9e24582fba6ff3fb629187ba46f09597  data/train-002
 - List with the SHA-256 of every image: `results_v3/verification/imagenet/matched_99417_list.csv`,
   **SHA-256 of the list `2d987bb096b9c2f0a72be1337282d66a1e176eb4fb7de047cb4a7211230a5030`**. Image
   hashes recomputed from the files equal the conversion records for 99,417/99,417.
+
+### 2026-10-16: MAE pretraining code check (before launch) — stopped for a decision
+
+Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared with HEAD:
+`main_pretrain.py`, `engine_pretrain.py`, `models_mae.py`, `util/lr_sched.py` (unchanged),
+`util/misc.py`, `util/pos_embed.py`, `ssl4polyp/utils/__init__.py`, `ssl4polyp/_compat.py`.
+- Logging / checkpoints only: TensorBoard wrapper; per-epoch summary and read-only NaN/Inf gradient
+  check in `engine_pretrain.py`/`misc.py`; reductions in float64 for multi-GPU logging;
+  `weights_only=False` when resuming; timm `torch._six` shim moved to `_compat.py`;
+  `utils.enable_deterministic_algorithms()` = the same `torch.use_deterministic_algorithms(True, warn_only=True)`.
+- Numerically equivalent: `np.float` → `np.float64` in the positional embedding (same type);
+  relative → package import of `pos_embed` in `models_mae.py`.
+- **Environment guard changed:** `assert timm.__version__ == "0.3.2"` (present 2024-03-23 → 2025-09-26)
+  became `"0.4.12"` in `ad3fd41` (2025-09-27). All arguments stored in `mae_hyperkvasir.pth` existed by
+  2025-09-09, so HyperKvasir was pretrained with timm 0.3.2 code. The current script does not start in
+  `ssl4polyp-pretrain` (timm 0.3.2).
+- CPU check of the effect of timm (0.3.2 in ssl4polyp-pretrain vs 0.4.12 in ssl4polyp-ft): same parameter
+  names and order (111,907,840 parameters), bit-identical initial weights with seed 0, identical weight-decay
+  groups (167 without / 85 with decay), identical loss and gradients for one fixed forward/backward.
+- Augmentation and normalisation: `RandomResizedCrop(224, scale=(0.2, 1.0), interpolation=3 bicubic)`,
+  `RandomHorizontalFlip()`, `ToTensor()`, `Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])`;
+  this block is unchanged since 2024-03-23 (same in `27e99ac` and HEAD), so it is the one used for HyperKvasir.
+- Not launched: running requires a code change to the timm version guard (or using the fine-tuning
+  environment); decision requested.
