@@ -650,3 +650,16 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   names and order (111,907,840 parameters); bit-identical initial weights (max |diff| = 0); identical
   weight-decay groups (167 parameters without decay, 85 with 0.05); identical loss (1.864511489868164) and
   gradients (max |diff| = 0) for one fixed forward/backward pass (fixed input and mask seeds).
+
+### 2026-10-16: pretraining launch failed at import — stopped for a decision
+
+- Launch (`checkpoints_v3/pretrain/mae_imnet_matched/launch.sh`, ssl4polyp-pretrain, GPU 1) failed before
+  training: `util/misc.py` does `from torch._six import inf`, removed in torch 2.x. No checkpoint or
+  TensorBoard file was written (only `launch.sh` and `train.log`).
+- Probe on a scratch copy of the MAE code (repository untouched) found two more blockers:
+  `models_mae.py` uses a package-relative import (`from .util.pos_embed import …`, `1d0564b`, 2025-09-25)
+  that fails when `main_pretrain.py` runs as a script; `engine_pretrain.py` prints `log_writer.log_dir`,
+  which the TensorBoard wrapper does not expose.
+- With the three provisional fixes (`from math import inf`; absolute `util.pos_embed` import; tolerant
+  `log_dir` print) epoch 0 ran to completion: 776 iterations, 2 min 37 s (0.203 s/it), no other error.
+- Not launched; the three code changes need approval.
