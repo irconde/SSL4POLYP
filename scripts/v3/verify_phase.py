@@ -38,7 +38,11 @@ def main() -> int:
     parser.add_argument("phase", choices=sorted(rc.PHASES))
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.REGIMES))
+    parser.add_argument("--root", default=cp.CKPT_ROOT)
+    parser.add_argument("--lr-override", default=None)
+    parser.add_argument("--records", default="results_v3/campaign")
     args = parser.parse_args()
+    cp.set_campaign(args.root, args.lr_override)
     runs = [r for r in cp.run_matrix(tuple(args.regimes)) if r["experiment"] in rc.PHASES[args.phase]]
     results, problems = [], []
     commits = Counter()
@@ -57,6 +61,13 @@ def main() -> int:
         run_block = payload.get("run") or {}
         commits[run_block.get("git_commit")] += 1
         meta_ok = run_block.get("partition") == run["k"] and int(payload.get("seed")) == run["seed"]
+        if run["experiment"] in ("sun_full", "E1"):
+            if args.lr_override:
+                lr_ok = run_block.get("lr_source") == "override" and abs(float(run_block.get("lr")) - float(args.lr_override)) < 1e-12
+            else:
+                lr_ok = str(run_block.get("lr_source", "")).startswith("model config")
+            checks.append({"run": name, "criterion": "lr", "passed": lr_ok,
+                           "evidence": f"lr={run_block.get('lr')} source={run_block.get('lr_source')}"})
         checks.append({"run": name, "criterion": "partition_seed", "passed": meta_ok,
                        "evidence": f"partition={run_block.get('partition')} seed={payload.get('seed')}"})
         for c in checks:
@@ -69,7 +80,7 @@ def main() -> int:
                "checks": len(results), "checks_passed": sum(c["passed"] for c in results),
                "checks_by_criterion": dict(by_criterion), "git_commits": dict(commits), "problems": problems}
     phase_dir = args.phase if set(args.regimes) == set(cp.REGIMES) else f"{args.phase}_{'_'.join(args.regimes)}"
-    out = args.out or REPO / f"results_v3/campaign/{phase_dir}/verification.json"
+    out = args.out or REPO / f"{args.records}/{phase_dir}/verification.json"
     out.write_text(json.dumps(summary, indent=2))
     print(json.dumps({k: v for k, v in summary.items() if k != "problems"}, indent=2))
     print(f"problems: {len(problems)}")

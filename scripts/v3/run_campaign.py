@@ -35,7 +35,7 @@ TRANSIENT = re.compile(
     r"CUDA out of memory|OutOfMemoryError|CUBLAS_STATUS_ALLOC_FAILED|Input/output error|OSError|IOError"
     r"|DataLoader worker \(pid|Broken pipe|Too many open files|No space left",
 )
-ABORTED = REPO / "checkpoints_v3/campaign/_aborted"
+ABORTED = REPO / "checkpoints_v3/campaign/_aborted"  # set from --root in main()
 
 
 def run_name(run: dict) -> str:
@@ -68,8 +68,14 @@ def main() -> int:
     parser.add_argument("phase", choices=sorted(PHASES))
     parser.add_argument("--gpus", default="0 1")
     parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.REGIMES))
+    parser.add_argument("--root", default=cp.CKPT_ROOT, help="checkpoint root (default: the registered campaign)")
+    parser.add_argument("--lr-override", default=None, help="explicit --override lr=<value> for sun_full and E1")
+    parser.add_argument("--records", default="results_v3/campaign", help="directory for events and logs")
     args = parser.parse_args()
     os.chdir(REPO)
+    global ABORTED
+    cp.set_campaign(args.root, args.lr_override)
+    ABORTED = REPO / Path(args.root).parent / "_aborted"
 
     import timm  # noqa: F401  (environment guard)
 
@@ -82,9 +88,9 @@ def main() -> int:
         sys.exit(f"Tracked files modified; commit before running the campaign:\n{dirty}")
     commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 
-    phase_dir = REPO / "results_v3/campaign" / args.phase
+    phase_dir = REPO / args.records / args.phase
     if set(args.regimes) != set(cp.REGIMES):
-        phase_dir = REPO / "results_v3/campaign" / f"{args.phase}_{'_'.join(args.regimes)}"
+        phase_dir = REPO / args.records / f"{args.phase}_{'_'.join(args.regimes)}"
     (phase_dir / "logs").mkdir(parents=True, exist_ok=True)
     events_path = phase_dir / "events.jsonl"
     lock = threading.Lock()
@@ -95,7 +101,8 @@ def main() -> int:
 
     runs = [r for r in cp.run_matrix(tuple(args.regimes)) if r["experiment"] in PHASES[args.phase]]
     todo = [r for r in runs if not is_complete(r)]
-    event(kind="phase_start", phase=args.phase, expected=len(runs), already_complete=len(runs) - len(todo), gpus=args.gpus)
+    event(kind="phase_start", phase=args.phase, expected=len(runs), already_complete=len(runs) - len(todo), gpus=args.gpus,
+          root=args.root, lr_override=args.lr_override)
     print(f"[{now()}] phase {args.phase}: {len(runs)} runs, {len(runs) - len(todo)} already complete", flush=True)
 
     jobs: "queue.Queue[dict]" = queue.Queue()
