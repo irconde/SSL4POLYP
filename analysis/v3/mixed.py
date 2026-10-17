@@ -27,8 +27,18 @@ def rscript() -> str:
     return found
 
 
-def fit_many(per_run: Mapping[str, Mapping[Tuple[int, int], float]]) -> pd.DataFrame:
-    """Fit ``d_{k,s} = mu + u_k + e_{k,s}`` for every id in ``{id: {(k, s): d}}`` (one Rscript call)."""
+VARIANTS = ("satterthwaite", "kenward-roger", "ttest")
+
+
+def fit_many(per_run: Mapping[str, Mapping[Tuple[int, int], float]], variant: str = "satterthwaite") -> pd.DataFrame:
+    """Fit ``d_{k,s} = mu + u_k + e_{k,s}`` for every id in ``{id: {(k, s): d}}`` (one Rscript call).
+
+    ``variant``: ``satterthwaite`` (SAP v3.2c), ``kenward-roger`` or ``ttest`` (always the t-test on the K
+    partition means); the last two are only used by the variant validation (``validate_variants.py``).
+    """
+
+    if variant not in VARIANTS:
+        raise ValueError(f"unknown variant {variant}")
 
     rows = [
         {"id": cid, "k": k, "s": s, "d": d}
@@ -41,7 +51,7 @@ def fit_many(per_run: Mapping[str, Mapping[Tuple[int, int], float]]) -> pd.DataF
         src, dst = Path(tmp) / "in.csv", Path(tmp) / "out.csv"
         pd.DataFrame(rows).to_csv(src, index=False, float_format="%.17g")
         env = dict(os.environ, LC_ALL="C")
-        proc = subprocess.run([rscript(), str(R_SCRIPT), str(src), str(dst)], capture_output=True, text=True, env=env)
+        proc = subprocess.run([rscript(), str(R_SCRIPT), str(src), str(dst), variant], capture_output=True, text=True, env=env)
         if proc.returncode != 0:
             raise RuntimeError(f"fit_mixed.R failed:\n{proc.stderr}")
         out = pd.read_csv(dst, dtype={"id": str}, keep_default_na=True)

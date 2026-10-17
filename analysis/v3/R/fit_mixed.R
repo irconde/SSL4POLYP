@@ -2,7 +2,10 @@
 # Fallback (section 4.3): if the fit is singular (partition variance estimated as 0) or does not
 # converge, average the seeds within each partition and run a one-sample t-test on the K means (df = K - 1).
 #
-# Usage: Rscript fit_mixed.R <input.csv: id,k,s,d> <output.csv>
+# Usage: Rscript fit_mixed.R <input.csv: id,k,s,d> <output.csv> [variant]
+#   variant "satterthwaite" (default, SAP v3.2c): lmer with Satterthwaite df, fallback as above
+#           "kenward-roger": the same with Kenward-Roger df and adjusted SE (pbkrtest), fallback as above
+#           "ttest": always the one-sample t-test on the K partition means (df = K - 1)
 # One fit per id. With a single partition (K = 1) the model is not estimable and a one-sample t-test
 # over the seeds is reported instead (method "t_seeds_K1", used for the k = 1 sensitivity analysis).
 
@@ -14,6 +17,9 @@ suppressPackageStartupMessages({
 SINGULAR_TOL <- 1e-4  # lme4::isSingular default
 
 args <- commandArgs(trailingOnly = TRUE)
+VARIANT <- if (length(args) >= 3) args[3] else "satterthwaite"
+stopifnot(VARIANT %in% c("satterthwaite", "kenward-roger", "ttest"))
+DDF <- if (VARIANT == "kenward-roger") "Kenward-Roger" else "Satterthwaite"
 input <- read.csv(args[1], colClasses = c(id = "character", k = "character", s = "character", d = "numeric"))
 
 empty_row <- function(id, n, K, est) {
@@ -64,6 +70,9 @@ fit_one <- function(x) {
   if (sd(x$d) == 0) {
     return(ttest_into(res, as.numeric(partition_means), "fallback_t"))
   }
+  if (VARIANT == "ttest") {
+    return(ttest_into(res, as.numeric(partition_means), "partition_means_t"))
+  }
   warns <- character(0)
   fit <- tryCatch(
     withCallingHandlers(
@@ -96,8 +105,8 @@ fit_one <- function(x) {
   if (singular || !converged) {
     return(ttest_into(res, as.numeric(partition_means), "fallback_t"))
   }
-  co <- summary(fit)$coefficients
-  res$method <- "lmer"
+  co <- summary(fit, ddf = DDF)$coefficients
+  res$method <- if (VARIANT == "kenward-roger") "lmer_kr" else "lmer"
   res$estimate <- co["(Intercept)", "Estimate"]
   res$se <- co["(Intercept)", "Std. Error"]
   res$df <- co["(Intercept)", "df"]

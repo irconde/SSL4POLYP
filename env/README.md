@@ -88,11 +88,15 @@ mamba create -n ssl4polyp-analysis -c conda-forge --override-channels python=3.1
 | scikit-learn / matplotlib | 1.5.2 / 3.9.4 |
 | R | 4.4.3 (OpenBLAS 0.3.34) |
 | lme4 / lmerTest / Matrix / numDeriv | 2.0-6 / 3.2-1 / 1.7-5 / 2016.8-1.1 |
+| pbkrtest (added 2026-10-17) | 0.5.5 |
 | pytest | 9.1.1 |
 
 Records: `environment-analysis.yml` (pinned spec), `environment-analysis.lock.yml` (full solved export),
 `pip_freeze-analysis.txt`, `r_packages-analysis.txt` (all installed R packages).
 
+- 2026-10-17: `r-pbkrtest` 0.5.5 added (Kenward–Roger df for `analysis/v3/validate_variants.py`), installed with
+  `r-base=4.4.3 r-lme4=2.0_6 r-lmertest=3.2_1` pinned; the solver only added packages (pbkrtest and its
+  dependencies), none changed or was removed. An unpinned install would have moved the environment to R 4.5.
 - The mixed models run in R (`analysis/v3/R/fit_mixed.R`, `lmerTest::lmer`, REML, Satterthwaite df), called
   from Python through the environment's `Rscript`.
 - All metrics come from `src/ssl4polyp/classification/metrics/binary.py`, loaded from its file
