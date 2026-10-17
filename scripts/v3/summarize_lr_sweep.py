@@ -22,7 +22,7 @@ from ssl4polyp.classification.analysis.frame_outputs import load_frame_outputs
 from ssl4polyp.classification.metrics.binary import metrics_at
 
 REPO = Path(__file__).resolve().parents[2]
-TAG = {"sup_imnet": "SUPImNet", "ssl_imnet": "SSLImNet", "ssl_colon": "SSLColon"}
+TAG = {"sup_imnet": "SUPImNet", "ssl_imnet": "SSLImNet", "ssl_colon": "SSLColon", "ssl_imnet_matched": "SSLImNetMatched"}
 LRS = ("1.0e-4", "3.0e-4", "1.0e-3")
 SEEDS = (13, 29, 47)
 EPOCH_RE = re.compile(r"\[epoch (\d+)\] train: loss=([\d.]+).*?val: loss=([\d.]+)")
@@ -67,9 +67,11 @@ def main() -> int:
     parser.add_argument("--ckpt-root", type=Path, default=REPO / "checkpoints_v3/lr_sweep/classification/k1")
     parser.add_argument("--results-root", type=Path, default=REPO / "results_v3/lr_sweep/k1")
     parser.add_argument("--out-dir", type=Path, default=REPO / "results_v3/verification")
+    parser.add_argument("--regimes", nargs="+", default=["sup_imnet", "ssl_imnet", "ssl_colon"], choices=list(TAG))
+    parser.add_argument("--tag", default="", help="suffix for the output file names")
     args = parser.parse_args()
 
-    rows = [run_row(args.ckpt_root, args.results_root, m, lr, s) for m in TAG for lr in LRS for s in SEEDS]
+    rows = [run_row(args.ckpt_root, args.results_root, m, lr, s) for m in args.regimes for lr in LRS for s in SEEDS]
     worst = max(abs(r["val_ap"] - r["val_ap_csv"]) for r in rows)
     print(f"val AP JSON vs CSV: max |diff| = {worst:.2e}")
 
@@ -94,20 +96,22 @@ def main() -> int:
         })
 
     decision = {}
-    for model in TAG:
+    for model in args.regimes:
         cands = sorted((s for s in summary if s["model"] == model), key=lambda s: -s["val_ap_mean"])
         decision[model] = cands[0]["lr"]
-    common = all(lr == "1.0e-3" for lr in decision.values())
-    decision["ssl_imnet_matched"] = decision["ssl_imnet"]
-    outcome = "keep common lr 1e-3" if common else "per-regime learning rates"
+    if set(args.regimes) == {"sup_imnet", "ssl_imnet", "ssl_colon"}:  # SAP section 10, rules 1-3
+        common = all(lr == "1.0e-3" for lr in decision.values())
+        outcome = "keep common lr 1e-3" if common else "per-regime learning rates"
+    else:  # SAP v3.2 section 10, rule 4: the regime's own highest mean validation AP
+        outcome = "rule 4: highest mean validation AP"
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    for name, data in (("lr_sweep_runs.csv", rows), ("lr_sweep_summary.csv", summary)):
+    for name, data in ((f"lr_sweep_runs{args.tag}.csv", rows), (f"lr_sweep_summary{args.tag}.csv", summary)):
         with (args.out_dir / name).open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=list(data[0]))
             writer.writeheader()
             writer.writerows(data)
-    (args.out_dir / "lr_sweep_decision.json").write_text(
+    (args.out_dir / f"lr_sweep_decision{args.tag}.json").write_text(
         json.dumps({"chosen_lr": decision, "outcome": outcome, "rule": "SAP v3.1 section 10"}, indent=2)
     )
     for s in sorted(summary, key=lambda s: (s["model"], float(s["lr"]))):

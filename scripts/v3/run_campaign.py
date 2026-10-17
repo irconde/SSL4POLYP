@@ -67,6 +67,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("phase", choices=sorted(PHASES))
     parser.add_argument("--gpus", default="0 1")
+    parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.REGIMES))
     args = parser.parse_args()
     os.chdir(REPO)
 
@@ -82,6 +83,8 @@ def main() -> int:
     commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 
     phase_dir = REPO / "results_v3/campaign" / args.phase
+    if set(args.regimes) != set(cp.REGIMES):
+        phase_dir = REPO / "results_v3/campaign" / f"{args.phase}_{'_'.join(args.regimes)}"
     (phase_dir / "logs").mkdir(parents=True, exist_ok=True)
     events_path = phase_dir / "events.jsonl"
     lock = threading.Lock()
@@ -90,7 +93,7 @@ def main() -> int:
         with lock, events_path.open("a") as handle:
             handle.write(json.dumps({"time": now(), "commit": commit, **payload}) + "\n")
 
-    runs = [r for r in cp.run_matrix() if r["experiment"] in PHASES[args.phase]]
+    runs = [r for r in cp.run_matrix(tuple(args.regimes)) if r["experiment"] in PHASES[args.phase]]
     todo = [r for r in runs if not is_complete(r)]
     event(kind="phase_start", phase=args.phase, expected=len(runs), already_complete=len(runs) - len(todo), gpus=args.gpus)
     print(f"[{now()}] phase {args.phase}: {len(runs)} runs, {len(runs) - len(todo)} already complete", flush=True)

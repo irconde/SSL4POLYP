@@ -1,0 +1,1017 @@
+{
+  "sap": {
+    "name": "SAP v3.2 (revision c)",
+    "path": "docs/v3/plan_analisis_estadistico_v3_2.md",
+    "registered_sha256": "a387aed06f6901affca6c523a4f9ea3b1fca9b34f9e1c7ec69be3ebd36874d47",
+    "file_sha256": "a387aed06f6901affca6c523a4f9ea3b1fca9b34f9e1c7ec69be3ebd36874d47",
+    "match": true
+  },
+  "runs": {
+    "sun_full": 60,
+    "E1": 300,
+    "E2": 60,
+    "E3": 60,
+    "E4": 240
+  },
+  "total_runs": 720,
+  "run_failures": [
+    {
+      "experiment": "sun_full",
+      "k": 1,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 1,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 1,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 1,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 2,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 2,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 2,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 2,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 3,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 3,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 3,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 3,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 4,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 4,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 4,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 4,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 5,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 13,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 5,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 29,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "sun_full",
+      "k": 5,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p5",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p10",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p25",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p50",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    },
+    {
+      "experiment": "E1",
+      "k": 5,
+      "seed": 47,
+      "regime": "ssl_imnet_matched",
+      "variant": "p100",
+      "errors": [
+        "no finetune_lr in the model config (sweep pending)",
+        "lr source experiment config"
+      ]
+    }
+  ],
+  "partition_check_failures": [],
+  "pending_regimes": [
+    {
+      "regime": "ssl_imnet_matched",
+      "status": "finetune_lr pending (SAP section 10 sweep)"
+    }
+  ],
+  "fewshot_s50_lt120_isolated": []
+}

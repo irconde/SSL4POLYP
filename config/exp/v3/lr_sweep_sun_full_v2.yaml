@@ -1,0 +1,24 @@
+# SAP v3.2c section 10, rule 4: learning-rate sweep of SSL-imnet-matched on the same data and settings as
+# the other three regimes (v2 sun_full pack, as exp/exp1.yaml and exp/exp2.yaml). Identical to
+# exp/exp1.yaml except for the model list and the reporting subdirectory.
+defaults:
+  - base
+  - data/sun_full
+reporting:
+  inputs_subdir: v3_lr_sweep
+models:
+  - model/sup_imnet
+  - model/ssl_imnet
+  - model/ssl_colon
+  - model/ssl_imnet_matched
+protocol:
+  finetune: full
+  eval_split: test
+  early_stop_split: val
+  thresholds:
+    primary: f1_opt_on_val
+    sensitivity: youden_on_val
+  export_curves:
+    splits: [test]
+    points: 200
+threshold_policy: f1_opt_on_val
