@@ -893,3 +893,15 @@ any error found is reported and registered as a deviation before re-running.
   `campaign_plan_checks_lr_common.json`): 540/540 runs resolved, 0 failures (sun_full 45, E2 45, E3 45, E1 225, E4 180;
   override in sun_full and E1 only; all outputs and parents under the new root).
 - Comparison code `analysis/v3/exploratory_lr_common.py` committed before launch (tested on simulated data only).
+
+### 2026-10-17: common-lr campaign, phases a–b
+
+`ssl4polyp-ft`, commit `c31b1d9`, driver `results_v3/verification/campaign_lr_common_driver.sh`, GPUs 0 and 1,
+root `checkpoints_v3/campaign_lr_common/classification`, records `results_v3/campaign_lr_common/`.
+
+| Phase | Wall time | Runs | GPU 0 / 1 | GPU-hours | Section 6 checks | Failures / retries |
+|---|---|---|---|---|---|---|
+| a) sun_full | 15:49:56 → 18:29:53 (2 h 40 min) | 45/45 | 21 / 24 | 5.23 | 540/540 (incl. lr = 0.001 from `override`, 45/45) | 0 / 0 |
+| b) E2 + E3 | 18:30:24 → 18:36:50 (6.4 min) | 90/90 | 45 / 45 | 0.21 | 540/540 | 0 / 0 |
+
+No metric was computed or reported.
