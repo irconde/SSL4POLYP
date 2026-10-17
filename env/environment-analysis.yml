@@ -15,4 +15,5 @@ dependencies:
   - r-base=4.4.3
   - r-lme4=2.0.6
   - r-lmertest=3.2.1
+  - r-pbkrtest=0.5.5          # added 2026-10-17 for the Kenward–Roger variant (validate_variants.py)
   - r-jsonlite
