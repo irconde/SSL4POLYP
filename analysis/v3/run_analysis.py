@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the SAP v3.2c analysis on campaign v3 results (or on a simulated campaign).
+"""Run the SAP v3.3 analysis on campaign v3 results (or on a simulated campaign).
 
     conda activate ssl4polyp-analysis
     PYTHONPATH=. python -m analysis.v3.run_analysis --out results_v3/analysis [--roots ROOT ...]
@@ -48,7 +48,7 @@ def write_report(res: Result, out: Path, tables: List[Path], figures: List[Path]
     h = res.hypotheses
     lines = [f"# {title}", ""]
     lines += [
-        f"- SAP implemented: v3.2 revision c, SHA-256 `{sap['implemented']}`; file matches: {sap['file_matches']}; "
+        f"- SAP implemented: v3.3, SHA-256 `{sap['implemented']}`; file matches: {sap['file_matches']}; "
         f"last SAP registered in RUNLOG: {sap['runlog_last']['name']} (`{sap['runlog_last']['sha256'][:12]}…`), matches: {sap['runlog_matches']}.",
         f"- Roots: {', '.join(f'`{r}`' for r in info['roots'])}",
         f"- Runs: {info['n_runs']}; regimes: {', '.join(info['regimes'])}; partitions: {info['partitions']}; seeds: {info['seeds']}.",
@@ -83,7 +83,7 @@ def main(argv=None) -> int:
     ap.add_argument("--B", type=int, default=B_BOOT)
     ap.add_argument("--boot-seed", type=int, default=BOOT_SEED)
     ap.add_argument("--workers", type=int, default=16)
-    ap.add_argument("--title", default="Campaign v3 analysis (SAP v3.2c)")
+    ap.add_argument("--title", default="Campaign v3 analysis (SAP v3.3)")
     ap.add_argument("--no-figures", action="store_true")
     args = ap.parse_args(argv)
 

@@ -67,14 +67,11 @@ def test_c_holm_and_double_rule_applied_in_every_repetition(monte_carlo):
         assert (rule == g["confirmed"].astype(bool)).all()
 
 
-def test_d_fallback_rule_follows_singularity(monte_carlo):
+def test_d_inference_without_partition_variance(monte_carlo):
+    """SAP v3.3 uses the t-test on the partition means in every fit (the v3.2c fallback switch is tested in
+    test_mixed_and_rules); with zero partition variance the effects are still recovered and confirmed."""
+
     df, summary = monte_carlo
-    for _, r in df.iterrows():
-        singular = str(r["singular"]).lower() in ("true", "1")
-        if singular:
-            assert r["model_method"] == "fallback_t"
+    assert set(df["model_method"]) == {"partition_means_t"}
     nop = df[df["scenario"] == "no_partition_variance"]
-    assert (nop["model_method"] == "fallback_t").mean() > 0.3
-    # with the fallback the CI is a t interval on K = 5 partition means
-    fb = df[df["model_method"] == "fallback_t"]
-    assert not fb.empty
+    assert nop["model_covers"].mean() >= 0.85 and nop["confirmed"].mean() >= 0.8

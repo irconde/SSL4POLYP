@@ -1,4 +1,4 @@
-"""Mixed models (SAP section 4) through ``Rscript`` and Holm's adjustment."""
+"""Section 4 inference through ``Rscript`` (t-test on partition means in v3.3; lmer variants kept) and Holm."""
 from __future__ import annotations
 
 import os
@@ -30,11 +30,11 @@ def rscript() -> str:
 VARIANTS = ("satterthwaite", "kenward-roger", "ttest")
 
 
-def fit_many(per_run: Mapping[str, Mapping[Tuple[int, int], float]], variant: str = "satterthwaite") -> pd.DataFrame:
+def fit_many(per_run: Mapping[str, Mapping[Tuple[int, int], float]], variant: str = "ttest") -> pd.DataFrame:
     """Fit ``d_{k,s} = mu + u_k + e_{k,s}`` for every id in ``{id: {(k, s): d}}`` (one Rscript call).
 
-    ``variant``: ``satterthwaite`` (SAP v3.2c), ``kenward-roger`` or ``ttest`` (always the t-test on the K
-    partition means); the last two are only used by the variant validation (``validate_variants.py``).
+    ``variant``: ``ttest`` (SAP v3.3: always the t-test on the K partition means), ``satterthwaite`` (SAP v3.2c:
+    lmer with fallback) or ``kenward-roger``; the last two are kept for the variant validation.
     """
 
     if variant not in VARIANTS:

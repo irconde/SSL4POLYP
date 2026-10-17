@@ -1,4 +1,4 @@
-"""Tables (CSV + Markdown): equivalents of manuscript Tables 3–9 and the new SAP v3.2c tables."""
+"""Tables (CSV + Markdown): equivalents of manuscript Tables 3–9 and the new SAP v3.2c/v3.3 tables."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -136,8 +136,8 @@ def build_tables(res: Result) -> Dict[str, Dict[str, object]]:
     md_cols = [c for c in ("hypothesis", "definition", "estimate", "sd_partition", "sd_seed", "model_method", "model_ci_lo",
                            "model_ci_hi", "p", "p_holm", "boot_lo", "boot_hi", "confirmed", "status", "note") if c in hyp]
     put("table_hypotheses", hyp, "Primary hypotheses H1–H7 (SAP sections 3–5)", hyp[md_cols],
-        "Estimate = mean of the paired per-run differences; model CI from lme4/lmerTest (Satterthwaite) or the "
-        "fallback t-test; Holm over the hypotheses listed in holm_family; confirmed = Holm p < 0.05 and the "
+        "Estimate = mean of the paired per-run differences; model CI and p from the one-sample t-test on the K "
+        "partition means (SAP v3.3, df = K − 1); Holm over the hypotheses listed in holm_family; confirmed = Holm p < 0.05 and the "
         "cluster-bootstrap 95 % CI excludes 0.")
 
     sun = levels(rm, "sun_full", LEVEL_METRICS + PER_POLYP, by=("regime",))

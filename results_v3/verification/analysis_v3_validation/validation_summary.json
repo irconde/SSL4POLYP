@@ -25,7 +25,7 @@
     "boot_ci_coverage": 0.6666666666666666,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.3333333333333333
+    "fallback_rate": 0.0
    },
    "H3": {
     "reps": 6,
@@ -36,7 +36,7 @@
     "boot_ci_coverage": 1.0,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.6666666666666666
+    "fallback_rate": 0.0
    },
    "H4": {
     "reps": 6,
@@ -47,7 +47,7 @@
     "boot_ci_coverage": 0.6666666666666666,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.3333333333333333
+    "fallback_rate": 0.0
    },
    "H5": {
     "reps": 6,
@@ -69,7 +69,7 @@
     "boot_ci_coverage": 0.8333333333333334,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.16666666666666666
+    "fallback_rate": 0.0
    },
    "H7": {
     "reps": 6,
@@ -99,7 +99,7 @@
     "boot_ci_coverage": 1.0,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.5
+    "fallback_rate": 0.0
    },
    "H2": {
     "reps": 4,
@@ -110,7 +110,7 @@
     "boot_ci_coverage": 0.75,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.5
+    "fallback_rate": 0.0
    },
    "H3": {
     "reps": 4,
@@ -132,7 +132,7 @@
     "boot_ci_coverage": 1.0,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.25
+    "fallback_rate": 0.0
    },
    "H5": {
     "reps": 4,
@@ -143,7 +143,7 @@
     "boot_ci_coverage": 1.0,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.5
+    "fallback_rate": 0.0
    },
    "H6": {
     "reps": 4,
@@ -154,7 +154,7 @@
     "boot_ci_coverage": 1.0,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.5
+    "fallback_rate": 0.0
    },
    "H7": {
     "reps": 4,
@@ -165,7 +165,7 @@
     "boot_ci_coverage": 1.0,
     "confirmation_rate": 1.0,
     "holm_significant_rate": 1.0,
-    "fallback_rate": 0.5
+    "fallback_rate": 0.0
    }
   }
  },
@@ -184,7 +184,7 @@
     "boot_ci_coverage": 0.45,
     "confirmation_rate": 0.1,
     "holm_significant_rate": 0.1,
-    "fallback_rate": 0.25
+    "fallback_rate": 0.0
    },
    "H2": {
     "reps": 20,
@@ -195,7 +195,7 @@
     "boot_ci_coverage": 0.5,
     "confirmation_rate": 0.0,
     "holm_significant_rate": 0.0,
-    "fallback_rate": 0.15
+    "fallback_rate": 0.0
    },
    "H3": {
     "reps": 20,
@@ -206,7 +206,7 @@
     "boot_ci_coverage": 0.9,
     "confirmation_rate": 0.0,
     "holm_significant_rate": 0.0,
-    "fallback_rate": 0.4
+    "fallback_rate": 0.0
    },
    "H4": {
     "reps": 20,
@@ -217,7 +217,7 @@
     "boot_ci_coverage": 0.6,
     "confirmation_rate": 0.0,
     "holm_significant_rate": 0.0,
-    "fallback_rate": 0.25
+    "fallback_rate": 0.0
    },
    "H5": {
     "reps": 20,
@@ -228,7 +228,7 @@
     "boot_ci_coverage": 1.0,
     "confirmation_rate": 0.0,
     "holm_significant_rate": 0.0,
-    "fallback_rate": 0.2
+    "fallback_rate": 0.0
    },
    "H6": {
     "reps": 20,
@@ -239,7 +239,7 @@
     "boot_ci_coverage": 0.05,
     "confirmation_rate": 0.0,
     "holm_significant_rate": 0.0,
-    "fallback_rate": 0.1
+    "fallback_rate": 0.0
    },
    "H7": {
     "reps": 20,
@@ -250,7 +250,7 @@
     "boot_ci_coverage": 0.2,
     "confirmation_rate": 0.05,
     "holm_significant_rate": 0.05,
-    "fallback_rate": 0.15
+    "fallback_rate": 0.0
    }
   }
  },
