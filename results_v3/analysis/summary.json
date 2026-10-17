@@ -1,0 +1,429 @@
+{
+ "info": {
+  "sap": {
+   "implemented": "fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56",
+   "file_sha256": "fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56",
+   "runlog_last": {
+    "name": "SAP v3.3",
+    "path": "docs/v3/plan_analisis_estadistico_v3_3.md",
+    "sha256": "fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56"
+   },
+   "file_matches": true,
+   "runlog_matches": true
+  },
+  "roots": [
+   "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign/classification",
+   "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign_matched/classification"
+  ],
+  "regimes": [
+   "sup_imnet",
+   "ssl_imnet",
+   "ssl_colon",
+   "ssl_imnet_matched"
+  ],
+  "partitions": [
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "seeds": [
+   13,
+   29,
+   47
+  ],
+  "n_runs": 720,
+  "n_views": 3060,
+  "n_contrasts": 2313,
+  "bootstrap": {
+   "B": 2000,
+   "seed": 12345
+  },
+  "loco_centers": [
+   "C1",
+   "C2",
+   "C3",
+   "C4",
+   "C5",
+   "C6"
+  ],
+  "locase_flat_cases": {
+   "1": [
+    "SUN_0022",
+    "SUN_0044",
+    "SUN_0052",
+    "SUN_0082",
+    "SUN_0100"
+   ],
+   "2": [
+    "SUN_0006",
+    "SUN_0010",
+    "SUN_0014",
+    "SUN_0065",
+    "SUN_0069"
+   ],
+   "3": [
+    "SUN_0011",
+    "SUN_0014",
+    "SUN_0052",
+    "SUN_0082",
+    "SUN_0086"
+   ],
+   "4": [
+    "SUN_0006",
+    "SUN_0040",
+    "SUN_0058",
+    "SUN_0060",
+    "SUN_0085"
+   ],
+   "5": [
+    "SUN_0022",
+    "SUN_0030",
+    "SUN_0041",
+    "SUN_0044",
+    "SUN_0060"
+   ]
+  },
+  "integrity_checks": {
+   "n": 840,
+   "failed": 0
+  },
+  "completeness": [
+   {
+    "experiment": "sun_full",
+    "regime": "sup_imnet",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "sun_full",
+    "regime": "ssl_imnet",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "sun_full",
+    "regime": "ssl_colon",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "sun_full",
+    "regime": "ssl_imnet_matched",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e1",
+    "regime": "sup_imnet",
+    "expected": 75,
+    "present": 75
+   },
+   {
+    "experiment": "e1",
+    "regime": "ssl_imnet",
+    "expected": 75,
+    "present": 75
+   },
+   {
+    "experiment": "e1",
+    "regime": "ssl_colon",
+    "expected": 75,
+    "present": 75
+   },
+   {
+    "experiment": "e1",
+    "regime": "ssl_imnet_matched",
+    "expected": 75,
+    "present": 75
+   },
+   {
+    "experiment": "e2",
+    "regime": "sup_imnet",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e2",
+    "regime": "ssl_imnet",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e2",
+    "regime": "ssl_colon",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e2",
+    "regime": "ssl_imnet_matched",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e3",
+    "regime": "sup_imnet",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e3",
+    "regime": "ssl_imnet",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e3",
+    "regime": "ssl_colon",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e3",
+    "regime": "ssl_imnet_matched",
+    "expected": 15,
+    "present": 15
+   },
+   {
+    "experiment": "e4",
+    "regime": "sup_imnet",
+    "expected": 60,
+    "present": 60
+   },
+   {
+    "experiment": "e4",
+    "regime": "ssl_imnet",
+    "expected": 60,
+    "present": 60
+   },
+   {
+    "experiment": "e4",
+    "regime": "ssl_colon",
+    "expected": 60,
+    "present": 60
+   },
+   {
+    "experiment": "e4",
+    "regime": "ssl_imnet_matched",
+    "expected": 60,
+    "present": 60
+   }
+  ],
+  "elapsed_s": 858.1
+ },
+ "notes": {},
+ "hypotheses": [
+  {
+   "hypothesis": "H1",
+   "definition": "E1, SSL-colon \u2212 SUP-imnet, AULC of AUPRC (5\u2013100 %)",
+   "note": "",
+   "estimate": 0.047469488283834,
+   "sd_partition": 0.015181381098724604,
+   "sd_seed": 0.023865703970121784,
+   "n_runs": 15,
+   "n_partitions": 5,
+   "model_method": "partition_means_t",
+   "model_estimate": 0.047469488283834,
+   "model_se": 0.0067893200258157,
+   "model_df": 4.0,
+   "model_ci_lo": 0.0286193139305366,
+   "model_ci_hi": 0.0663196626371315,
+   "var_partition": NaN,
+   "var_seed": NaN,
+   "singular": NaN,
+   "p": 0.002201793283546,
+   "p_holm": 0.008807173134184,
+   "holm_family": "H1,H2,H3,H4,H5,H6,H7",
+   "holm_m": 7,
+   "boot_lo": 0.03545299682106404,
+   "boot_hi": 0.059156811003374624,
+   "boot_B": 2000,
+   "holm_significant": true,
+   "boot_excludes_zero": true,
+   "confirmed": true,
+   "status": "final"
+  },
+  {
+   "hypothesis": "H2",
+   "definition": "E1, SSL-colon \u2212 SSL-imnet-matched, AULC of AUPRC (5\u2013100 %)",
+   "note": "",
+   "estimate": -0.01384092071783708,
+   "sd_partition": 0.011845368884473162,
+   "sd_seed": 0.008386151580515599,
+   "n_runs": 15,
+   "n_partitions": 5,
+   "model_method": "partition_means_t",
+   "model_estimate": -0.0138409207178371,
+   "model_se": 0.0052974100088485,
+   "model_df": 4.0,
+   "model_ci_lo": -0.0285488888071305,
+   "model_ci_hi": 0.0008670473714563,
+   "var_partition": NaN,
+   "var_seed": NaN,
+   "singular": NaN,
+   "p": 0.0592472470800498,
+   "p_holm": 0.1184944941600996,
+   "holm_family": "H1,H2,H3,H4,H5,H6,H7",
+   "holm_m": 7,
+   "boot_lo": -0.02143432078761149,
+   "boot_hi": -0.0063687846192736364,
+   "boot_B": 2000,
+   "holm_significant": false,
+   "boot_excludes_zero": true,
+   "confirmed": false,
+   "status": "final"
+  },
+  {
+   "hypothesis": "H3",
+   "definition": "E2, SSL-colon \u2212 SUP-imnet, AUROC, flat stratum",
+   "note": "",
+   "estimate": 0.03801816141210081,
+   "sd_partition": 0.020818964226855027,
+   "sd_seed": 0.030324504896828915,
+   "n_runs": 15,
+   "n_partitions": 5,
+   "model_method": "partition_means_t",
+   "model_estimate": 0.0380181614121008,
+   "model_se": 0.0093105238464768,
+   "model_df": 4.0,
+   "model_ci_lo": 0.0121680030517229,
+   "model_ci_hi": 0.0638683197724788,
+   "var_partition": NaN,
+   "var_seed": NaN,
+   "singular": NaN,
+   "p": 0.0150569405223222,
+   "p_holm": 0.0451708215669666,
+   "holm_family": "H1,H2,H3,H4,H5,H6,H7",
+   "holm_m": 7,
+   "boot_lo": 0.020188735843281323,
+   "boot_hi": 0.05925660646872765,
+   "boot_B": 2000,
+   "holm_significant": true,
+   "boot_excludes_zero": true,
+   "confirmed": true,
+   "status": "final"
+  },
+  {
+   "hypothesis": "H4",
+   "definition": "E3, SSL-colon \u2212 SUP-imnet, AUROC, polypgen_clean_test",
+   "note": "",
+   "estimate": -0.07200147932413375,
+   "sd_partition": 0.021365333728702682,
+   "sd_seed": 0.036140230407007146,
+   "n_runs": 15,
+   "n_partitions": 5,
+   "model_method": "partition_means_t",
+   "model_estimate": -0.0720014793241338,
+   "model_se": 0.0095548677158696,
+   "model_df": 4.0,
+   "model_ci_lo": -0.0985300450246725,
+   "model_ci_hi": -0.045472913623595,
+   "var_partition": NaN,
+   "var_seed": NaN,
+   "singular": NaN,
+   "p": 0.0016608976565066,
+   "p_holm": 0.0084065216439222,
+   "holm_family": "H1,H2,H3,H4,H5,H6,H7",
+   "holm_m": 7,
+   "boot_lo": -0.3447090780763172,
+   "boot_hi": 0.0943700711678507,
+   "boot_B": 2000,
+   "holm_significant": true,
+   "boot_excludes_zero": false,
+   "confirmed": false,
+   "status": "final"
+  },
+  {
+   "hypothesis": "H5",
+   "definition": "E3 decomposition, sequence \u2212 isolated negatives, AUROC, mean of regimes, 50-frame split, common positives",
+   "note": "",
+   "estimate": 0.15484913743974615,
+   "sd_partition": 0.027887755832106766,
+   "sd_seed": 0.020483510742811305,
+   "n_runs": 15,
+   "n_partitions": 5,
+   "model_method": "partition_means_t",
+   "model_estimate": 0.154849137439746,
+   "model_se": 0.0124717835561014,
+   "model_df": 4.0,
+   "model_ci_lo": 0.120221915032322,
+   "model_ci_hi": 0.18947635984717,
+   "var_partition": NaN,
+   "var_seed": NaN,
+   "singular": NaN,
+   "p": 0.0002419236782252,
+   "p_holm": 0.0016934657475764,
+   "holm_family": "H1,H2,H3,H4,H5,H6,H7",
+   "holm_m": 7,
+   "boot_lo": -0.031012671071979428,
+   "boot_hi": 0.309348155297908,
+   "boot_B": 1997,
+   "holm_significant": true,
+   "boot_excludes_zero": false,
+   "confirmed": false,
+   "status": "final"
+  },
+  {
+   "hypothesis": "H6",
+   "definition": "E4, arm B \u2212 arm A, balanced accuracy, mean of budgets and regimes",
+   "note": "",
+   "estimate": -0.006351221086635476,
+   "sd_partition": 0.014261430322151459,
+   "sd_seed": 0.01829163538492067,
+   "n_runs": 15,
+   "n_partitions": 5,
+   "model_method": "partition_means_t",
+   "model_estimate": -0.0063512210866354,
+   "model_se": 0.0063779055313414,
+   "model_df": 4.0,
+   "model_ci_lo": -0.0240591256805425,
+   "model_ci_hi": 0.0113566835072715,
+   "var_partition": NaN,
+   "var_seed": NaN,
+   "singular": NaN,
+   "p": 0.375700974123623,
+   "p_holm": 0.375700974123623,
+   "holm_family": "H1,H2,H3,H4,H5,H6,H7",
+   "holm_m": 7,
+   "boot_lo": -0.018377219965498806,
+   "boot_hi": 0.0057772773881670765,
+   "boot_B": 1691,
+   "holm_significant": false,
+   "boot_excludes_zero": false,
+   "confirmed": false,
+   "status": "final"
+  },
+  {
+   "hypothesis": "H7",
+   "definition": "E4, arm C \u2212 arm A, balanced accuracy, mean of budgets and regimes",
+   "note": "",
+   "estimate": -0.07484029021892456,
+   "sd_partition": 0.021232735753251252,
+   "sd_seed": 0.04636582893312546,
+   "n_runs": 15,
+   "n_partitions": 5,
+   "model_method": "partition_means_t",
+   "model_estimate": -0.0748402902189246,
+   "model_se": 0.009495568098512,
+   "model_df": 4.0,
+   "model_ci_lo": -0.101204213787111,
+   "model_ci_hi": -0.0484763666507386,
+   "var_partition": NaN,
+   "var_seed": NaN,
+   "singular": NaN,
+   "p": 0.0014010869406537,
+   "p_holm": 0.0084065216439222,
+   "holm_family": "H1,H2,H3,H4,H5,H6,H7",
+   "holm_m": 7,
+   "boot_lo": -0.13528506970509818,
+   "boot_hi": -0.014993374031816211,
+   "boot_B": 1691,
+   "holm_significant": true,
+   "boot_excludes_zero": true,
+   "confirmed": true,
+   "status": "final"
+  }
+ ]
+}

@@ -849,3 +849,29 @@ runs has been computed (campaign records above: "No metric was computed or repor
 
 No metric of the real runs had been computed before this entry. The analysis code is not modified after this point;
 any error found is reported and registered as a deviation before re-running.
+
+### 2026-10-17: analysis of the real data (SAP v3.3), tag `v3-cmpb-analysis-results`
+
+- Run: opened 15:15:33 CEST, finished in 858 s; code `1d70d4c` unchanged; 720 runs (4 regimes × 5 partitions × 3
+  seeds × sun_full/E1×5/E2/E3/E4×4), 840/840 integrity checks, 3,060 views, 2,313 contrasts, B = 2000, seed 12345.
+  Outputs `results_v3/analysis/` (report.md, tables, figures, drift/). Recomputed metrics equal the campaign JSONs
+  (2,460 values, max |diff| 5e-11).
+- H1–H7 (estimate; t-test CI; Holm p; bootstrap CI; verdict): H1 +0.0475 [0.029, 0.066], 0.0088, [0.036, 0.059],
+  confirmed; H2 −0.0138 [−0.029, 0.001], 0.118, [−0.021, −0.006], not confirmed; H3 +0.0380 [0.012, 0.064], 0.045,
+  [0.020, 0.059], confirmed; H4 −0.0720 [−0.099, −0.046], 0.0084, [−0.345, 0.094], not confirmed (bootstrap);
+  H5 +0.1548 [0.120, 0.190], 0.0017, [−0.031, 0.309], not confirmed (bootstrap); H6 −0.0064 [−0.024, 0.011], 0.376,
+  [−0.018, 0.006], not confirmed; H7 −0.0748 [−0.101, −0.048], 0.0084, [−0.135, −0.015], confirmed.
+- Incidences (no code change, no re-run):
+  1. Bootstrap replicates with an undefined value are dropped (as in analysis_v2): 309/2000 for the 148 contrasts that
+     include E4 s500 (H6, H7: 1,691 valid), whose evaluation splits hold only the sequence negatives of a few sequences;
+     3/2000 for the negative-source contrasts (H5: 1,997). The SAP sensitivity analysis without s500 keeps 2000/2000
+     and gives the same verdicts (H7 bootstrap CI [−0.161, −0.034]; H6 [−0.023, 0.006]).
+  2. Degenerate predictors (test specificity or sensitivity < 0.10): E3 4–6 of 15 runs per regime; E4 arm C up to
+     7/15 (SSL-imnet-matched); E1 p5 SSL-imnet 2/15.
+  3. 31 secondary contrasts of per-polyp sensitivity have zero variance (method "constant", no p-value).
+  4. `manuscript_results_values.md` is not in the repository; the drift report uses its transcription
+     `analysis_v2/manuscript_values.py`. The default root `checkpoints_v3/campaign_matched/` does not exist (matched
+     runs are under `checkpoints_v3/campaign/`); listed in report.md, no effect.
+- Drift (`results_v3/analysis/drift/drift_report.md`): vs manuscript, 16/40 paired differences change sign, 217/264
+  levels differ by > 0.02; vs analysis_v2, 165/370 sign changes.
+- Closed 2026-10-17 15:31:35 CEST.

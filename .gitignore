@@ -24,6 +24,7 @@
 !/results_v3/environment/
 !/results_v3/verification/
 !/results_v3/SAP_deviations.md
+!/results_v3/analysis/
 
 # Python cache and virtual environment files
 __pycache__/
