@@ -832,3 +832,20 @@ runs has been computed (campaign records above: "No metric was computed or repor
   in `fit_mixed.R` for the validation). Tests 24/24 pass (1 h 09 min). The full simulated run
   (`analysis_v3_simulated/`, B = 2000) was redone under v3.3: same estimates, CIs, p-values and verdicts for H1–H7 as
   under v3.2c. No analysis of the real data.
+
+## Analysis of the real data
+
+### 2026-10-17: opening of the real data (registered before running anything)
+
+| Item | Value |
+|---|---|
+| SAP in force | SAP v3.3, `docs/v3/plan_analisis_estadistico_v3_3.md`, SHA-256 `fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56` (tag `v3-cmpb-sap33`) |
+| Primary analysis variant | V3: one-sample t-test on the K partition means (df = K − 1), `MODEL_VARIANT = "ttest"` (SAP v3.3 section 4) |
+| Analysis code | commit `1d70d4c` (`analysis/v3/`, last change: drift script; inference code `3e4f618`) |
+| Environment | `ssl4polyp-analysis` (`env/environment-analysis.yml`) |
+| Data | campaigns `v3-cmpb-campaign3` and `v3-cmpb-campaign4`, `checkpoints_v3/campaign/classification` (four regimes) |
+| Command | `PYTHONPATH=. python -m analysis.v3.run_analysis --out results_v3/analysis` (B = 2000, seed 12345, SAP defaults) |
+| Opening time | 2026-10-17 15:15:33 CEST |
+
+No metric of the real runs had been computed before this entry. The analysis code is not modified after this point;
+any error found is reported and registered as a deviation before re-running.
