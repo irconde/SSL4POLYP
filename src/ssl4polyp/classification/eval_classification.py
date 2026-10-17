@@ -759,7 +759,7 @@ def build(args):
 
     threshold_loader = loaders.get("val") if args.threshold_pack else None
 
-    if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
+    if args.pretraining in ["Hyperkvasir", "ImageNet_self", "ImageNet_self_matched"]:
         model = utils.get_MAE_backbone(None, True, args.n_class, False, None)
     elif args.pretraining == "ImageNet_class":
         model = utils.get_ImageNet_or_random_ViT(
@@ -946,7 +946,7 @@ def get_args():
         "--pretraining",
         type=str,
         required=True,
-        choices=["Hyperkvasir", "ImageNet_class", "ImageNet_self", "random"],
+        choices=["Hyperkvasir", "ImageNet_class", "ImageNet_self", "ImageNet_self_matched", "random"],
     )
     parser.add_argument("--ss-framework", type=str, choices=["mae"])
     parser.add_argument("--dataset", type=str, required=True)

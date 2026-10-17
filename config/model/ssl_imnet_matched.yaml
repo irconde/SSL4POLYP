@@ -1,0 +1,11 @@
+model:
+  key: ssl_imnet_matched
+  name: SSL-imnet-matched
+  arch: vit_b
+  pretraining: ImageNet_self_matched
+  # MAE pretrained on the 99,417-image class-stratified ImageNet-1k subset with the HyperKvasir arguments
+  # (checkpoints_v3/pretrain/mae_imnet_matched/ckpts/ckpts/checkpoint-399.pth, results_v3/RUNLOG.md).
+  checkpoint: checkpoints/pretrained/vit_b/mae_imnet_matched.pth
+  checkpoint_sha256: 964089f643ddf3bd3d4cd883a821ae74bb6f5226c483801a693680611504c328
+  frozen: false
+  ss_framework: mae

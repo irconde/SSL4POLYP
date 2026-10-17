@@ -9,6 +9,7 @@ models:
   - model/sup_imnet
   - model/ssl_imnet
   - model/ssl_colon
+  - model/ssl_imnet_matched
 protocol:
   finetune: full
   eval_split: test

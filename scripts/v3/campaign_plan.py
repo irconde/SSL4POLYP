@@ -32,12 +32,17 @@ PACKS = REPO / "data_packs"
 V3 = PACKS / "v3"
 PARTITIONS = (1, 2, 3, 4, 5)
 SEEDS = (13, 29, 47)
-REGIMES = ("sup_imnet", "ssl_imnet", "ssl_colon")
-PENDING_REGIMES = ("ssl_imnet_matched",)
+REGIMES = ("sup_imnet", "ssl_imnet", "ssl_colon", "ssl_imnet_matched")
 PERCENTS = (5, 10, 25, 50, 100)
 SIZES = (50, 100, 200, 500)
-SELECTED_LR = {"sup_imnet": 3.0e-4, "ssl_imnet": 3.0e-4, "ssl_colon": 1.0e-4}  # SAP section 10
-TAG = {"sup_imnet": "SUPImNet", "ssl_imnet": "SSLImNet", "ssl_colon": "SSLColon"}
+TAG = {"sup_imnet": "SUPImNet", "ssl_imnet": "SSLImNet", "ssl_colon": "SSLColon", "ssl_imnet_matched": "SSLImNetMatched"}
+
+
+def selected_lr(regime: str) -> Optional[float]:
+    """Learning rate chosen by the SAP section 10 sweep, read from the model config (single source)."""
+
+    cfg = yaml.safe_load((REPO / "config/model" / f"{regime}.yaml").read_text())["model"]
+    return float(cfg["finetune_lr"]) if "finetune_lr" in cfg else None
 CKPT_ROOT = "checkpoints_v3/campaign/classification"
 
 
@@ -75,11 +80,11 @@ def case_set(path: Path) -> set:
         return {row["case_id"] for row in csv.DictReader(handle)}
 
 
-def run_matrix() -> List[Dict[str, object]]:
+def run_matrix(regimes=REGIMES) -> List[Dict[str, object]]:
     runs: List[Dict[str, object]] = []
     for k in PARTITIONS:
         for seed in SEEDS:
-            for regime in REGIMES:
+            for regime in regimes:
                 base = ["--partition", str(k), "--seed", str(seed), "--model-key", regime, "--roots", "data/roots.json"]
                 runs.append({"experiment": "sun_full", "k": k, "seed": seed, "regime": regime, "variant": "",
                              "argv": ["--exp-config", "exp/v3/sun_full.yaml", *base,
@@ -118,7 +123,9 @@ def check_run(run: Dict[str, object], resolved: Dict[str, object], index: dict) 
     expect(int(a.seed) == seed, f"training seed {a.seed} != {seed}")
     if exp in ("sun_full", "E1"):
         expect(a.finetune_mode == "full", f"finetune {a.finetune_mode}")
-        expect(abs(float(a.lr) - SELECTED_LR[regime]) < 1e-12, f"lr {a.lr} != {SELECTED_LR[regime]}")
+        chosen = selected_lr(regime)
+        expect(chosen is not None, "no finetune_lr in the model config (sweep pending)")
+        expect(chosen is None or abs(float(a.lr) - chosen) < 1e-12, f"lr {a.lr} != {chosen}")
         expect(str(a.lr_source).startswith("model config"), f"lr source {a.lr_source}")
         expect(a.val_pack == base and a.test_pack == base, f"val/test {a.val_pack}/{a.test_pack}")
         expect(a.threshold_policy == "f1_opt_on_val", f"policy {a.threshold_policy}")
@@ -229,12 +236,14 @@ def fewshot_composition() -> List[Dict[str, object]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=REPO / "results_v3/verification")
+    parser.add_argument("--regimes", nargs="+", default=list(REGIMES), choices=list(REGIMES))
+    parser.add_argument("--tag", default="", help="suffix for the output file names")
     args = parser.parse_args()
     index = yaml.safe_load((V3 / "index.yaml").read_text())
     sap = current_sap()
 
     plan_rows, failures = [], []
-    for run in run_matrix():
+    for run in run_matrix(tuple(args.regimes)):
         try:
             resolved = resolve(run["argv"])
             errors = check_run(run, resolved, index)
@@ -242,7 +251,7 @@ def main() -> int:
         except Exception as exc:  # report, do not stop the dry run
             errors, a = [f"resolution failed: {exc}"], None
         if errors:
-            failures.append({k: run[k] for k in ("experiment", "k", "seed", "regime", "variant")} | {"errors": errors})
+            failures.append({**{k: run[k] for k in ("experiment", "k", "seed", "regime", "variant")}, "errors": errors})
         plan_rows.append({
             "experiment": run["experiment"], "k": run["k"], "seed": run["seed"], "regime": run["regime"], "variant": run["variant"],
             "config": run["argv"][1], "train_pack": getattr(a, "train_pack", None) or "", "val_pack": getattr(a, "val_pack", None) or "",
@@ -251,12 +260,12 @@ def main() -> int:
             "parent": getattr(a, "parent_checkpoint", None) or "", "output_dir": getattr(a, "output_dir", ""),
             "stem": getattr(a, "run_stem", ""), "sap_ok": not errors,
         })
-    pending = [{"regime": r, "status": "pending: no model config until the MAE pretraining and its learning-rate sweep (SAP section 10, rule 4)"} for r in PENDING_REGIMES]
+    pending = [{"regime": r, "status": "finetune_lr pending (SAP section 10 sweep)"} for r in args.regimes if selected_lr(r) is None]
     part_errors = partition_checks(index)
     composition = fewshot_composition()
 
     args.out.mkdir(parents=True, exist_ok=True)
-    for name, rows in (("campaign_plan.csv", plan_rows), ("fewshot_composition.csv", composition)):
+    for name, rows in ((f"campaign_plan{args.tag}.csv", plan_rows), (f"fewshot_composition{args.tag}.csv", composition)):
         fields = list(dict.fromkeys(k for r in rows for k in r))
         with (args.out / name).open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=fields)
@@ -266,7 +275,7 @@ def main() -> int:
     summary = {"sap": sap, "runs": dict(counts), "total_runs": len(plan_rows), "run_failures": failures,
                "partition_check_failures": part_errors, "pending_regimes": pending,
                "fewshot_s50_lt120_isolated": [r for r in composition if r.get("flag_lt120_isolated_neg")]}
-    (args.out / "campaign_plan_checks.json").write_text(json.dumps(summary, indent=2, default=str))
+    (args.out / f"campaign_plan_checks{args.tag}.json").write_text(json.dumps(summary, indent=2, default=str))
     print(json.dumps({k: summary[k] for k in ("sap", "runs", "total_runs")}, indent=2))
     print("run failures:", len(failures), failures[:3])
     print("partition check failures:", part_errors)

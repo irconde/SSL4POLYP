@@ -5902,7 +5902,7 @@ def build(args, rank, device: torch.device, distributed: bool):
         args.class_counts = None
 
     expected_init_sha = getattr(args, "ckpt_sha256", None)
-    if args.pretraining in ["Hyperkvasir", "ImageNet_self"]:
+    if args.pretraining in ["Hyperkvasir", "ImageNet_self", "ImageNet_self_matched"]:
         assert os.path.exists(args.ckpt)
         init_sha = _compute_file_sha256(Path(args.ckpt))
         if expected_init_sha and init_sha != expected_init_sha:
@@ -8203,7 +8203,7 @@ def get_args():
         "--pretraining",
         type=str,
         default=None,
-        choices=["Hyperkvasir", "ImageNet_class", "ImageNet_self", "random"],
+        choices=["Hyperkvasir", "ImageNet_class", "ImageNet_self", "ImageNet_self_matched", "random"],
     )
     parser.add_argument("--ss-framework", type=str, choices=["mae"])
     parser.add_argument("--checkpoint", type=str, dest="ckpt", default=None)

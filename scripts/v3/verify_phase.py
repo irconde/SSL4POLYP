@@ -37,8 +37,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("phase", choices=sorted(rc.PHASES))
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.REGIMES))
     args = parser.parse_args()
-    runs = [r for r in cp.run_matrix() if r["experiment"] in rc.PHASES[args.phase]]
+    runs = [r for r in cp.run_matrix(tuple(args.regimes)) if r["experiment"] in rc.PHASES[args.phase]]
     results, problems = [], []
     commits = Counter()
     for run in runs:
@@ -67,7 +68,8 @@ def main() -> int:
     summary = {"phase": args.phase, "expected_runs": len(runs), "complete_runs": sum(rc.is_complete(r) for r in runs),
                "checks": len(results), "checks_passed": sum(c["passed"] for c in results),
                "checks_by_criterion": dict(by_criterion), "git_commits": dict(commits), "problems": problems}
-    out = args.out or REPO / f"results_v3/campaign/{args.phase}/verification.json"
+    phase_dir = args.phase if set(args.regimes) == set(cp.REGIMES) else f"{args.phase}_{'_'.join(args.regimes)}"
+    out = args.out or REPO / f"results_v3/campaign/{phase_dir}/verification.json"
     out.write_text(json.dumps(summary, indent=2))
     print(json.dumps({k: v for k, v in summary.items() if k != "problems"}, indent=2))
     print(f"problems: {len(problems)}")

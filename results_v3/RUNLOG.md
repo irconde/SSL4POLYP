@@ -741,3 +741,21 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
 - Kept checkpoints: milestones 49, 149, 199, 249, 299, 349, 399 and 9, 85, 89, 95, 99 (lexicographic retention,
   as noted at launch; no effect since there was no interruption).
 - Incidents: none.
+
+### 2026-10-17: SSL-imnet-matched incorporated
+
+- `checkpoints/pretrained/vit_b/mae_imnet_matched.pth` = copy of
+  `checkpoints_v3/pretrain/mae_imnet_matched/ckpts/ckpts/checkpoint-399.pth`; SHA-256 of the copy
+  `964089f643ddf3bd3d4cd883a821ae74bb6f5226c483801a693680611504c328` (equal to the original).
+- `config/model/ssl_imnet_matched.yaml` (key `ssl_imnet_matched`, tag `SSLImNetMatched`, pretraining
+  `ImageNet_self_matched`, MAE backbone, `checkpoint_sha256` above; `finetune_lr` set after the sweep).
+- Code: `ImageNet_self_matched` accepted by `train_classification.py` and `eval_classification.py` (MAE path);
+  model added to `config/exp/v3/{sun_full,e1,e2,e3,e4}.yaml`; `config/exp/v3/lr_sweep_sun_full_v2.yaml` for
+  the sweep (identical to `exp/exp1.yaml` apart from the model list, checked on the loaded configs);
+  `--regimes` in `campaign_plan.py`, `run_campaign.py`, `verify_phase.py`, `summarize_lr_sweep.py` (rule 4
+  for the matched regime); `MODELS` in `run_lr_sweep.sh`; `campaign_plan.py` reads each regime's selected
+  learning rate from `config/model/*.yaml` (Python 3.8 fix in its failure report).
+- Dry run, four regimes (`results_v3/verification/campaign_plan_all4.csv`, `campaign_plan_checks_all4.json`):
+  720 runs; SSL-imnet-matched resolves the same configs, packs, fine-tuning mode, threshold policy and parent
+  pattern as SUP-imnet in 180/180 runs; the only failures are its 90 sun_full/E1 runs with `finetune_lr`
+  pending; the three other regimes have none. Tests unchanged (pre-existing failures only).
