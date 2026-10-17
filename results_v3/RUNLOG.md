@@ -722,3 +722,22 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   in every singular fit.
 - Full run on one simulated campaign (effects scenario, B = 2000, 924 s):
   `results_v3/verification/analysis_v3_simulated/`.
+
+### 2026-10-17: SSL-imnet-matched MAE pretraining finished
+
+- 2026-10-16 12:08:08 → 2026-10-17 06:00:24; training time 17 h 52 min 13 s (main_pretrain.py), GPU 1,
+  `ssl4polyp-pretrain`, commit `fdb1ee1` (code `32ca324`). 400/400 epochs (0–399), each 776 iterations
+  (2 min 39 s – 2 min 40 s per epoch), uninterrupted: no power cut, no resume, no error.
+- Mean train loss (`ckpts/log.txt`, SHA-256 `beb260412ab9ebbb1a715e4b5b130278222a3cf8ce520853697a2393a78204ec`):
+
+| Epoch | 0 | 50 | 100 | 150 | 200 | 250 | 300 | 350 | 399 |
+|---|---|---|---|---|---|---|---|---|---|
+| Train loss | 1.212950 | 0.323818 | 0.310994 | 0.305432 | 0.299819 | 0.294123 | 0.287659 | 0.282087 | 0.280343 |
+
+- Final checkpoint `checkpoints_v3/pretrain/mae_imnet_matched/ckpts/ckpts/checkpoint-399.pth` (`last.pth`),
+  SHA-256 `964089f643ddf3bd3d4cd883a821ae74bb6f5226c483801a693680611504c328`: epoch 399, stored args with
+  `data_path=/workspace/data/imagenet_matched_99417`, seed 0, empty `resume`, `start_epoch` 0; all weights
+  finite; loads into the fine-tuning backbone (`ViT_from_MAE`, 254 tensors).
+- Kept checkpoints: milestones 49, 149, 199, 249, 299, 349, 399 and 9, 85, 89, 95, 99 (lexicographic retention,
+  as noted at launch; no effect since there was no interruption).
+- Incidents: none.
