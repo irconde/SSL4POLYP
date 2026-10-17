@@ -801,3 +801,30 @@ next. Logs and events: `results_v3/campaign/<phase>_ssl_imnet_matched/`.
   kept under `checkpoints_v3/campaign/`, not in git), `campaign4_<phase>_verification.json`, `_events.jsonl`,
   `campaign4_driver.sh`. Disk: 830 GB free.
 - Incidents: none. No metric was computed or reported.
+
+## SAP v3.3
+
+### 2026-10-17: variant validation of the primary inference (simulated data only)
+
+- Plan and decision rule committed and pushed before the run (`0b6dd67`,
+  `results_v3/verification/analysis_v3_variants/PLAN.md`). CPU only, 12 processes at nice 19; no real result read.
+- 200 null and 50 effects repetitions of a simulated campaign; three variants on the same data: V1 (SAP v3.2c:
+  `lmer`, Satterthwaite, fallback), V2 (`lmer`, Kenward–Roger, same fallback; `r-pbkrtest` 0.5.5 added to
+  `ssl4polyp-analysis`), V3 (always the t-test on the K partition means).
+- Result (`analysis_v3_variants/RESULTS.md`): identical decisions in 1,750/1,750 tests; family-wise false
+  confirmations 7/200 = 0.035 (exact 95 % CI 0.014–0.071); minimum model-CI coverage 0.92 (H4 and H5 with
+  effects, 46/50); mean power 1.00. V1 fails the coverage condition (≥ 0.93); V2 and V3 too → V3 by the rule.
+- 13 simulated targets clipped in 7 repetitions; without them the decision is the same (7/194, CI 0.015–0.073,
+  minimum coverage 0.918).
+
+### 2026-10-17: SAP v3.3 registered (before any analysis of the real data)
+
+| Document | Path | SHA-256 | Commit |
+|---|---|---|---|
+| SAP v3.3 | `docs/v3/plan_analisis_estadistico_v3_3.md` | `fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56` | tag `v3-cmpb-sap33` |
+
+Supersedes SAP v3.2c (`a387aed0…d36874d47`). Only change (deviation 9.3, `results_v3/SAP_deviations.md`): the
+inference on μ in section 4 is always the one-sample t-test on the K partition means (df = K − 1); the
+`lmer`/Satterthwaite fit and its fallback rule are removed. With every run present the estimates, CIs and p-values
+are the same as under v3.2c. Registered before any analysis of the real campaign results: no metric of the real
+runs has been computed (campaign records above: "No metric was computed or reported").

@@ -48,3 +48,18 @@
   HyperKvasir training logs are not available, so this follows from the stored arguments and dataset size.
 - **Effect on the SAP:** none on hypotheses, metrics or rules; the matched regime differs from SSL-colon in
   the PyTorch version used for pretraining (2.4.1 vs, probably, 1.9), declared as a limitation.
+
+## 2026-10-17: inference method of section 4 (SAP v3.3)
+
+- **SAP:** `docs/v3/plan_analisis_estadistico_v3_3.md`, SHA-256 `fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56` (deviation 9.3), tag `v3-cmpb-sap33`.
+- **When:** after the four-regime campaign finished and **before any analysis of the real data**; no metric of the
+  real runs had been computed or seen.
+- **What changed:** the inference on μ is always the one-sample t-test on the K partition means (df = K − 1),
+  instead of `lmer` with Satterthwaite df and the fallback rule for singular or non-converged fits.
+- **Why:** simulation validation with a decision rule fixed and committed before the run (`0b6dd67`): 200 null and
+  50 effects repetitions, variants V1 (v3.2c), V2 (Kenward–Roger) and V3 (t-test on partition means). The three
+  gave identical decisions; family-wise false confirmations 7/200 (exact 95 % CI 0.014–0.071); minimum coverage
+  0.92 < 0.93 → no variant met both conditions → V3 by the rule
+  (`results_v3/verification/analysis_v3_variants/RESULTS.md`).
+- **Effect:** none on H1–H7, metrics, Holm, bootstrap or the double confirmation rule. With all runs present the
+  results are identical to v3.2c; the change only matters if runs are missing and removes the singularity check.
