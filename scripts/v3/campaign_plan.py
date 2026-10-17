@@ -44,6 +44,14 @@ def selected_lr(regime: str) -> Optional[float]:
     cfg = yaml.safe_load((REPO / "config/model" / f"{regime}.yaml").read_text())["model"]
     return float(cfg["finetune_lr"]) if "finetune_lr" in cfg else None
 CKPT_ROOT = "checkpoints_v3/campaign/classification"
+# Campaign settings (defaults = the registered campaign). The exploratory common-learning-rate experiment
+# (docs/v3/plan_exploratorio_lr_comun.md) sets another root and ``--override lr=<value>`` for sun_full and E1.
+CAMPAIGN = {"root": CKPT_ROOT, "lr_override": None}
+
+
+def set_campaign(root: str = CKPT_ROOT, lr_override: Optional[str] = None) -> None:
+    CAMPAIGN["root"] = root.rstrip("/")
+    CAMPAIGN["lr_override"] = lr_override
 
 
 def sha256(path: Path) -> str:
@@ -68,7 +76,7 @@ def resolve(argv: List[str]) -> Dict[str, object]:
 
 
 def parent_path(k: int, seed: int, regime: str) -> str:
-    return f"{CKPT_ROOT}/k{k}/sun_full/{regime}_seed{seed}/sun_baselines/{TAG[regime]}_SUNFull_s{seed}.pth"
+    return f"{CAMPAIGN['root']}/k{k}/sun_full/{regime}_seed{seed}/sun_baselines/{TAG[regime]}_SUNFull_s{seed}.pth"
 
 
 def manifest(pack: str) -> dict:
@@ -82,16 +90,18 @@ def case_set(path: Path) -> set:
 
 def run_matrix(regimes=REGIMES) -> List[Dict[str, object]]:
     runs: List[Dict[str, object]] = []
+    CKPT_ROOT = CAMPAIGN["root"]  # noqa: N806
+    lr = ["--override", f"lr={CAMPAIGN['lr_override']}"] if CAMPAIGN["lr_override"] else []
     for k in PARTITIONS:
         for seed in SEEDS:
             for regime in regimes:
                 base = ["--partition", str(k), "--seed", str(seed), "--model-key", regime, "--roots", "data/roots.json"]
                 runs.append({"experiment": "sun_full", "k": k, "seed": seed, "regime": regime, "variant": "",
-                             "argv": ["--exp-config", "exp/v3/sun_full.yaml", *base,
+                             "argv": ["--exp-config", "exp/v3/sun_full.yaml", *base, *lr,
                                       "--output-dir", f"{CKPT_ROOT}/k{k}/sun_full/{regime}_seed{seed}"]})
                 for p in PERCENTS:
                     runs.append({"experiment": "E1", "k": k, "seed": seed, "regime": regime, "variant": f"p{p}",
-                                 "argv": ["--exp-config", "exp/v3/e1.yaml", *base, "--dataset-percent", str(p),
+                                 "argv": ["--exp-config", "exp/v3/e1.yaml", *base, *lr, "--dataset-percent", str(p),
                                           "--output-dir", f"{CKPT_ROOT}/k{k}/e1/p{p}/{regime}_seed{seed}"]})
                 parent = parent_path(k, seed, regime)
                 runs.append({"experiment": "E2", "k": k, "seed": seed, "regime": regime, "variant": "",
@@ -123,10 +133,14 @@ def check_run(run: Dict[str, object], resolved: Dict[str, object], index: dict) 
     expect(int(a.seed) == seed, f"training seed {a.seed} != {seed}")
     if exp in ("sun_full", "E1"):
         expect(a.finetune_mode == "full", f"finetune {a.finetune_mode}")
-        chosen = selected_lr(regime)
-        expect(chosen is not None, "no finetune_lr in the model config (sweep pending)")
-        expect(chosen is None or abs(float(a.lr) - chosen) < 1e-12, f"lr {a.lr} != {chosen}")
-        expect(str(a.lr_source).startswith("model config"), f"lr source {a.lr_source}")
+        if CAMPAIGN["lr_override"]:
+            expect(abs(float(a.lr) - float(CAMPAIGN["lr_override"])) < 1e-12, f"lr {a.lr} != override {CAMPAIGN['lr_override']}")
+            expect(a.lr_source == "override", f"lr source {a.lr_source}")
+        else:
+            chosen = selected_lr(regime)
+            expect(chosen is not None, "no finetune_lr in the model config (sweep pending)")
+            expect(chosen is None or abs(float(a.lr) - chosen) < 1e-12, f"lr {a.lr} != {chosen}")
+            expect(str(a.lr_source).startswith("model config"), f"lr source {a.lr_source}")
         expect(a.val_pack == base and a.test_pack == base, f"val/test {a.val_pack}/{a.test_pack}")
         expect(a.threshold_policy == "f1_opt_on_val", f"policy {a.threshold_policy}")
         expect(a.parent_checkpoint in (None, ""), "unexpected parent")
@@ -238,7 +252,10 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=REPO / "results_v3/verification")
     parser.add_argument("--regimes", nargs="+", default=list(REGIMES), choices=list(REGIMES))
     parser.add_argument("--tag", default="", help="suffix for the output file names")
+    parser.add_argument("--root", default=CKPT_ROOT, help="checkpoint root of the campaign")
+    parser.add_argument("--lr-override", default=None, help="explicit --override lr=<value> for sun_full and E1")
     args = parser.parse_args()
+    set_campaign(args.root, args.lr_override)
     index = yaml.safe_load((V3 / "index.yaml").read_text())
     sap = current_sap()
 
