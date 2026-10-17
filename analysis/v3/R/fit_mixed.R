@@ -1,9 +1,10 @@
-# SAP v3.2c section 4: d_{k,s} = mu + u_k + e_{k,s}, REML (lme4), Satterthwaite df (lmerTest).
+# SAP v3.3 section 4 (variant "ttest", passed by analysis/v3): one-sample t-test on the K partition means.
+# SAP v3.2c section 4 (variant "satterthwaite"): d_{k,s} = mu + u_k + e_{k,s}, REML (lme4), Satterthwaite df.
 # Fallback (section 4.3): if the fit is singular (partition variance estimated as 0) or does not
 # converge, average the seeds within each partition and run a one-sample t-test on the K means (df = K - 1).
 #
 # Usage: Rscript fit_mixed.R <input.csv: id,k,s,d> <output.csv> [variant]
-#   variant "satterthwaite" (default, SAP v3.2c): lmer with Satterthwaite df, fallback as above
+#   variant "satterthwaite" (default when no variant is given; SAP v3.2c): lmer with Satterthwaite df, fallback as above
 #           "kenward-roger": the same with Kenward-Roger df and adjusted SE (pbkrtest), fallback as above
 #           "ttest": always the one-sample t-test on the K partition means (df = K - 1)
 # One fit per id. With a single partition (K = 1) the model is not estimable and a one-sample t-test

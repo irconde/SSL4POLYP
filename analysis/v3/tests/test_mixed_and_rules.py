@@ -21,7 +21,7 @@ def test_lmer_matches_balanced_anova_satterthwaite():
     rng = np.random.default_rng(3)
     u = rng.normal(0, 0.03, 5)
     d = {(k, s): 0.02 + u[k - 1] + rng.normal(0, 0.01) for k in range(1, 6) for s in (13, 29, 47)}
-    fit = mixed.fit_many({"x": d}).iloc[0]
+    fit = mixed.fit_many({"x": d}, "satterthwaite").iloc[0]
     assert fit["method"] == "lmer" and not fit["singular"] and fit["converged"]
     arr = np.array([[d[(k, s)] for s in (13, 29, 47)] for k in range(1, 6)])
     K, n = arr.shape
@@ -39,12 +39,12 @@ def test_lmer_matches_balanced_anova_satterthwaite():
 
 
 def test_fallback_when_partition_variance_is_zero():
-    """Equal partition means (and large seed noise) => REML σ²_partition = 0 => singular => t-test on K means."""
+    """v3.2c variant: equal partition means (and large seed noise) => REML σ²_partition = 0 => singular => t-test."""
 
     dev = (-0.02, 0.0, 0.02)
     offsets = (0.0005, -0.0005, 0.0003, -0.0003, 0.0)
     d = {(k, s): 0.01 + offsets[k - 1] + dev[j] for k in range(1, 6) for j, s in enumerate((13, 29, 47))}
-    fit = mixed.fit_many({"x": d}).iloc[0]
+    fit = mixed.fit_many({"x": d}, "satterthwaite").iloc[0]
     assert fit["singular"] in (True, "TRUE") or bool(fit["singular"])
     assert fit["method"] == "fallback_t"
     means = [np.mean([d[(k, s)] for s in (13, 29, 47)]) for k in range(1, 6)]
@@ -53,6 +53,23 @@ def test_fallback_when_partition_variance_is_zero():
     assert np.isclose(fit["p"], tt.pvalue, rtol=1e-8)
     lo, hi = stats.t.interval(0.95, 4, loc=np.mean(means), scale=stats.sem(means))
     assert np.isclose(fit["ci_lo"], lo) and np.isclose(fit["ci_hi"], hi)
+
+
+def test_v33_inference_is_the_t_test_on_partition_means_and_equals_lmer_when_balanced():
+    rng = np.random.default_rng(5)
+    u = rng.normal(0, 0.02, 5)
+    bal = {(k, s): 0.01 + u[k - 1] + rng.normal(0, 0.01) for k in range(1, 6) for s in (13, 29, 47)}
+    unb = {key: v for key, v in bal.items() if key not in ((2, 29), (5, 13))}
+    for d in (bal, unb):
+        fit = mixed.fit_many({"x": d}).iloc[0]      # default = SAP v3.3
+        assert fit["method"] == "partition_means_t"
+        means = [np.mean([v for (k, _), v in d.items() if k == kk]) for kk in range(1, 6)]
+        tt = stats.ttest_1samp(means, 0.0)
+        assert np.isclose(fit["estimate"], np.mean(means)) and fit["df"] == 4 and np.isclose(fit["p"], tt.pvalue, rtol=1e-10)
+    lm = mixed.fit_many({"x": bal}, "satterthwaite").iloc[0]
+    tt = mixed.fit_many({"x": bal}).iloc[0]
+    if lm["method"] == "lmer":
+        assert np.isclose(lm["p"], tt["p"], rtol=1e-5) and np.isclose(lm["ci_lo"], tt["ci_lo"], rtol=1e-5)
 
 
 def test_single_partition_uses_seed_t_test_and_constant_data_is_flagged():

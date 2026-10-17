@@ -2,7 +2,7 @@
 
 Settings: bootstrap B = 200 per repetition (the analysis itself uses 2000); null 20, effects 6, zero partition variance 4 repetitions. Each repetition simulates a full campaign (4 regimes × 5 partitions × 3 seeds; `analysis/v3/simulate.py`) and runs H1–H7 (model, fallback, Holm over 7, bootstrap, double rule). Partition and seed SD of every difference: 0.008 (0 between partitions in the third scenario). No simulated target was clipped.
 
-Produced by `pytest analysis/v3/tests` (log: `pytest_log.txt`, 23 passed); per-repetition rows in `validation_reps.csv`.
+Produced by `pytest analysis/v3/tests`; per-repetition rows in `validation_reps.csv`. First run 2026-10-16 under SAP v3.2c (23 passed); rerun 2026-10-17 under SAP v3.3 (`pytest_log.txt`, 24 passed): the 30 repetitions give the same decisions, and every fit now uses the t-test on the partition means (the "fallback used" column below is from the v3.2c run).
 
 ## effects
 

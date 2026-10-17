@@ -828,3 +828,7 @@ inference on μ in section 4 is always the one-sample t-test on the K partition 
 `lmer`/Satterthwaite fit and its fallback rule are removed. With every run present the estimates, CIs and p-values
 are the same as under v3.2c. Registered before any analysis of the real campaign results: no metric of the real
 runs has been computed (campaign records above: "No metric was computed or reported").
+- Analysis code switched to SAP v3.3 (`analysis/v3/sap.py`: `MODEL_VARIANT = "ttest"`; the v3.2c variants stay
+  in `fit_mixed.R` for the validation). Tests 24/24 pass (1 h 09 min). The full simulated run
+  (`analysis_v3_simulated/`, B = 2000) was redone under v3.3: same estimates, CIs, p-values and verdicts for H1–H7 as
+  under v3.2c. No analysis of the real data.

@@ -1,4 +1,4 @@
-"""SAP v3.2c analysis: per-run metrics, paired differences, mixed models, cluster bootstrap, Holm and the
+"""SAP v3.3 analysis: per-run metrics, paired differences, mixed models, cluster bootstrap, Holm and the
 double confirmation rule, secondary and sensitivity analyses."""
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .design import Contrast, View, ViewKey, bootstrap, build_views, ci95, compl
 from .loader import Campaign, completeness, load_campaign
 from .sap import (
     ALPHA, B_BOOT, BOOT_SEED, CALIBRATION, COMPARATORS, HYPOTHESES, HYPOTHESIS_TEXT, MATCHED, METRICS,
-    NEGSOURCE_BUDGET, PER_POLYP, sap_status,
+    MODEL_VARIANT, NEGSOURCE_BUDGET, PER_POLYP, sap_status,
 )
 
 LOCO_METRICS = ("auroc", "auprc", "f1", "balanced_accuracy", "recall", "specificity")
@@ -203,7 +203,7 @@ def run_analysis(
 
     metric_of = lambda vk, m: point[vk][m]  # noqa: E731
     per_run = {c.id: c.per_run(metric_of) for c in contrasts}
-    fits = mixed.fit_many(per_run).set_index("id")
+    fits = mixed.fit_many(per_run, MODEL_VARIANT).set_index("id")
     log(f"[models] {len(fits)} fits ({time.time() - t0:.0f}s)")
 
     boot: Dict[str, Tuple[float, float, int]] = {}

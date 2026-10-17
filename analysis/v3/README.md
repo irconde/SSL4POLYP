@@ -1,7 +1,7 @@
-# Campaign v3 analysis (SAP v3.2 revision c)
+# Campaign v3 analysis (SAP v3.3)
 
-Implements `docs/v3/plan_analisis_estadistico_v3_2.md` (SHA-256 `a387aed0…d36874d47`, the last SAP registered in
-`results_v3/RUNLOG.md`). Environment: `ssl4polyp-analysis` (`env/environment-analysis.yml`, see `env/README.md`).
+Implements `docs/v3/plan_analisis_estadistico_v3_3.md` (SHA-256 `fd6b0342…7ff56`, tag `v3-cmpb-sap33`, the last SAP
+registered in `results_v3/RUNLOG.md`; v3.2c plus deviation 9.3). Environment: `ssl4polyp-analysis` (`env/environment-analysis.yml`, see `env/README.md`).
 
 ```bash
 conda activate ssl4polyp-analysis
@@ -20,11 +20,12 @@ PYTHONPATH=. python -m analysis.v3.validate --out <dir>                         
 | `loader.py` | Finds complete runs (`RUN_COMPLETE.json`) under one or more roots, reads τ from the JSONs and the per-frame CSVs; structural integrity checks (inherited τ = parent τ, paired runs score the same frames, E2 = sun_full test frames) |
 | `design.py` | Views (run × rows × τ × bootstrap units), linear paired contrasts `d_{k,s} = Σ w·metric`, cluster bootstrap (section 5) |
 | `contrasts.py` | H1–H7 exactly as in section 3; all secondary comparisons of section 6; k = 1 and no-s500 sensitivity contrasts |
-| `R/fit_mixed.R`, `mixed.py` | `lmerTest::lmer(d ~ 1 + (1 | k))`, REML, Satterthwaite; fallback t-test on the K partition means when singular or not converged; Holm; SDs between partitions and seeds |
+| `R/fit_mixed.R`, `mixed.py` | Section 4 inference: one-sample t-test on the K partition means (v3.3); the v3.2c variants (`lmer` + Satterthwaite or Kenward–Roger, with fallback) are kept for the validation; Holm; SDs between partitions and seeds |
 | `analysis.py` | Orchestration: metrics, contrasts, models, bootstrap per experiment, Holm + double confirmation rule, LOCO (E3 and negative-source decomposition) and leave-one-case-out (E2 flat) |
 | `tables.py`, `figures.py`, `run_analysis.py` | Tables (CSV + Markdown), figures (PNG), report and CLI |
 | `simulate.py` | Simulated campaigns with the real structure and known effects |
 | `validate.py` | Monte Carlo validation (effects, null, zero partition variance) |
+| `validate_variants.py` | Validation of three inference variants (V1 v3.2c, V2 Kenward–Roger, V3 t-test) that led to SAP v3.3 |
 | `tests/` | Automated tests |
 
 ## How the SAP is implemented
@@ -35,8 +36,9 @@ PYTHONPATH=. python -m analysis.v3.validate --out <dir>                         
   negatives) − AUROC(common positives vs isolated negatives) on the E4 s50 zero-shot outputs (positives also in the
   E3 test of the same run), averaged over regimes. H6/H7: balanced accuracy of arm B (resp. C) − arm A, averaged
   over budgets and regimes.
-- **Model (4.2–4.3).** One fit per contrast; `method` is `lmer`, `fallback_t` (singular: `isSingular`, tol 1e-4, or
-  not converged) or `t_seeds_K1` (only one partition: k = 1 sensitivity analysis).
+- **Inference (4.2–4.3, v3.3).** One test per contrast: seeds averaged within each partition, one-sample t-test on
+  the K partition means (df = K − 1); `method` is `partition_means_t`, `t_seeds_K1` (only one partition: k = 1
+  sensitivity analysis) or `constant` (zero variance). With all runs present this equals the v3.2c `lmer` fit.
 - **Holm (4.4).** Over the hypotheses that exist. Until SSL-imnet-matched results exist, H2 is reported as
   `pending`, Holm runs over the other six and their status is `provisional`; H5–H7 then average the three available
   regimes. Once the matched runs are found (under any root), H2 enters and Holm runs over all seven.

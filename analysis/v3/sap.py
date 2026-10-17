@@ -1,4 +1,4 @@
-"""Constants fixed by SAP v3.2 revision c (registered in ``results_v3/RUNLOG.md``)."""
+"""Constants fixed by SAP v3.3 (registered in ``results_v3/RUNLOG.md``; v3.2c plus deviation 9.3)."""
 from __future__ import annotations
 
 import hashlib
@@ -8,8 +8,12 @@ from typing import Dict
 
 REPO = Path(__file__).resolve().parents[2]
 
-SAP_PATH = "docs/v3/plan_analisis_estadistico_v3_2.md"
-SAP_SHA256 = "a387aed06f6901affca6c523a4f9ea3b1fca9b34f9e1c7ec69be3ebd36874d47"  # v3.2 revision c
+SAP_PATH = "docs/v3/plan_analisis_estadistico_v3_3.md"
+SAP_SHA256 = "fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56"  # v3.3
+
+# Section 4 (v3.3): one-sample t-test on the K partition means (``fit_mixed.R`` variant "ttest").
+# v3.2c used lmer + Satterthwaite with a fallback (variant "satterthwaite"), kept for the validation.
+MODEL_VARIANT = "ttest"
 
 # Section 1
 REGIMES = ("sup_imnet", "ssl_imnet", "ssl_colon", "ssl_imnet_matched")
