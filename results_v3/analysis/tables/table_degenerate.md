@@ -1,0 +1,100 @@
+### Degenerate predictors (test specificity or sensitivity < 0.10 at the operating threshold)
+
+| experiment | variant | slot | regime | regime_label | n_runs | n_degenerate | proportion |
+|---|---|---|---|---|---|---|---|
+| e1 | 5 | all | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e1 | 5 | all | ssl_imnet | SSL-imnet | 15 | 2 | 0.1333 |
+| e1 | 5 | all | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e1 | 5 | all | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e1 | 10 | all | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e1 | 10 | all | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e1 | 10 | all | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e1 | 10 | all | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e1 | 25 | all | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e1 | 25 | all | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e1 | 25 | all | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e1 | 25 | all | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e1 | 50 | all | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e1 | 50 | all | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e1 | 50 | all | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e1 | 50 | all | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e1 | 100 | all | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e1 | 100 | all | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e1 | 100 | all | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e1 | 100 | all | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e2 |  | overall | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e2 |  | overall | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e2 |  | overall | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e2 |  | overall | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e3 |  | all | ssl_colon | SSL-colon | 15 | 6 | 0.4000 |
+| e3 |  | all | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e3 |  | all | ssl_imnet_matched | SSL-imnet-matched | 15 | 5 | 0.3333 |
+| e3 |  | all | sup_imnet | SUP-imnet | 15 | 4 | 0.2667 |
+| e4 | 50 | A | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 50 | A | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 50 | A | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 50 | A | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 50 | B | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 50 | B | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 50 | B | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 50 | B | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 50 | C | ssl_colon | SSL-colon | 15 | 1 | 0.0667 |
+| e4 | 50 | C | ssl_imnet | SSL-imnet | 15 | 3 | 0.2000 |
+| e4 | 50 | C | ssl_imnet_matched | SSL-imnet-matched | 15 | 7 | 0.4667 |
+| e4 | 50 | C | sup_imnet | SUP-imnet | 15 | 1 | 0.0667 |
+| e4 | 50 | D | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 50 | D | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 50 | D | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 50 | D | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 100 | A | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 100 | A | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 100 | A | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 100 | A | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 100 | B | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 100 | B | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 100 | B | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 100 | B | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 100 | C | ssl_colon | SSL-colon | 15 | 2 | 0.1333 |
+| e4 | 100 | C | ssl_imnet | SSL-imnet | 15 | 2 | 0.1333 |
+| e4 | 100 | C | ssl_imnet_matched | SSL-imnet-matched | 15 | 7 | 0.4667 |
+| e4 | 100 | C | sup_imnet | SUP-imnet | 15 | 4 | 0.2667 |
+| e4 | 100 | D | ssl_colon | SSL-colon | 15 | 1 | 0.0667 |
+| e4 | 100 | D | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 100 | D | ssl_imnet_matched | SSL-imnet-matched | 15 | 1 | 0.0667 |
+| e4 | 100 | D | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 200 | A | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 200 | A | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 200 | A | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 200 | A | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 200 | B | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 200 | B | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 200 | B | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 200 | B | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 200 | C | ssl_colon | SSL-colon | 15 | 3 | 0.2000 |
+| e4 | 200 | C | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 200 | C | ssl_imnet_matched | SSL-imnet-matched | 15 | 7 | 0.4667 |
+| e4 | 200 | C | sup_imnet | SUP-imnet | 15 | 3 | 0.2000 |
+| e4 | 200 | D | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 200 | D | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 200 | D | ssl_imnet_matched | SSL-imnet-matched | 15 | 1 | 0.0667 |
+| e4 | 200 | D | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 500 | A | ssl_colon | SSL-colon | 15 | 1 | 0.0667 |
+| e4 | 500 | A | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 500 | A | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 500 | A | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 500 | B | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 500 | B | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 500 | B | ssl_imnet_matched | SSL-imnet-matched | 15 | 1 | 0.0667 |
+| e4 | 500 | B | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| e4 | 500 | C | ssl_colon | SSL-colon | 15 | 1 | 0.0667 |
+| e4 | 500 | C | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 500 | C | ssl_imnet_matched | SSL-imnet-matched | 15 | 2 | 0.1333 |
+| e4 | 500 | C | sup_imnet | SUP-imnet | 15 | 1 | 0.0667 |
+| e4 | 500 | D | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| e4 | 500 | D | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| e4 | 500 | D | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| e4 | 500 | D | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |
+| sun_full |  | all | ssl_colon | SSL-colon | 15 | 0 | 0.0000 |
+| sun_full |  | all | ssl_imnet | SSL-imnet | 15 | 0 | 0.0000 |
+| sun_full |  | all | ssl_imnet_matched | SSL-imnet-matched | 15 | 0 | 0.0000 |
+| sun_full |  | all | sup_imnet | SUP-imnet | 15 | 0 | 0.0000 |

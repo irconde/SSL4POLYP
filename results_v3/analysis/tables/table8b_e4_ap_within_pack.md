@@ -1,0 +1,52 @@
+### Table 8b: E4 AP differences between regimes within each pack (per budget and arm)
+
+| variant | slot | comparison | metric | mean | sd_partition | sd_seed | n_runs | n_partitions | model_method | model_estimate | model_ci_lo | model_ci_hi | model_p | boot_lo | boot_hi | boot_B |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 50 | A | ssl_colon - sup_imnet | auprc | -0.2101 | 0.0354 | 0.1087 | 15 | 5 | partition_means_t | -0.2101 | -0.2540 | -0.1662 | 1.86e-04 | -0.2978 | -0.0401 | 2000 |
+| 50 | A | ssl_colon - ssl_imnet | auprc | -0.1459 | 0.0705 | 0.0532 | 15 | 5 | partition_means_t | -0.1459 | -0.2334 | -0.0583 | 0.0098 | -0.2077 | -0.0086 | 2000 |
+| 50 | A | ssl_colon - ssl_imnet_matched | auprc | 0.0396 | 0.0165 | 0.0590 | 15 | 5 | partition_means_t | 0.0396 | 0.0191 | 0.0600 | 0.0058 | -0.0347 | 0.1455 | 2000 |
+| 50 | B | ssl_colon - sup_imnet | auprc | -0.2101 | 0.0354 | 0.1087 | 15 | 5 | partition_means_t | -0.2101 | -0.2540 | -0.1662 | 1.86e-04 | -0.2978 | -0.0401 | 2000 |
+| 50 | B | ssl_colon - ssl_imnet | auprc | -0.1459 | 0.0705 | 0.0532 | 15 | 5 | partition_means_t | -0.1459 | -0.2334 | -0.0583 | 0.0098 | -0.2077 | -0.0086 | 2000 |
+| 50 | B | ssl_colon - ssl_imnet_matched | auprc | 0.0396 | 0.0165 | 0.0590 | 15 | 5 | partition_means_t | 0.0396 | 0.0191 | 0.0600 | 0.0058 | -0.0347 | 0.1455 | 2000 |
+| 50 | C | ssl_colon - sup_imnet | auprc | -0.1658 | 0.0783 | 0.1339 | 15 | 5 | partition_means_t | -0.1658 | -0.2630 | -0.0686 | 0.0091 | -0.2422 | -0.0640 | 2000 |
+| 50 | C | ssl_colon - ssl_imnet | auprc | -0.0465 | 0.0961 | 0.0736 | 15 | 5 | partition_means_t | -0.0465 | -0.1659 | 0.0728 | 0.3401 | -0.1045 | 0.0261 | 2000 |
+| 50 | C | ssl_colon - ssl_imnet_matched | auprc | 0.1006 | 0.0331 | 0.1172 | 15 | 5 | partition_means_t | 0.1006 | 0.0595 | 0.1417 | 0.0025 | 0.0309 | 0.1627 | 2000 |
+| 50 | D | ssl_colon - sup_imnet | auprc | -0.1658 | 0.0783 | 0.1339 | 15 | 5 | partition_means_t | -0.1658 | -0.2630 | -0.0686 | 0.0091 | -0.2422 | -0.0640 | 2000 |
+| 50 | D | ssl_colon - ssl_imnet | auprc | -0.0465 | 0.0961 | 0.0736 | 15 | 5 | partition_means_t | -0.0465 | -0.1659 | 0.0728 | 0.3401 | -0.1045 | 0.0261 | 2000 |
+| 50 | D | ssl_colon - ssl_imnet_matched | auprc | 0.1006 | 0.0331 | 0.1172 | 15 | 5 | partition_means_t | 0.1006 | 0.0595 | 0.1417 | 0.0025 | 0.0309 | 0.1627 | 2000 |
+| 100 | A | ssl_colon - sup_imnet | auprc | -0.2128 | 0.0364 | 0.1109 | 15 | 5 | partition_means_t | -0.2128 | -0.2579 | -0.1676 | 1.97e-04 | -0.2989 | -0.0433 | 2000 |
+| 100 | A | ssl_colon - ssl_imnet | auprc | -0.1470 | 0.0718 | 0.0531 | 15 | 5 | partition_means_t | -0.1470 | -0.2361 | -0.0580 | 0.0102 | -0.2089 | -0.0080 | 2000 |
+| 100 | A | ssl_colon - ssl_imnet_matched | auprc | 0.0401 | 0.0168 | 0.0596 | 15 | 5 | partition_means_t | 0.0401 | 0.0192 | 0.0610 | 0.0059 | -0.0341 | 0.1470 | 2000 |
+| 100 | B | ssl_colon - sup_imnet | auprc | -0.2128 | 0.0364 | 0.1109 | 15 | 5 | partition_means_t | -0.2128 | -0.2579 | -0.1676 | 1.97e-04 | -0.2989 | -0.0433 | 2000 |
+| 100 | B | ssl_colon - ssl_imnet | auprc | -0.1470 | 0.0718 | 0.0531 | 15 | 5 | partition_means_t | -0.1470 | -0.2361 | -0.0580 | 0.0102 | -0.2089 | -0.0080 | 2000 |
+| 100 | B | ssl_colon - ssl_imnet_matched | auprc | 0.0401 | 0.0168 | 0.0596 | 15 | 5 | partition_means_t | 0.0401 | 0.0192 | 0.0610 | 0.0059 | -0.0341 | 0.1470 | 2000 |
+| 100 | C | ssl_colon - sup_imnet | auprc | -0.2108 | 0.1145 | 0.1879 | 15 | 5 | partition_means_t | -0.2108 | -0.3530 | -0.0687 | 0.0146 | -0.3003 | -0.1016 | 2000 |
+| 100 | C | ssl_colon - ssl_imnet | auprc | -0.1655 | 0.0902 | 0.1947 | 15 | 5 | partition_means_t | -0.1655 | -0.2776 | -0.0535 | 0.0148 | -0.2389 | -0.0730 | 2000 |
+| 100 | C | ssl_colon - ssl_imnet_matched | auprc | 0.0642 | 0.1410 | 0.1871 | 15 | 5 | partition_means_t | 0.0642 | -0.1109 | 0.2393 | 0.3662 | -0.0052 | 0.1244 | 2000 |
+| 100 | D | ssl_colon - sup_imnet | auprc | -0.2108 | 0.1145 | 0.1879 | 15 | 5 | partition_means_t | -0.2108 | -0.3530 | -0.0687 | 0.0146 | -0.3003 | -0.1016 | 2000 |
+| 100 | D | ssl_colon - ssl_imnet | auprc | -0.1655 | 0.0902 | 0.1947 | 15 | 5 | partition_means_t | -0.1655 | -0.2776 | -0.0535 | 0.0148 | -0.2389 | -0.0730 | 2000 |
+| 100 | D | ssl_colon - ssl_imnet_matched | auprc | 0.0642 | 0.1410 | 0.1871 | 15 | 5 | partition_means_t | 0.0642 | -0.1109 | 0.2393 | 0.3662 | -0.0052 | 0.1244 | 2000 |
+| 200 | A | ssl_colon - sup_imnet | auprc | -0.2177 | 0.0379 | 0.1143 | 15 | 5 | partition_means_t | -0.2177 | -0.2647 | -0.1706 | 2.11e-04 | -0.3045 | -0.0484 | 2000 |
+| 200 | A | ssl_colon - ssl_imnet | auprc | -0.1486 | 0.0735 | 0.0541 | 15 | 5 | partition_means_t | -0.1486 | -0.2399 | -0.0573 | 0.0107 | -0.2103 | -0.0086 | 2000 |
+| 200 | A | ssl_colon - ssl_imnet_matched | auprc | 0.0415 | 0.0170 | 0.0611 | 15 | 5 | partition_means_t | 0.0415 | 0.0204 | 0.0626 | 0.0055 | -0.0311 | 0.1509 | 2000 |
+| 200 | B | ssl_colon - sup_imnet | auprc | -0.2177 | 0.0379 | 0.1143 | 15 | 5 | partition_means_t | -0.2177 | -0.2647 | -0.1706 | 2.11e-04 | -0.3045 | -0.0484 | 2000 |
+| 200 | B | ssl_colon - ssl_imnet | auprc | -0.1486 | 0.0735 | 0.0541 | 15 | 5 | partition_means_t | -0.1486 | -0.2399 | -0.0573 | 0.0107 | -0.2103 | -0.0086 | 2000 |
+| 200 | B | ssl_colon - ssl_imnet_matched | auprc | 0.0415 | 0.0170 | 0.0611 | 15 | 5 | partition_means_t | 0.0415 | 0.0204 | 0.0626 | 0.0055 | -0.0311 | 0.1509 | 2000 |
+| 200 | C | ssl_colon - sup_imnet | auprc | -0.2384 | 0.0751 | 0.2338 | 15 | 5 | partition_means_t | -0.2384 | -0.3316 | -0.1452 | 0.0021 | -0.3231 | -0.1181 | 2000 |
+| 200 | C | ssl_colon - ssl_imnet | auprc | -0.1542 | 0.0798 | 0.2489 | 15 | 5 | partition_means_t | -0.1542 | -0.2533 | -0.0552 | 0.0124 | -0.2157 | -0.0616 | 2000 |
+| 200 | C | ssl_colon - ssl_imnet_matched | auprc | 0.0104 | 0.0713 | 0.1402 | 15 | 5 | partition_means_t | 0.0104 | -0.0781 | 0.0989 | 0.7608 | -0.0327 | 0.0610 | 2000 |
+| 200 | D | ssl_colon - sup_imnet | auprc | -0.2384 | 0.0751 | 0.2338 | 15 | 5 | partition_means_t | -0.2384 | -0.3316 | -0.1452 | 0.0021 | -0.3231 | -0.1181 | 2000 |
+| 200 | D | ssl_colon - ssl_imnet | auprc | -0.1542 | 0.0798 | 0.2489 | 15 | 5 | partition_means_t | -0.1542 | -0.2533 | -0.0552 | 0.0124 | -0.2157 | -0.0616 | 2000 |
+| 200 | D | ssl_colon - ssl_imnet_matched | auprc | 0.0104 | 0.0713 | 0.1402 | 15 | 5 | partition_means_t | 0.0104 | -0.0781 | 0.0989 | 0.7608 | -0.0327 | 0.0610 | 2000 |
+| 500 | A | ssl_colon - sup_imnet | auprc | -0.1170 | 0.0615 | 0.1214 | 15 | 5 | partition_means_t | -0.1170 | -0.1934 | -0.0407 | 0.0131 | -0.1693 | -0.0193 | 1691 |
+| 500 | A | ssl_colon - ssl_imnet | auprc | -0.0698 | 0.0711 | 0.0990 | 15 | 5 | partition_means_t | -0.0698 | -0.1581 | 0.0185 | 0.0931 | -0.1055 | -6.34e-04 | 1691 |
+| 500 | A | ssl_colon - ssl_imnet_matched | auprc | 0.0244 | 0.0268 | 0.0400 | 15 | 5 | partition_means_t | 0.0244 | -0.0089 | 0.0577 | 0.1116 | -0.0133 | 0.0606 | 1691 |
+| 500 | B | ssl_colon - sup_imnet | auprc | -0.1170 | 0.0615 | 0.1214 | 15 | 5 | partition_means_t | -0.1170 | -0.1934 | -0.0407 | 0.0131 | -0.1693 | -0.0193 | 1691 |
+| 500 | B | ssl_colon - ssl_imnet | auprc | -0.0698 | 0.0711 | 0.0990 | 15 | 5 | partition_means_t | -0.0698 | -0.1581 | 0.0185 | 0.0931 | -0.1055 | -6.34e-04 | 1691 |
+| 500 | B | ssl_colon - ssl_imnet_matched | auprc | 0.0244 | 0.0268 | 0.0400 | 15 | 5 | partition_means_t | 0.0244 | -0.0089 | 0.0577 | 0.1116 | -0.0133 | 0.0606 | 1691 |
+| 500 | C | ssl_colon - sup_imnet | auprc | -0.0241 | 0.0306 | 0.0574 | 15 | 5 | partition_means_t | -0.0241 | -0.0621 | 0.0139 | 0.1527 | -0.0652 | 0.0075 | 1691 |
+| 500 | C | ssl_colon - ssl_imnet | auprc | -0.0025 | 0.0264 | 0.1022 | 15 | 5 | partition_means_t | -0.0025 | -0.0353 | 0.0303 | 0.8407 | -0.0509 | 0.0348 | 1691 |
+| 500 | C | ssl_colon - ssl_imnet_matched | auprc | -0.0156 | 0.0150 | 0.0483 | 15 | 5 | partition_means_t | -0.0156 | -0.0343 | 0.0031 | 0.0812 | -0.0390 | 0.0035 | 1691 |
+| 500 | D | ssl_colon - sup_imnet | auprc | -0.0241 | 0.0306 | 0.0574 | 15 | 5 | partition_means_t | -0.0241 | -0.0621 | 0.0139 | 0.1527 | -0.0652 | 0.0075 | 1691 |
+| 500 | D | ssl_colon - ssl_imnet | auprc | -0.0025 | 0.0264 | 0.1022 | 15 | 5 | partition_means_t | -0.0025 | -0.0353 | 0.0303 | 0.8407 | -0.0509 | 0.0348 | 1691 |
+| 500 | D | ssl_colon - ssl_imnet_matched | auprc | -0.0156 | 0.0150 | 0.0483 | 15 | 5 | partition_means_t | -0.0156 | -0.0343 | 0.0031 | 0.0812 | -0.0390 | 0.0035 | 1691 |
