@@ -875,3 +875,21 @@ any error found is reported and registered as a deviation before re-running.
 - Drift (`results_v3/analysis/drift/drift_report.md`): vs manuscript, 16/40 paired differences change sign, 217/264
   levels differ by > 0.02; vs analysis_v2, 165/370 sign changes.
 - Closed 2026-10-17 15:31:35 CEST.
+
+## Exploratory experiment: common learning rate (not registered in the SAP)
+
+### 2026-10-17: plan registered before launching, tag `v3-cmpb-exp-lr-plan`
+
+| Document | Path | SHA-256 | Commit |
+|---|---|---|---|
+| Exploratory plan | `docs/v3/plan_exploratorio_lr_comun.md` | `739fc133379f0183274f40d6b19f2783b07a6cac9981586cc5a541efc3887c1c` | `6f24ba3` |
+
+- Exploratory, decided after seeing the campaign v3 results; its results will not be used to confirm hypotheses
+  (no Holm, no verdicts). Regimes SUP-imnet, SSL-imnet, SSL-colon; `--override lr=1e-3` for sun_full and E1;
+  everything else as campaign v3. Output root `checkpoints_v3/campaign_lr_common/classification`, records
+  `results_v3/campaign_lr_common/`.
+- Campaign scripts extended with `--root`, `--lr-override`, `--records` (defaults unchanged; default matrix identical
+  to the registered one). Dry run (`results_v3/verification/campaign_plan_lr_common.csv`,
+  `campaign_plan_checks_lr_common.json`): 540/540 runs resolved, 0 failures (sun_full 45, E2 45, E3 45, E1 225, E4 180;
+  override in sun_full and E1 only; all outputs and parents under the new root).
+- Comparison code `analysis/v3/exploratory_lr_common.py` committed before launch (tested on simulated data only).
