@@ -778,3 +778,26 @@ No run stopped before epoch 6 or had its best epoch before 6; no epoch-1 batch l
 Decision (rule 4, applied as written): **SSL-imnet-matched fine-tuning lr = 1e-4**, set as `finetune_lr` in
 `config/model/ssl_imnet_matched.yaml`. Dry run of the regime (`campaign_plan_checks_matched.json`): 180 runs
 (sun_full 15, E1 75, E2 15, E3 15, E4 60), 0 failures against SAP v3.2c.
+
+## Campaign 4: SSL-imnet-matched (2026-10-17)
+
+`ssl4polyp-ft`, commit `3afbe6f` (since campaign 3's `8fdbb6b`, fine-tuning code changed only to accept
+`ImageNet_self_matched` as an MAE initialisation and to import `pos_embed` in both modes), packs
+`v3-cmpb-packs2`, SAP v3.2c, fine-tuning lr 1e-4; `results_v3/campaign/run_campaign4.sh` ran the phases in
+order with `--regimes ssl_imnet_matched` on GPUs 0 and 1 (one run per GPU) and verified each phase before the
+next. Logs and events: `results_v3/campaign/<phase>_ssl_imnet_matched/`.
+
+| Phase | Wall time | Runs | GPU 0 / 1 | GPU-hours | Section 6 checks | Failures / retries |
+|---|---|---|---|---|---|---|
+| a) sun_full | 08:30:12 → 09:39:22 (69 min) | 15/15 | 7 / 8 | 2.17 | 165/165 | 0 / 0 |
+| b) E2 + E3 | 09:39:33 → 09:41:55 (2.4 min) | 30/30 (15 + 15) | 15 / 15 | 0.08 | 180/180 | 0 / 0 |
+| c) E1 | 09:42:14 → 12:33:36 (2 h 51 min) | 75/75 | 38 / 37 | 5.63 | 825/825 | 0 / 0 |
+| d) E4, four arms | 12:34:36 → 12:52:28 (18 min) | 60/60 | 29 / 31 | 0.58 | 1,500/1,500 | 0 / 0 |
+
+- Total: 180/180 runs, 2,670/2,670 checks, 8.46 GPU-hours, 08:30 → 12:53 (4 h 23 min wall); no interrupted
+  runs. Extra checks: E2 test scores equal the sun_full test scores for 15/15 runs; arm D kept the inherited τ
+  in 0/60 runs. 150 best-epoch checkpoints kept (sun_full 15, E1 75, E4 60).
+- Records: `results_v3/verification/campaign4_runs.csv`, `campaign4_results_manifest.csv` (2,700 files, 181 MB,
+  kept under `checkpoints_v3/campaign/`, not in git), `campaign4_<phase>_verification.json`, `_events.jsonl`,
+  `campaign4_driver.sh`. Disk: 830 GB free.
+- Incidents: none. No metric was computed or reported.

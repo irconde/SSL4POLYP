@@ -1,0 +1,19 @@
+{
+  "phase": "e2e3",
+  "expected_runs": 30,
+  "complete_runs": 30,
+  "checks": 180,
+  "checks_passed": 180,
+  "checks_by_criterion": {
+    "epoch": 30,
+    "ckpt_sha": 30,
+    "csv_columns": 30,
+    "pred": 30,
+    "json_vs_csv": 30,
+    "partition_seed": 30
+  },
+  "git_commits": {
+    "3afbe6f22fe8ec08ba3de80d5e82d54b43f6c52a": 30
+  },
+  "problems": []
+}
