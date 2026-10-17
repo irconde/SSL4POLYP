@@ -759,3 +759,22 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   720 runs; SSL-imnet-matched resolves the same configs, packs, fine-tuning mode, threshold policy and parent
   pattern as SUP-imnet in 180/180 runs; the only failures are its 90 sun_full/E1 runs with `finetune_lr`
   pending; the three other regimes have none. Tests unchanged (pre-existing failures only).
+
+### 2026-10-17: SSL-imnet-matched learning-rate sweep (SAP v3.2c section 10, rule 4), validation only
+
+`ssl4polyp-ft`, commit `274e007`, `MODELS=ssl_imnet_matched scripts/v3/run_lr_sweep.sh` on GPUs 0 and 1,
+`exp/v3/lr_sweep_sun_full_v2.yaml` (v2 sun_full, same validation split as the other three regimes),
+`--skip-test-eval` (no test CSV exists). 9/9 runs ok, 07:56–08:29 (33 min wall, 1.0 GPU-hours).
+Validation AP JSON = recomputation from the CSV (max |diff| 0). Outputs: `results_v3/verification/lr_sweep_{runs,summary}_matched.csv`,
+`lr_sweep_decision_matched.json`.
+
+| lr | Mean validation AP ± SD | Per seed (13 / 29 / 47) | Epoch-1 train loss | Best epoch |
+|---|---|---|---|---|
+| **1e-4** | **0.9983 ± 0.0004** | 0.9985 / 0.9987 / 0.9979 | 0.648 / 0.635 / 0.660 | 13 / 11 / 21 |
+| 3e-4 | 0.9951 ± 0.0007 | 0.9953 / 0.9956 / 0.9942 | 0.547 / 0.535 / 0.580 | 13 / 16 / 15 |
+| 1e-3 | 0.9878 ± 0.0037 | 0.9844 / 0.9918 / 0.9873 | 0.497 / 0.500 / 0.513 | 7 / 6 / 7 |
+
+No run stopped before epoch 6 or had its best epoch before 6; no epoch-1 batch loss above 2·ln 2.
+Decision (rule 4, applied as written): **SSL-imnet-matched fine-tuning lr = 1e-4**, set as `finetune_lr` in
+`config/model/ssl_imnet_matched.yaml`. Dry run of the regime (`campaign_plan_checks_matched.json`): 180 runs
+(sun_full 15, E1 75, E2 15, E3 15, E4 60), 0 failures against SAP v3.2c.

@@ -1,0 +1,7 @@
+{
+  "chosen_lr": {
+    "ssl_imnet_matched": "1.0e-4"
+  },
+  "outcome": "rule 4: highest mean validation AP",
+  "rule": "SAP v3.1 section 10"
+}
