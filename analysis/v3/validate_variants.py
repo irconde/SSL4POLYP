@@ -61,7 +61,8 @@ def one_rep(task: Tuple[str, int, str, int]) -> List[dict]:
         fits = mixed.fit_many(per_run_h, variant).set_index("id")
         summary = res.summary.copy().set_index("id")
         for src, dst in MODEL_COLS.items():
-            summary.loc[fits.index, dst] = fits[src]
+            summary[dst] = summary[dst].astype(object)
+            summary.loc[fits.index, dst] = fits[src].astype(object)
         out = confirm(summary.reset_index(), hyp, res.notes).set_index("hypothesis")
         for h in HYPOTHESES:
             r = out.loc[h]
@@ -84,6 +85,12 @@ def clopper_pearson(x: int, n: int) -> Tuple[float, float]:
     lo = float(beta.ppf(0.025, x, n - x + 1)) if x > 0 else 0.0
     hi = float(beta.ppf(0.975, x + 1, n - x)) if x < n else 1.0
     return lo, hi
+
+
+def read_reps(path: Path) -> pd.DataFrame:
+    """``scenario`` holds the literal "null", which pandas would read as NaN by default."""
+
+    return pd.read_csv(path, keep_default_na=False, na_values=["", "NaN", "nan"], dtype={"scenario": str, "variant": str, "hypothesis": str})
 
 
 def summarize(df: pd.DataFrame) -> Dict[str, object]:
@@ -154,7 +161,7 @@ def main(argv=None) -> int:
         work.mkdir(parents=True, exist_ok=True)
         done = set()
         if reps_csv.exists():
-            prev = pd.read_csv(reps_csv)
+            prev = read_reps(reps_csv)
             done = set(zip(prev["scenario"], prev["sim_seed"]))
         tasks = [("null", s, str(work), args.B) for s in range(1000, 1000 + args.null_reps)]
         tasks += [("effects", s, str(work), args.B) for s in range(2000, 2000 + args.effect_reps)]
@@ -165,7 +172,7 @@ def main(argv=None) -> int:
                 pd.DataFrame(rows).to_csv(reps_csv, mode="a", header=not reps_csv.exists(), index=False, float_format="%.10g")
                 print(f"[{i}/{len(tasks)}] {rows[0]['scenario']} seed {rows[0]['sim_seed']} ({rows[0]['seconds']} s)", flush=True)
         shutil.rmtree(work, ignore_errors=True)
-    df = pd.read_csv(reps_csv)
+    df = read_reps(reps_csv)
     summary = summarize(df)
     summary["settings"] = {"B": args.B, "null_reps_requested": args.null_reps, "effect_reps_requested": args.effect_reps}
     (args.out / "variant_summary.json").write_text(json.dumps(summary, indent=1))

@@ -1,0 +1,199 @@
+{
+ "variants": {
+  "V1": {
+   "null_reps": 200,
+   "effect_reps": 50,
+   "family_wise_false": 7,
+   "family_wise_rate": 0.035,
+   "family_wise_ci95": [
+    0.014185525898419246,
+    0.0707809983509772
+   ],
+   "min_coverage": 0.92,
+   "mean_power": 1.0,
+   "meets_conditions": false,
+   "per_hypothesis": {
+    "H1": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.96,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    },
+    "H2": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.975,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    },
+    "H3": {
+     "false_confirmation_null": 0.0,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.98,
+     "power_effects": 1.0
+    },
+    "H4": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.92,
+     "power_effects": 1.0
+    },
+    "H5": {
+     "false_confirmation_null": 0.0,
+     "coverage_null": 0.935,
+     "coverage_effects": 0.92,
+     "power_effects": 1.0
+    },
+    "H6": {
+     "false_confirmation_null": 0.015,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.96,
+     "power_effects": 1.0
+    },
+    "H7": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.955,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    }
+   }
+  },
+  "V2": {
+   "null_reps": 200,
+   "effect_reps": 50,
+   "family_wise_false": 7,
+   "family_wise_rate": 0.035,
+   "family_wise_ci95": [
+    0.014185525898419246,
+    0.0707809983509772
+   ],
+   "min_coverage": 0.92,
+   "mean_power": 1.0,
+   "meets_conditions": false,
+   "per_hypothesis": {
+    "H1": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.96,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    },
+    "H2": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.975,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    },
+    "H3": {
+     "false_confirmation_null": 0.0,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.98,
+     "power_effects": 1.0
+    },
+    "H4": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.92,
+     "power_effects": 1.0
+    },
+    "H5": {
+     "false_confirmation_null": 0.0,
+     "coverage_null": 0.935,
+     "coverage_effects": 0.92,
+     "power_effects": 1.0
+    },
+    "H6": {
+     "false_confirmation_null": 0.015,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.96,
+     "power_effects": 1.0
+    },
+    "H7": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.955,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    }
+   }
+  },
+  "V3": {
+   "null_reps": 200,
+   "effect_reps": 50,
+   "family_wise_false": 7,
+   "family_wise_rate": 0.035,
+   "family_wise_ci95": [
+    0.014185525898419246,
+    0.0707809983509772
+   ],
+   "min_coverage": 0.92,
+   "mean_power": 1.0,
+   "meets_conditions": false,
+   "per_hypothesis": {
+    "H1": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.96,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    },
+    "H2": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.975,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    },
+    "H3": {
+     "false_confirmation_null": 0.0,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.98,
+     "power_effects": 1.0
+    },
+    "H4": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.92,
+     "power_effects": 1.0
+    },
+    "H5": {
+     "false_confirmation_null": 0.0,
+     "coverage_null": 0.935,
+     "coverage_effects": 0.92,
+     "power_effects": 1.0
+    },
+    "H6": {
+     "false_confirmation_null": 0.015,
+     "coverage_null": 0.95,
+     "coverage_effects": 0.96,
+     "power_effects": 1.0
+    },
+    "H7": {
+     "false_confirmation_null": 0.005,
+     "coverage_null": 0.955,
+     "coverage_effects": 0.94,
+     "power_effects": 1.0
+    }
+   }
+  }
+ },
+ "agreement": {
+  "max_abs_p_difference": {
+   "V1-V2": 0.00028204207000000203,
+   "V1-V3": 0.00027933200000000713,
+   "V2-V3": 1.7032500000069284e-05
+  },
+  "confirmation_disagreements": {
+   "V1-V2": 0,
+   "V1-V3": 0,
+   "V2-V3": 0
+  }
+ },
+ "rule": {
+  "fwer_upper_max": 0.08,
+  "coverage_min": 0.93,
+  "choice": "V3",
+  "reason": "V1 fails and neither V2 nor V3 meets both conditions: V3 by default"
+ },
+ "clipped_targets_total": 13,
+ "settings": {
+  "B": 200,
+  "null_reps_requested": 200,
+  "effect_reps_requested": 50
+ }
+}
