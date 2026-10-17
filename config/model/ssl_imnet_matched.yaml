@@ -9,3 +9,6 @@ model:
   checkpoint_sha256: 964089f643ddf3bd3d4cd883a821ae74bb6f5226c483801a693680611504c328
   frozen: false
   ss_framework: mae
+  # Fine-tuning learning rate (sun_full, E1) chosen by the SAP v3.2c section 10 sweep, rule 4
+  # (results_v3/verification/lr_sweep_decision_matched.json). E4 keeps its staged schedule.
+  finetune_lr: 1.0e-4
