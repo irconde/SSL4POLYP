@@ -25,6 +25,7 @@ PYTHONPATH=. python -m analysis.v3.validate --out <dir>                         
 | `tables.py`, `figures.py`, `run_analysis.py` | Tables (CSV + Markdown), figures (PNG), report and CLI |
 | `simulate.py` | Simulated campaigns with the real structure and known effects |
 | `validate.py` | Monte Carlo validation (effects, null, zero partition variance) |
+| `drift.py` | Drift report vs the previous manuscript (`analysis_v2/manuscript_values.py`) and `analysis_v2` (written before opening the real data) |
 | `validate_variants.py` | Validation of three inference variants (V1 v3.2c, V2 Kenward–Roger, V3 t-test) that led to SAP v3.3 |
 | `tests/` | Automated tests |
 
