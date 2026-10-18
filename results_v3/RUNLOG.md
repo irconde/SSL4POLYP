@@ -905,3 +905,22 @@ root `checkpoints_v3/campaign_lr_common/classification`, records `results_v3/cam
 | b) E2 + E3 | 18:30:24 → 18:36:50 (6.4 min) | 90/90 | 45 / 45 | 0.21 | 540/540 | 0 / 0 |
 
 No metric was computed or reported.
+
+### 2026-10-18: common-lr campaign, phases c–d and closure
+
+| Phase | Wall time | Runs | GPU 0 / 1 | GPU-hours | Section 6 checks | Failures / retries |
+|---|---|---|---|---|---|---|
+| c) E1 | 18:37:33 → 02:08:18 (7 h 31 min) | 225/225 | 104 / 121 | 14.93 | 2,700/2,700 (incl. lr, 225/225) | 0 / 0 |
+| d) E4, four arms | 02:11:40 → 03:01:36 (50 min) | 180/180 | 91 / 89 | 1.66 | 4,500/4,500 | 0 / 0 |
+
+- Campaign closed: 540/540 runs, 8,280/8,280 checks, 0 failed attempts, 0 retries, 22.03 GPU-hours,
+  2026-10-17 15:49 → 2026-10-18 03:02 (11 h 13 min wall). Arm D kept the inherited τ in 0/180 runs.
+  326 GB under `checkpoints_v3/campaign_lr_common/` (not in git). No file was written under the registered
+  campaign roots (`checkpoints_v3/campaign/`, `results_v3/campaign/`: 0 files newer than the launch).
+- Records: `results_v3/verification/campaign_lr_common_<phase>_verification.json`, `_events.jsonl`, `_driver.log`.
+- **Incidence (commit recorded in the runs):** the RUNLOG commit `bf93a15` (phases a–b) was made while E1 was running;
+  each run records the HEAD at its start, so sun_full, E2, E3 and the first 69 E1 runs record `c31b1d9` and the last
+  156 E1 runs and all 180 E4 runs record `bf93a15`. `git diff c31b1d9 bf93a15` changes only `results_v3/RUNLOG.md`
+  (no code): all runs used the same code. The launcher allows changes under `results_v3/`. No further commit was made
+  until the campaign ended.
+- No metric was computed or reported before this entry.

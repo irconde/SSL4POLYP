@@ -1,0 +1,23 @@
+{
+  "phase": "e1",
+  "expected_runs": 225,
+  "complete_runs": 225,
+  "checks": 2700,
+  "checks_passed": 2700,
+  "checks_by_criterion": {
+    "reload": 225,
+    "epoch": 225,
+    "ckpt_sha": 225,
+    "csv_columns": 450,
+    "pred": 450,
+    "json_vs_csv": 450,
+    "tau": 225,
+    "lr": 225,
+    "partition_seed": 225
+  },
+  "git_commits": {
+    "c31b1d909ae7669926d1b3622e066e2b536b8fbb": 69,
+    "bf93a155e38604bcbd7b7b2c3947372683ad63bf": 156
+  },
+  "problems": []
+}
