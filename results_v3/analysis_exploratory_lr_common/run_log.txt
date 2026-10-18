@@ -1,0 +1,37 @@
+[load] v3 540 runs, common lr 540 runs, 2520 views (21s)
+[metrics] 2520 views; 1785 contrasts (28s)
+[bootstrap] e1: 498 contrasts (168s)
+[bootstrap] e2: 216 contrasts (244s)
+[bootstrap] e3: 57 contrasts (259s)
+[bootstrap] e4: 1011 contrasts (1128s)
+[bootstrap] neg: 3 contrasts (1207s)
+{
+ "v3_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign/classification",
+ "lrc_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign_lr_common/classification",
+ "regimes": [
+  "sup_imnet",
+  "ssl_imnet",
+  "ssl_colon"
+ ],
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "n_contrasts_per_version": 595,
+ "integrity_checks": {
+  "v3": 840,
+  "common": 675
+ },
+ "elapsed_s": 1206.8
+}

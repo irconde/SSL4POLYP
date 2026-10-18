@@ -924,3 +924,17 @@ No metric was computed or reported.
   (no code): all runs used the same code. The launcher allows changes under `results_v3/`. No further commit was made
   until the campaign ended.
 - No metric was computed or reported before this entry.
+
+### 2026-10-18: exploratory common-lr analysis, tag `v3-cmpb-exp-lr-results`
+
+- `analysis/v3/exploratory_lr_common.py` (committed in `6f24ba3` before the campaign; `analysis/v3` unchanged since),
+  `ssl4polyp-analysis`, B = 2000, seed 12345, t-test on partition means. 540 + 540 runs (three regimes), 2,520 views,
+  595 contrasts × 3 versions (common, v3, common − v3), 1,207 s. Output `results_v3/analysis_exploratory_lr_common/`.
+- Exploratory: no Holm, no verdicts. v3 values equal the registered analysis for two-regime contrasts (H1, H3, H4);
+  H5 and H7 average three regimes here (registered: four).
+- Contrasts (estimate, t-test CI): H1 common +0.105 [0.050, 0.160], v3 +0.048 [0.029, 0.066], diff +0.057
+  [0.013, 0.102]; H3 common +0.072 [0.007, 0.137], v3 +0.038 [0.012, 0.064], diff +0.034 [−0.052, 0.120];
+  H4 common +0.079 [0.028, 0.130], v3 −0.072 [−0.099, −0.046], diff +0.151 [0.108, 0.194]; H5 common +0.166, v3 +0.160,
+  diff +0.006 [−0.039, 0.050]; H7 common −0.092, v3 −0.060, diff −0.032 [−0.071, 0.008].
+- Incidence: 46 difference contrasts that include E4 s500 have fewer than 2000 valid bootstrap replicates (same cause
+  as in the registered analysis).

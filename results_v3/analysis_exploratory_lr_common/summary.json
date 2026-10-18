@@ -1,0 +1,30 @@
+{
+ "v3_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign/classification",
+ "lrc_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign_lr_common/classification",
+ "regimes": [
+  "sup_imnet",
+  "ssl_imnet",
+  "ssl_colon"
+ ],
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "n_contrasts_per_version": 595,
+ "integrity_checks": {
+  "v3": 840,
+  "common": 675
+ },
+ "elapsed_s": 1206.8
+}
