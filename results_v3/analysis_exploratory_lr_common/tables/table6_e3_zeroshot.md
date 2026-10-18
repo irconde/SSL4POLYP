@@ -1,0 +1,7 @@
+### table6_e3_zeroshot: levels, common lr vs v3 (mean over runs)
+
+| regime | regime_label | auroc_mean_common | auprc_mean_common | f1_mean_common | precision_mean_common | recall_mean_common | specificity_mean_common | balanced_accuracy_mean_common | brier_mean_common | ece_mean_common | auroc_mean_v3 | auprc_mean_v3 | f1_mean_v3 | precision_mean_v3 | recall_mean_v3 | specificity_mean_v3 | balanced_accuracy_mean_v3 | brier_mean_v3 | ece_mean_v3 | auroc_diff | auprc_diff | f1_diff | precision_diff | recall_diff | specificity_diff | balanced_accuracy_diff | brier_diff | ece_diff |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| sup_imnet | SUP-imnet | 0.5251 | 0.8788 | 0.7965 | 0.8806 | 0.7545 | 0.2877 | 0.5211 | 0.2410 | 0.2603 | 0.6896 | 0.9282 | 0.9080 | 0.8872 | 0.9316 | 0.1891 | 0.5604 | 0.1326 | 0.1183 | -0.1645 | -0.0494 | -0.1115 | -0.0065 | -0.1771 | 0.0986 | -0.0393 | 0.1083 | 0.1420 |
+| ssl_imnet | SSL-imnet | 0.5315 | 0.8809 | 0.8199 | 0.8765 | 0.7910 | 0.2322 | 0.5116 | 0.2162 | 0.2221 | 0.6962 | 0.9334 | 0.9034 | 0.8899 | 0.9187 | 0.2217 | 0.5702 | 0.1463 | 0.1356 | -0.1647 | -0.0526 | -0.0835 | -0.0133 | -0.1278 | 0.0105 | -0.0586 | 0.0699 | 0.0865 |
+| ssl_colon | SSL-colon | 0.6043 | 0.9029 | 0.8514 | 0.8902 | 0.8213 | 0.3047 | 0.5630 | 0.1920 | 0.1878 | 0.6176 | 0.9111 | 0.8989 | 0.8795 | 0.9210 | 0.1370 | 0.5290 | 0.1605 | 0.1533 | -0.0133 | -0.0083 | -0.0475 | 0.0108 | -0.0997 | 0.1678 | 0.0340 | 0.0315 | 0.0345 |
