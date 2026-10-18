@@ -938,3 +938,17 @@ No metric was computed or reported.
   diff +0.006 [−0.039, 0.050]; H7 common −0.092, v3 −0.060, diff −0.032 [−0.071, 0.008].
 - Incidence: 46 difference contrasts that include E4 s500 have fewer than 2000 valid bootstrap replicates (same cause
   as in the registered analysis).
+
+## Exploratory experiment: SSL-imnet with lr 1e-4 in E1 (not registered in the SAP)
+
+### 2026-10-18: plan registered before launching, tag `v3-cmpb-exp-lr2-plan`
+
+| Document | Path | SHA-256 | Commit |
+|---|---|---|---|
+| Exploratory plan | `docs/v3/plan_exploratorio_lr_sslimnet.md` | `93fdf34d434200a74d53fafa95e4c140b6cf3f53c334dc8e686b87f005fbef1c` | `d4e18dc` |
+
+- Exploratory, decided after seeing results; no Holm, no verdicts. SSL-imnet only, `--override lr=1e-4`, sun_full (15)
+  and E1 five budgets (75); root `checkpoints_v3/campaign_lr_sslimnet_1e-4/classification`, records
+  `results_v3/campaign_lr_sslimnet_1e-4/`. Dry run: 90/90 runs with lr = 0.0001 (`override`), 0 failures.
+- Comparison code `analysis/v3/exploratory_lr_sslimnet.py` committed before launch (`analysis/v3` otherwise unchanged).
+- No commits while the campaign runs.
