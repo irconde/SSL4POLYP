@@ -1,0 +1,23 @@
+{
+ "v3_roots": [
+  "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign/classification"
+ ],
+ "new_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign_lr_sslimnet_1e-4/classification",
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "n_base_contrasts": 24,
+ "elapsed_s": 97.6
+}

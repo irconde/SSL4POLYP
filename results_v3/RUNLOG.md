@@ -952,3 +952,21 @@ No metric was computed or reported.
   `results_v3/campaign_lr_sslimnet_1e-4/`. Dry run: 90/90 runs with lr = 0.0001 (`override`), 0 failures.
 - Comparison code `analysis/v3/exploratory_lr_sslimnet.py` committed before launch (`analysis/v3` otherwise unchanged).
 - No commits while the campaign runs.
+
+### 2026-10-18: SSL-imnet lr 1e-4 campaign and exploratory analysis, tag `v3-cmpb-exp-lr2-results`
+
+| Phase | Wall time | Runs | GPU 0 / 1 | GPU-hours | Section 6 checks | Failures / retries |
+|---|---|---|---|---|---|---|
+| sun_full | 08:02:46 → 08:57:13 (54 min) | 15/15 | 8 / 7 | 1.76 | 180/180 (incl. lr = 0.0001 from `override`, 15/15) | 0 / 0 |
+| E1 | 08:57:23 → 11:19:10 (2 h 22 min) | 75/75 | 38 / 37 | 4.62 | 900/900 (incl. lr, 75/75) | 0 / 0 |
+
+- 90/90 runs, 1,080/1,080 checks, 6.38 GPU-hours, all runs on commit `be04f7b` (no commit during the campaign).
+  87 GB under `checkpoints_v3/campaign_lr_sslimnet_1e-4/`. No file written under the other campaign roots.
+- Analysis: `analysis/v3/exploratory_lr_sslimnet.py` (committed in `d4e18dc`; `analysis/v3` unchanged), B = 2000, 98 s.
+  Output `results_v3/analysis_exploratory_lr_sslimnet/`. The v3 versions equal the registered analysis (12 SSL-colon
+  contrasts, max |diff| 0; 75 SSL-imnet runs identical).
+- Contrasts (estimate, t-test CI), SSL-colon − SSL-imnet AUPRC: 5 % lr 1e-4 +0.125 [0.016, 0.233] vs v3 +0.166
+  [0.120, 0.212]; 10 % +0.027 [−0.008, 0.062] vs +0.100 [0.042, 0.159]; AULC +0.001 [−0.020, 0.022] vs +0.010
+  [−0.004, 0.025]. SSL-imnet-matched − SSL-imnet AUPRC: 5 % +0.087 [−0.007, 0.180] vs +0.128 [0.067, 0.189]; 10 % +0.042
+  [0.007, 0.077] vs +0.115 [0.049, 0.181]; AULC +0.015 [−0.008, 0.038] vs +0.024 [0.007, 0.042].
+- Exploratory: no Holm, no verdicts.
