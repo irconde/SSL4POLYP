@@ -26,6 +26,7 @@
 !/results_v3/SAP_deviations.md
 !/results_v3/analysis/
 !/results_v3/analysis_exploratory_lr_common/
+!/results_v3/analysis_exploratory_lr_sslimnet/
 
 # Python cache and virtual environment files
 __pycache__/
