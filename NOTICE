@@ -1,0 +1,54 @@
+SSL4POLYP
+Copyright 2025-2026 Ivan Rodriguez-Conde, Vincent Yip and Florentino Fdez-Riverola.
+
+This repository is distributed under the Apache License, Version 2.0 (see LICENSE), EXCEPT for the
+directory src/ssl4polyp/models/mae/, which is distributed under the Creative Commons
+Attribution-NonCommercial 4.0 International license (see src/ssl4polyp/models/mae/LICENSE).
+Uses of the files in that directory (including the MAE pretraining code and the MAE backbones imported
+for fine-tuning) are subject to the terms of that non-commercial license.
+
+-------------------------------------------------------------------------------------------------------
+Third-party components
+-------------------------------------------------------------------------------------------------------
+
+1. SSL4GIE
+   "A Study on Self-Supervised Pretraining for Vision Problems in Gastrointestinal Endoscopy",
+   Edward Sanderson and Bogdan J. Matuszewski, IEEE Access, 2024 (doi:10.1109/ACCESS.2024.3381517).
+   https://github.com/ESandML/SSL4GIE
+   License: Apache License, Version 2.0.
+   This repository started as a fork of SSL4GIE (commits by Edward Sanderson / ESandML, 2024). The
+   classification fine-tuning code, the model wrappers (src/ssl4polyp/models/models.py,
+   src/ssl4polyp/models/DPT_decoder.py) and the original LICENSE derive from it.
+
+2. Masked Autoencoders (MAE)
+   "Masked Autoencoders Are Scalable Vision Learners", Kaiming He et al., CVPR 2022.
+   https://github.com/facebookresearch/mae
+   Copyright (c) Meta Platforms, Inc. and affiliates.
+   License: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0).
+   Located in src/ssl4polyp/models/mae/ (pretraining, fine-tuning and utility code, with the
+   modifications recorded in this repository's history). The MAE code itself credits DeiT
+   (https://github.com/facebookresearch/deit) and BEiT (https://github.com/microsoft/unilm/tree/master/beit).
+
+3. PyTorch Image Models (timm)
+   Ross Wightman, https://github.com/huggingface/pytorch-image-models
+   License: Apache License, Version 2.0.
+   Used as a dependency (timm 0.3.2 for MAE pretraining, timm 0.4.12 for fine-tuning): the ViT
+   building blocks, the .npz weight loader for the SUP-imnet initialisation and the optimiser
+   parameter groups come from timm. src/ssl4polyp/_compat.py and src/ssl4polyp/models/models.py contain
+   compatibility code written against timm's interfaces.
+
+4. DPT (Dense Prediction Transformers)
+   "Vision Transformers for Dense Prediction", René Ranftl, Alexey Bochkovskiy and Vladlen Koltun,
+   ICCV 2021. https://github.com/isl-org/DPT
+   License: MIT.
+   The readout and reassembly blocks in src/ssl4polyp/models/DPT_decoder.py (inherited from SSL4GIE)
+   follow the DPT implementation. The decoder is not used by the classification experiments.
+
+-------------------------------------------------------------------------------------------------------
+Data and pretrained weights (not distributed in this repository)
+-------------------------------------------------------------------------------------------------------
+
+The datasets (SUN Colonoscopy Video Database, PolypGen, HyperKvasir, ImageNet-1k/ILSVRC-2012) and the
+pretrained weights (AugReg ViT-B/16, MAE ImageNet-1k, MAE HyperKvasir) are subject to their own terms of
+use and must be obtained from their providers. data_packs/ contains only split definitions
+(identifiers, labels and annotations derived from those datasets) and their hashes; see README.md.
