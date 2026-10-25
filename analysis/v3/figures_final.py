@@ -156,13 +156,13 @@ def figure4(loco: pd.DataFrame, h: pd.DataFrame) -> None:
     src_h = "results_v3/analysis/tables/table_hypotheses.csv"
     sub = loco[(loco["comparison"] == "ssl_colon - sup_imnet") & (loco["metric"] == "auroc")].set_index("excluded")
     h4 = h.set_index("hypothesis").loc["H4"]
-    rows = [("All centres", h4["estimate"], h4["model_ci_lo"], h4["model_ci_hi"], src_h, "H4")]
+    rows = [("All centers", h4["estimate"], h4["model_ci_lo"], h4["model_ci_hi"], src_h, "H4")]
     rows += [(f"Without {c}", sub.loc[c, "mean"], sub.loc[c, "model_ci_lo"], sub.loc[c, "model_ci_hi"], src_l, f"excluded={c}")
              for c in ("C1", "C2", "C3", "C4", "C5", "C6")]
     fig, ax = plt.subplots(figsize=(WIDTH_IN, 62 * MM), layout="constrained")
     y = np.arange(len(rows))[::-1]
     for yi, (label, est, lo, hi, src, key) in zip(y, rows):
-        full = label == "All centres"
+        full = label == "All centers"
         ax.plot([lo, hi], [yi, yi], color=COLOR["ssl_colon"], linewidth=1.6, solid_capstyle="butt")
         ax.plot(est, yi, marker="D" if full else "o", markersize=5, color=COLOR["ssl_colon"], markeredgewidth=0.8,
                 markerfacecolor=COLOR["ssl_colon"] if full else "white")
@@ -213,7 +213,7 @@ def figure6(c: pd.DataFrame) -> None:
     c = c[c["base_id"].isin(["H1", "H3", "H4"]) & (c["hypothesis"] == c["base_id"])].set_index("base_id").loc[["H1", "H3", "H4"]]
     labels = {"H1": HYP_SHORT["H1"], "H3": HYP_SHORT["H3"], "H4": HYP_SHORT["H4"]}
     conds = [("v3", "Selected learning rate per regime", BLACK, "o", "black"),
-             ("common", "Common learning rate (1e-3)", GREY, "s", "white")]
+             ("common", r"Shared learning rate ($1\times10^{-3}$)", GREY, "s", "white")]
     fig, ax = plt.subplots(figsize=(WIDTH_IN, 58 * MM), layout="constrained")
     base_y = np.arange(len(c))[::-1] * 1.0
     for yb, (hid, r) in zip(base_y, c.iterrows()):
@@ -290,22 +290,31 @@ def verify(h, t3, loco, t8, c) -> pd.DataFrame:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.parse_args()
+    parser.add_argument("--only", nargs="+", type=int, choices=[2, 3, 4, 5, 6],
+                        help="regenerate only these figures; their rows in plotted_values.csv are replaced")
+    args = parser.parse_args()
+    selected = set(args.only or [2, 3, 4, 5, 6])
     h = pd.read_csv(TABLES / "table_hypotheses.csv")
     t3 = pd.read_csv(TABLES / "table3_e1_performance.csv")
     loco = pd.read_csv(TABLES / "table_loco_e3.csv")
     t8 = pd.read_csv(TABLES / "table8_e4_arms.csv")
     c = pd.read_csv(EXPLORATORY / "contrasts_common_vs_v3.csv")
-    figure2(h)
-    figure3(t3)
-    figure4(loco, h)
-    figure5(t8)
-    figure6(c)
-    pd.DataFrame(ROWS).to_csv(OUT / "plotted_values.csv", index=False, float_format="%.17g")
+    jobs = {2: lambda: figure2(h), 3: lambda: figure3(t3), 4: lambda: figure4(loco, h), 5: lambda: figure5(t8),
+            6: lambda: figure6(c)}
+    for number in sorted(selected):
+        jobs[number]()
+    plotted = pd.DataFrame(ROWS)
+    if args.only and (OUT / "plotted_values.csv").exists():
+        kept = pd.read_csv(OUT / "plotted_values.csv")
+        kept = kept[~kept["figure"].isin([f"Figure {n}" for n in selected])]
+        plotted = pd.concat([kept, plotted], ignore_index=True)
+        plotted["_order"] = plotted["figure"].str.extract(r"(\d+)").astype(int)
+        plotted = plotted.sort_values("_order", kind="stable").drop(columns="_order")
+    plotted.to_csv(OUT / "plotted_values.csv", index=False, float_format="%.17g")
     checks = verify(h, t3, loco, t8, c)
     checks.to_csv(OUT / "verification.csv", index=False, float_format="%.17g")
     worst = checks["abs_diff"].max()
-    print(f"font: {FONT}; plotted values: {len(ROWS)}; checks: {len(checks)}, exact matches: {int(checks['match'].sum())}, "
+    print(f"font: {FONT}; figures: {sorted(selected)}; plotted values: {len(plotted)}; checks: {len(checks)}, exact matches: {int(checks['match'].sum())}, "
           f"max |diff| {worst:.3g}")
     tol = checks[checks["abs_diff"] > 1e-12]
     if not tol.empty:
