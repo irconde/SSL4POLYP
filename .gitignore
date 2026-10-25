@@ -39,3 +39,8 @@ __pycache__/
 
 # Build metadata from pip install -e
 *.egg-info/
+
+# Local working files (not part of the release)
+.claude/
+analysis_v2/
+analysis_v2.zip
