@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 
-sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 if "distutils" not in sys.modules:
     sys.modules["distutils"] = types.ModuleType("distutils")
