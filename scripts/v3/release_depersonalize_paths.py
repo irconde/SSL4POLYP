@@ -21,23 +21,22 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 NOT_DATA_PACKS = r"(?![A-Za-z0-9_])"  # ".../data" but not ".../data_packs"
+HOME = r"/(?:Users|home)/[A-Za-z0-9_.-]+"  # any user's home directory
+ANY = r"(?:/[A-Za-z0-9_.-]+)*?"  # any intermediate directories
 RULES = [
-    (r"/Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE", "<REPO>"),
-    (r"/Users/irconde/Desktop/sssl-polyps/workspace/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
-    (r"/home/irconde/workspace/code/SSL4POLYP/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
-    (r"/workspace/code/SSL4POLYP/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
-    (r"/home/irconde/workspace/code/SSL4POLYP", "<REPO>"),
-    (r"/workspace/code/SSL4POLYP", "<REPO>"),
-    (r"/workspace/code/SSL4GIE", "<REPO>"),
+    (HOME + ANY + r"/workspace/code/SSL4(?:POLYP|GIE)/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
+    (r"/workspace/code/SSL4(?:POLYP|GIE)/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
+    (HOME + ANY + r"/workspace/code/SSL4(?:POLYP|GIE)", "<REPO>"),
+    (r"/workspace/code/SSL4(?:POLYP|GIE)", "<REPO>"),
     (r"/workspace/data_packs_v3_staging", "<DATA_ROOT>/data_packs_v3_staging"),
-    (r"/home/irconde/workspace/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
+    (HOME + ANY + r"/workspace/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
     (r"/workspace/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
-    (r"/home/irconde/miniforge3", "<CONDA_ROOT>"),
-    (r"/home/irconde/workspace", "<REPO>/.."),
-    (r"/home/irconde", "<HOME>"),
-    (r"/Users/irconde", "<HOME>"),
+    (HOME + r"/miniforge3", "<CONDA_ROOT>"),
+    (HOME + r"/workspace", "<REPO>/.."),
+    (r"/home/(?!conda/)[A-Za-z0-9_.-]+", "<HOME>"),  # /home/conda/... are conda-forge build paths
+    (r"/Users/[A-Za-z0-9_.-]+", "<HOME>"),
 ]
-LEFT = re.compile(r"/Users/irconde|/home/irconde|/workspace/(code|data)")
+LEFT = re.compile(r"/Users/[A-Za-z]|/home/(?!conda/)[A-Za-z]|/workspace/(code|data)")
 
 
 def targets() -> list:
