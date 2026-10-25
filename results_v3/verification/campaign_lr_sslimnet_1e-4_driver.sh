@@ -3,7 +3,7 @@
 # stop at the first failed phase or check. Separate root and records.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
-PY=/home/irconde/miniforge3/envs/ssl4polyp-ft/bin/python
+PY=<CONDA_ROOT>/envs/ssl4polyp-ft/bin/python
 OPTS=(--regimes ssl_imnet --root checkpoints_v3/campaign_lr_sslimnet_1e-4/classification --lr-override 1e-4 --records results_v3/campaign_lr_sslimnet_1e-4)
 for phase in sun_full e1; do
   echo "[$(date -Is)] phase ${phase} start"

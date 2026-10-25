@@ -1,6 +1,6 @@
 {
- "v3_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign/classification",
- "lrc_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign_lr_common/classification",
+ "v3_root": "<REPO>/checkpoints_v3/campaign/classification",
+ "lrc_root": "<REPO>/checkpoints_v3/campaign_lr_common/classification",
  "regimes": [
   "sup_imnet",
   "ssl_imnet",

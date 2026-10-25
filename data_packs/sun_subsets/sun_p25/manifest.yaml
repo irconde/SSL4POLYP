@@ -3,8 +3,8 @@ version: '0.0'
 generator:
   repo: polyp-db-analysis
   git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
-  command: polypdb sun subsets-canonical --pack /Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE/data_packs/sun_full
-    --percents 5 10 25 50 100 --seed 13 --out /Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE/data_packs/sun_subsets
+  command: polypdb sun subsets-canonical --pack <REPO>/data_packs/sun_full
+    --percents 5 10 25 50 100 --seed 13 --out <REPO>/data_packs/sun_subsets
   seed: 13
   percent_seed_map:
     5: 13
@@ -29,7 +29,7 @@ frame_sampling:
   resampled_with_replacement: false
   selection_scope: frame
 roots:
-  sun: /Users/irconde/Desktop/sssl-polyps/workspace/data/sun
+  sun: <DATA_ROOT>/sun
 assertions:
   no_case_leakage_across_splits: true
   split_targets_met:
@@ -567,7 +567,7 @@ parent_pack:
     val: 453e9ec4f95d373e5211119e7098750d74b585070ed25bdab127d9a3ad3cd704
     test: 855d4a467e68b1cfbfb031e796d7c8a5ccb44a81f43542a5ffe7de016c5b5b97
     train: 1ddddab032549e0fd5207f2eca347dcfc4fa16c0531d92d7e95a37b726843006
-  path: /Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE/data_packs/sun_full
+  path: <REPO>/data_packs/sun_full
 subset:
   percent: 25
   seed: 13

@@ -3,8 +3,8 @@ version: '0.0'
 generator:
   repo: polyp-db-analysis
   git_commit: d78ed76e6a70d22631aace92bfe9bf9689f2b496
-  command: polypdb polypgen build --root /workspace/code/SSL4POLYP/data/polypgen --out
-    /workspace/data_packs_v3_staging/_parent/polypgen_clean_test_extended --track
+  command: polypdb polypgen build --root <DATA_ROOT>/polypgen --out
+    <DATA_ROOT>/data_packs_v3_staging/_parent/polypgen_clean_test_extended --track
     clean --include-negative-sequences
   git_dirty: false
   environment:
@@ -14,7 +14,7 @@ generator:
 policy:
   unit_of_split: frame
 roots:
-  polypgen_clean: /workspace/code/SSL4POLYP/data/polypgen
+  polypgen_clean: <DATA_ROOT>/polypgen
 assertions:
   class_presence:
     pos: '>0'

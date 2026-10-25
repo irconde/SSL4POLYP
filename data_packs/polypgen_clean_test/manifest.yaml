@@ -3,13 +3,13 @@ version: '0.0'
 generator:
   repo: polyp-db-analysis
   git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
-  command: polypdb polypgen build --root /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
-    --out /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/polypgen_clean_test
+  command: polypdb polypgen build --root <DATA_ROOT>/polypgen
+    --out <DATA_ROOT>/packs/polypgen_clean_test
     --track clean
 policy:
   unit_of_split: frame
 roots:
-  polypgen_clean: /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
+  polypgen_clean: <DATA_ROOT>/polypgen
 assertions:
   class_presence:
     pos: '>0'

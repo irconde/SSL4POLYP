@@ -3,8 +3,8 @@ version: '0.0'
 generator:
   repo: polyp-db-analysis
   git_commit: d78ed76e6a70d22631aace92bfe9bf9689f2b496
-  command: polypdb sun subsets-canonical --pack /workspace/data_packs_v3_staging/k1/base
-    --percents 5 10 25 50 100 --seed 13 --out /workspace/data_packs_v3_staging/k1/sun_subsets
+  command: polypdb sun subsets-canonical --pack <DATA_ROOT>/data_packs_v3_staging/k1/base
+    --percents 5 10 25 50 100 --seed 13 --out <DATA_ROOT>/data_packs_v3_staging/k1/sun_subsets
   seed: 13
   git_dirty: false
   environment:
@@ -76,7 +76,7 @@ frame_sampling:
   resampled_with_replacement: false
   selection_scope: frame
 roots:
-  sun: /workspace/code/SSL4POLYP/data/sun
+  sun: <DATA_ROOT>/sun
 assertions:
   no_case_leakage_across_splits: true
   split_targets_met:
@@ -737,7 +737,7 @@ inputs:
     cases_parquet_sha256: 6b54655e8fef9aecf1618ff159d146e618c4033d2f0c1823dc5958fb6c915565
 parent_pack:
   name: sun_full
-  path: /workspace/data_packs_v3_staging/k1/base
+  path: <DATA_ROOT>/data_packs_v3_staging/k1/base
   manifest_sha256: 177e8857246731d3203ec3324f1964989f4aa99e33acbe425782bacdaa2780bb
   hashes:
     test: 84951612405cae3f06c67d20aef75eb02fe2c2c004bd42e13248d47704fc3f36

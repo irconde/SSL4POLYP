@@ -3,7 +3,7 @@ version: '0.0'
 generator:
   repo: polyp-db-analysis
   git_commit: d78ed76e6a70d22631aace92bfe9bf9689f2b496
-  command: polypdb sun morph --root /workspace/code/SSL4POLYP/data/sun --out /workspace/data_packs_v3_staging/k1/base
+  command: polypdb sun morph --root <DATA_ROOT>/sun --out <DATA_ROOT>/data_packs_v3_staging/k1/base
     --seed 47 --frames-per-case 33
   seed: 47
   git_dirty: false
@@ -68,7 +68,7 @@ frame_sampling:
   frames_per_case: 33
   resampled_with_replacement: false
 roots:
-  sun: /workspace/code/SSL4POLYP/data/sun
+  sun: <DATA_ROOT>/sun
 assertions:
   no_case_leakage_across_splits: true
   split_targets_met:

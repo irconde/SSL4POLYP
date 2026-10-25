@@ -2,9 +2,9 @@
 [bootstrap] {('sun', 1): {'y0': 15, 'y1': 15}, ('sun', 2): {'y0': 15, 'y1': 15}, ('sun', 3): {'y0': 15, 'y1': 15}, ('sun', 4): {'y0': 15, 'y1': 15}, ('sun', 5): {'y0': 15, 'y1': 15}} (98s)
 {
  "v3_roots": [
-  "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign/classification"
+  "<REPO>/checkpoints_v3/campaign/classification"
  ],
- "new_root": "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign_lr_sslimnet_1e-4/classification",
+ "new_root": "<REPO>/checkpoints_v3/campaign_lr_sslimnet_1e-4/classification",
  "partitions": [
   1,
   2,

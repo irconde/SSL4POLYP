@@ -3,8 +3,8 @@ version: '0.0'
 generator:
   repo: polyp-db-analysis
   git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
-  command: polypdb sun build --root /Users/irconde/Desktop/sssl-polyps/workspace/data/sun
-    --out /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/sun_full --seed
+  command: polypdb sun build --root <DATA_ROOT>/sun
+    --out <DATA_ROOT>/packs/sun_full --seed
     47 --frames-per-case 33
   seed: 47
 policy:
@@ -22,7 +22,7 @@ frame_sampling:
   frames_per_case: 33
   resampled_with_replacement: false
 roots:
-  sun: /Users/irconde/Desktop/sssl-polyps/workspace/data/sun
+  sun: <DATA_ROOT>/sun
 assertions:
   no_case_leakage_across_splits: true
   split_targets_met:

@@ -3,8 +3,8 @@ version: '0.0'
 generator:
   repo: polyp-db-analysis
   git_commit: 7de86f730942a9a4c63708a1d0818ade2c384ae0
-  command: polypdb sun perturbations --pack /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/sun_full
-    --out /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/sun_test_perturbations
+  command: polypdb sun perturbations --pack <DATA_ROOT>/packs/sun_full
+    --out <DATA_ROOT>/packs/sun_test_perturbations
     --master-seed 47
 evaluation_runtime:
   generate_perturbations_on_the_fly: true
@@ -74,10 +74,10 @@ row_schema:
     type: float
     nullable: true
 roots:
-  sun: /Users/irconde/Desktop/sssl-polyps/workspace/data/sun
+  sun: <DATA_ROOT>/sun
 parent_pack:
   name: sun_full
-  path: /Users/irconde/Desktop/sssl-polyps/workspace/data/packs/sun_full
+  path: <DATA_ROOT>/packs/sun_full
 perturbations:
 - id: clean
   kind: clean

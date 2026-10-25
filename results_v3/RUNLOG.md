@@ -182,7 +182,7 @@ for the other three regimes. New tag `v3-cmpb-sap32b`.
 
 ### 2026-10-15: packs copied to `data_packs/v3/` and campaign configs
 
-- Source `/workspace/data_packs_v3_staging/` (index.yaml, REPORT.txt, `_parent/`, k1–k5) copied unchanged
+- Source `<DATA_ROOT>/data_packs_v3_staging/` (index.yaml, REPORT.txt, `_parent/`, k1–k5) copied unchanged
   (`diff -r` identical). 221/221 CSV SHA-256 equal to `index.yaml` (none extra or missing); 91 manifests
   with their own `hashes` matching; 31,694 distinct images present (PolypGen SHA-1 and SUN sizes checked).
   k1 base = current `sun_morphology` (train/val/test); `_parent/polypgen_clean_test_extended` = current pack.
@@ -282,7 +282,7 @@ Environment `ssl4polyp-ft`, packs `v3-cmpb-packs2`, SAP v3.2c, launcher `scripts
 
 ### 2026-10-16: ImageNet-1k download check (ILSVRC/imagenet-1k, Hugging Face)
 
-- `/workspace/data/imagenet_hf/data/`: 294/294 `train-NNNNN-of-00294.parquet` present, none missing.
+- `<DATA_ROOT>/imagenet_hf/data/`: 294/294 `train-NNNNN-of-00294.parquet` present, none missing.
 - Dataset revision (commit): `49e2ee26f3810fb5a7536bbf732a7b07389a47b5` (all 294 download records).
 - SHA-256 of every shard computed and equal to the Hugging Face etag (LFS SHA-256) for 294/294.
   List: `results_v3/verification/imagenet/parquet_sha256.txt` (SHA-256 of the list `5d2e38390b74f80e973b944cbc92c06500eee258584288fc2996cbfb684b2bd4`).
@@ -592,7 +592,7 @@ b6b0afcf627311319967762cc760235e9e24582fba6ff3fb629187ba46f09597  data/train-002
 
 - Auxiliary environment `imagenet-convert` (Python 3.11, pyarrow 17.0.0, Pillow 10.4.0, numpy 2.4.6);
   `scripts/v3/imagenet_hf_to_folders.py`, 16 processes, 3 min 51 s.
-- `/workspace/data/imagenet_train/<synset>/<name>.JPEG`: original encoded bytes written unchanged.
+- `<DATA_ROOT>/imagenet_train/<synset>/<name>.JPEG`: original encoded bytes written unchanged.
   Name = original ILSVRC name (the Parquet stores `<original>_<synset>.JPEG`; the `_<synset>` suffix
   added by Hugging Face is dropped); stored for 1,281,167/1,281,167 images, no name collisions.
 - Label → synset from the stored names: one-to-one, and label i = i-th synset in sorted order. Checked:
@@ -609,7 +609,7 @@ b6b0afcf627311319967762cc760235e9e24582fba6ff3fb629187ba46f09597  data/train-002
 - `scripts/v3/imagenet_matched_subset.py`, **seed 99417** (numpy `default_rng`): the 417 classes with
   100 images are `rng.choice(1000, 417, replace=False)` over the sorted synsets; then, per synset in
   sorted order, the first 99 or 100 of `rng.permutation` over its sorted file names.
-- `/workspace/data/imagenet_matched_99417/<synset>/`: 99,417 absolute symbolic links (0 broken),
+- `<DATA_ROOT>/imagenet_matched_99417/<synset>/`: 99,417 absolute symbolic links (0 broken),
   1,000 classes (417 × 100 + 583 × 99). `torchvision.datasets.ImageFolder` (ssl4polyp-pretrain) reads
   99,417 images in 1,000 classes.
 - List with the SHA-256 of every image: `results_v3/verification/imagenet/matched_99417_list.csv`,
@@ -736,7 +736,7 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
 
 - Final checkpoint `checkpoints_v3/pretrain/mae_imnet_matched/ckpts/ckpts/checkpoint-399.pth` (`last.pth`),
   SHA-256 `964089f643ddf3bd3d4cd883a821ae74bb6f5226c483801a693680611504c328`: epoch 399, stored args with
-  `data_path=/workspace/data/imagenet_matched_99417`, seed 0, empty `resume`, `start_epoch` 0; all weights
+  `data_path=<DATA_ROOT>/imagenet_matched_99417`, seed 0, empty `resume`, `start_epoch` 0; all weights
   finite; loads into the fine-tuning backbone (`ViT_from_MAE`, 254 tensors).
 - Kept checkpoints: milestones 49, 149, 199, 249, 299, 349, 399 and 9, 85, 89, 95, 99 (lexicographic retention,
   as noted at launch; no effect since there was no interruption).

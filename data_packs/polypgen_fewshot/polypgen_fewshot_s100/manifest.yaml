@@ -127,12 +127,12 @@ summary_by_split:
 notes:
   excluded_sequences_in_test: []
 roots:
-  polypgen_clean: /Users/irconde/Desktop/sssl-polyps/workspace/data/polypgen
+  polypgen_clean: <DATA_ROOT>/polypgen
 generator:
   repo: polyp-db-analysis
   git_commit: dafb5a5a119f7d6ce1d24fe3f2a20591bdeebaee
-  command: polypdb polypgen fewshot --pack /Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE/data_packs/polypgen_clean_test_extended
-    --sizes 100 --seeds 13 --out /Users/irconde/Desktop/sssl-polyps/workspace/code/SSL4GIE/data_packs/polypgen_fewshot
+  command: polypdb polypgen fewshot --pack <REPO>/data_packs/polypgen_clean_test_extended
+    --sizes 100 --seeds 13 --out <REPO>/data_packs/polypgen_fewshot
   seed: 13
 generated_at: '2025-10-03T20:19:46.750681+00:00'
 hashes:

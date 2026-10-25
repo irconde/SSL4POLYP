@@ -12,8 +12,8 @@
    "runlog_matches": true
   },
   "roots": [
-   "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign/classification",
-   "/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/campaign_matched/classification"
+   "<REPO>/checkpoints_v3/campaign/classification",
+   "<REPO>/checkpoints_v3/campaign_matched/classification"
   ],
   "regimes": [
    "sup_imnet",

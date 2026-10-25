@@ -1,6 +1,6 @@
 ============================= test session starts ==============================
-platform linux -- Python 3.11.17, pytest-9.1.1, pluggy-1.7.0 -- /home/irconde/miniforge3/envs/ssl4polyp-analysis/bin/python
-rootdir: /home/irconde/workspace/code/SSL4POLYP
+platform linux -- Python 3.11.17, pytest-9.1.1, pluggy-1.7.0 -- <CONDA_ROOT>/envs/ssl4polyp-analysis/bin/python
+rootdir: <REPO>
 configfile: pyproject.toml
 collecting ... collected 24 items
 

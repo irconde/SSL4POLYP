@@ -93,7 +93,7 @@
     "run": "SSLColon_PolypGenFew50_s13",
     "criterion": "reload",
     "passed": true,
-    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/e4_s50_ssl_colon_seed13/polypgen_fewshot/s50/seed13/SSLColon_PolypGenFew50_s13_e05_valLoss.pth' (epoch 5)."
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/smoke2/classification/k1/e4_s50_ssl_colon_seed13/polypgen_fewshot/s50/seed13/SSLColon_PolypGenFew50_s13_e05_valLoss.pth' (epoch 5)."
   },
   {
     "run": "SSLColon_PolypGenFew50_s13",
@@ -237,7 +237,7 @@
     "run": "SSLImNet_PolypGenFew50_s13",
     "criterion": "reload",
     "passed": true,
-    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/e4_s50_ssl_imnet_seed13/polypgen_fewshot/s50/seed13/SSLImNet_PolypGenFew50_s13_e23_valLoss.pth' (epoch 23)."
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/smoke2/classification/k1/e4_s50_ssl_imnet_seed13/polypgen_fewshot/s50/seed13/SSLImNet_PolypGenFew50_s13_e23_valLoss.pth' (epoch 23)."
   },
   {
     "run": "SSLImNet_PolypGenFew50_s13",
@@ -381,7 +381,7 @@
     "run": "SUPImNet_PolypGenFew50_s13",
     "criterion": "reload",
     "passed": true,
-    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/e4_s50_sup_imnet_seed13/polypgen_fewshot/s50/seed13/SUPImNet_PolypGenFew50_s13_e06_valLoss.pth' (epoch 6)."
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/smoke2/classification/k1/e4_s50_sup_imnet_seed13/polypgen_fewshot/s50/seed13/SUPImNet_PolypGenFew50_s13_e06_valLoss.pth' (epoch 6)."
   },
   {
     "run": "SUPImNet_PolypGenFew50_s13",
@@ -525,7 +525,7 @@
     "run": "SSLColon_SUNFull_s13",
     "criterion": "reload",
     "passed": true,
-    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/sun_full_ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13_e16_valLoss.pth' (epoch 16)."
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/smoke2/classification/k1/sun_full_ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13_e16_valLoss.pth' (epoch 16)."
   },
   {
     "run": "SSLColon_SUNFull_s13",
@@ -585,7 +585,7 @@
     "run": "SSLImNet_SUNFull_s13",
     "criterion": "reload",
     "passed": true,
-    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/sun_full_ssl_imnet_seed13/sun_baselines/SSLImNet_SUNFull_s13_e12_valLoss.pth' (epoch 12)."
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/smoke2/classification/k1/sun_full_ssl_imnet_seed13/sun_baselines/SSLImNet_SUNFull_s13_e12_valLoss.pth' (epoch 12)."
   },
   {
     "run": "SSLImNet_SUNFull_s13",
@@ -645,7 +645,7 @@
     "run": "SUPImNet_SUNFull_s13",
     "criterion": "reload",
     "passed": true,
-    "evidence": "Reloaded best checkpoint weights from '/home/irconde/workspace/code/SSL4POLYP/checkpoints_v3/smoke2/classification/k1/sun_full_sup_imnet_seed13/sun_baselines/SUPImNet_SUNFull_s13_e03_valLoss.pth' (epoch 3)."
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/smoke2/classification/k1/sun_full_sup_imnet_seed13/sun_baselines/SUPImNet_SUNFull_s13_e03_valLoss.pth' (epoch 3)."
   },
   {
     "run": "SUPImNet_SUNFull_s13",
