@@ -1,484 +1,312 @@
-Official code repository for the paper entitled *"Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection: A Morphology-Aware and Sample-Efficient Perspective"*.
+# SSL4POLYP
 
-This work is based on the study: "A Study on Self-Supervised Pretraining for Vision Problems in Gastrointestinal Endoscopy"
+Reference implementation and run records of the article
 
-Original authors: [Edward Sanderson](https://scholar.google.com/citations?user=ea4c7r0AAAAJ&hl=en&oi=ao) and [Bogdan J. Matuszewski](https://scholar.google.co.uk/citations?user=QlUO_oAAAAAJ&hl=en)
+> **Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection: A Morphology-Aware and
+> Sample-Efficient Perspective.** Vincent Yip, Florentino Fdez-Riverola and Ivan Rodriguez-Conde.
+> Submitted to *Computer Methods and Programs in Biomedicine*.
 
-Repository authors:
-- Vincent Yip, PhD student at the Department of Computer Science at University of Arkansas at Little Rock ([vxyip@ualr.edu](mailto:vxyip@ualr.edu))
-- Florentino Fdez-Riverola, full professor at the Department of Computer Science at University of Vigo ([riverola@uvigo.gal](mailto:riverola@uvigo.gal))
-- Ivan Rodriguez-Conde, associate professor at the Department of Computer Science at University of Vigo ([ivarodriguez@uvigo.gal](mailto:ivarodriguez@uvigo.gal))
+This branch holds **campaign v3**, the retraining from scratch whose results are reported in the article.
+The code that produced the earlier version of the study (v2) is on `main`; its README is kept in
+[docs/legacy/README_v2.md](docs/legacy/README_v2.md).
 
-Links to the original paper:
-+ [IEEE Access (open access)](https://ieeexplore.ieee.org/document/10478725)
-+ [arXiv](https://arxiv.org/abs/2401.06278)
+The repository started as a fork of [SSL4GIE](https://github.com/ESandML/SSL4GIE) (Sanderson and
+Matuszewski, IEEE Access 2024). See [NOTICE](NOTICE) for third-party code and licenses.
+
+## Study summary
+
+A ViT-B/16 frame classifier (polyp / no polyp) is fine-tuned from four initialisations:
+
+| Regime | Initialisation | Pretraining data |
+|---|---|---|
+| SUP-imnet | Supervised AugReg ViT-B/16 (ImageNet-21k, fine-tuned on ImageNet-1k) | ImageNet |
+| SSL-imnet | MAE | ImageNet-1k (1.28 M images) |
+| SSL-colon | MAE | HyperKvasir unlabelled (99,417 images) |
+| SSL-imnet-matched | MAE, same arguments as SSL-colon | Class-stratified ImageNet-1k subset of 99,417 images |
+
+SSL-imnet-matched isolates the effect of the pretraining domain from the amount of pretraining data.
+
+Experiments (SUN Colonoscopy Video Database for training; PolypGen for external evaluation):
+
+| Id | Question | Design |
+|---|---|---|
+| sun_full | Reference models | Full SUN training split of each partition |
+| E1 | Sample efficiency | Nested SUN training subsets of 5, 10, 25, 50 and 100 % |
+| E2 | Morphology | sun_full models evaluated on flat and polypoid strata (no new training) |
+| E3 | Zero-shot transfer | sun_full models on `polypgen_clean_test`, τ inherited from SUN |
+| E4 | Few-shot adaptation | PolypGen budgets of 50, 100, 200 and 500 frames; arms A (unadapted, inherited τ), B (unadapted, recalibrated τ), C (adapted, inherited τ), D (adapted, recalibrated τ) |
+
+Replication: K = 5 independent case-level SUN partitions (morphology-stratified) × 3 seeds (13, 29, 47)
+× 4 regimes = 720 runs. The seven primary hypotheses (H1–H7), the metrics, the inference (one-sample
+t-test on the K partition means, Holm correction, cluster bootstrap) and the secondary analyses are fixed
+in the pre-registered statistical analysis plan (SAP, below). Every step, decision and incident of the
+campaign is recorded in [results_v3/RUNLOG.md](results_v3/RUNLOG.md).
+
+## Repository layout
+
+| Path | Content |
+|---|---|
+| `src/ssl4polyp/` | Python package: fine-tuning and evaluation (`classification/`), models and MAE (`models/`), config loading, pack utilities |
+| `config/` | Layered YAML configs; campaign experiments in `config/exp/v3/`, regimes in `config/model/` |
+| `data_packs/` | Split definitions (CSV) and manifests; campaign v3 packs in `data_packs/v3/` |
+| `scripts/v3/` | Campaign v3 drivers and verification scripts |
+| `analysis/v3/` | Statistical analysis (SAP v3.3), simulator, figures and their tests |
+| `docs/v3/` | Retraining specification, SAP versions and exploratory plans (in Spanish) |
+| `env/` | Conda environments and exact package lists |
+| `results_v3/` | Run log, SAP deviations, verification records, analysis outputs and final figures |
+| `tests/` | Package tests (`tests/legacy/`: v2 tests, skipped by default) |
+
+Weights (`checkpoints/`, `checkpoints_v3/`) and data (`data/`) are not distributed.
 
 ## Installation
 
-The project ships three dependency manifests:
+Three conda environments, all described in [env/README.md](env/README.md):
 
-- `requirements.txt` – the curated runtime pins used by the training/evaluation CLIs.
-- `requirements-pip.txt` / `requirements.lock.txt` – full `pip freeze`-style locks (including Jupyter/tooling extras)
-  captured from the reference environments.
-
-To reproduce the curated environment:
-
-1. Create and activate a fresh virtual environment (for example, `python -m venv .venv && source .venv/bin/activate`).
-2. Install the dependencies, e.g. `pip install -r requirements.txt` (use `requirements-pip.txt` or
-   `requirements.lock.txt` when you need the full frozen tooling stack).
-3. Register the package in editable mode without letting pip resolve alternatives:
-
-   ```bash
-   pip install --no-deps -e .
-   ```
-
-   ```bash
-   export CUBLAS_WORKSPACE_CONFIG=:4096:8
-   ```
-
-   Configure CuBLAS determinism before launching training to avoid runtime errors when `torch.use_deterministic_algorithms(True)` is active.
-
-Using `--no-deps` prevents pip from overwriting the pinned versions with newer releases while still exposing the
-`ssl4polyp` CLI entry points.
-
-## New functionality
-
-We include helper scripts that automate common workflows introduced in the
-paper:
-
-- `ssl4polyp/models/mae/run_hyperkvasir_pretraining.py` – wraps MAE pretraining on the
-  Hyperkvasir-unlabelled dataset with the settings used in the paper. The
-  script exposes `--batch-size`, `--epochs`, `--extra-args`, `--auto-resume`,
-  `--save-freq-epochs` and `--save-freq-mins` so you can tweak the training run
-  or forward additional options to `main_pretrain.py`.
-- `ssl4polyp/classification/run_all_pretrainings.py` – sequentially fine-tunes ViT-B/16
-  under all three pretraining schemes (SUP-imnet, SSL-imnet and SSL-colon) by looping
-  over the model keys defined in an experiment config. Select the schemes with
-  `--model-keys` and set the seed/batch size with `--seed`/`--batch-size`; pass further
-  arguments to `train_classification.py` via `--extra-args`.
-- `scripts/run_exps.sh` – iterates over the `*.yaml` experiment manifests in a
-  directory and launches each run across the configured seeds with a shared roots
-  mapping, then copies metrics into `results/` and refreshes the reporting inputs.
-
-### Script improvements
-
-Recent updates enhance reproducibility and robustness across training and
-finetuning:
-
-- Runs now accept a `--seed` flag and dump their full configuration (including
-  the Git commit) to `config.yaml` in the output directory.
-- TensorBoard logs are written to `tb/` under the chosen `--output-dir`.
-- Checkpoints are consistently stored and a `last.pth` symlink tracks the most
-  recent save.
-- Mixed precision can be toggled via `--precision {amp, fp32}`.
-- Data loading behaviour is configurable with `--workers`, `--prefetch-factor`,
-  `--pin-memory` and `--persistent-workers`.
-- MAE pretraining exposes `--accum_iter` for gradient accumulation and can
-  automatically resume, save checkpoints on a time or epoch basis, retain only
-  recent checkpoints and handle termination signals gracefully.
-- Dataset splits are provided as data packs (`--train-pack`, `--val-pack`,
-  `--test-pack`). Each pack may be a pack name, a directory, or a
-  `manifest.yaml` file, and is resolved against `data_packs/`; absolute paths
-  are honoured. The training script snapshots these inputs and environment
-  details for reproducibility.
-- Class imbalance can be addressed with `--class-weights` to override automatic
-  weighting.
-- Evaluation reports mean AUROC in addition to the existing metrics, and
-  `ssl4polyp/classification/eval_outputs.py` offers a utility to persist logits and
-  metadata for later analysis.
-
-### Configuration layout
-
-Configuration assets are organised into two top-level directories that live
-next to the source tree.  The `config/` directory now contains layered YAML
-files that capture shared defaults and experiment-specific overrides, while
-`data_packs/` stores the dataset manifests and CSV splits referenced by those
-configs.  A typical layout looks like:
-
-```
-config/
-├─ base.yaml                  # global defaults (optimizer, scheduler, seed, …)
-├─ data/                      # dataset pack descriptors
-│  ├─ sun_full.yaml
-│  ├─ sun_morphology.yaml
-│  ├─ sun_subsets.yaml
-│  ├─ polypgen_clean_test.yaml
-│  └─ …
-├─ model/                     # backbone definitions (checkpoints, freezing policy)
-│  ├─ sup_imnet.yaml
-│  ├─ ssl_imnet.yaml
-│  └─ ssl_colon.yaml
-└─ exp/                       # experiment manifests (include base + data + models)
-   ├─ exp1.yaml
-   ├─ exp2.yaml
-   └─ …
-
-data_packs/
-└─ <pack_name>/manifest.yaml, *.csv, …
-```
-
-Layered configs use a `defaults:` list to compose these files; the training
-scripts resolve everything automatically when pointed at an experiment manifest.
-
-In addition, the repository seeds git-ignored directories that act as default
-targets for local assets:
-
-```
-data/
-checkpoints/
-outputs/
-results/
-```
-
-Each ships with a short README describing the expected sub-structure. Command
-line interfaces default to these folders for datasets, pretrained weights, logs and
-evaluation exports while still letting you override the destinations.
-
-Command-line interfaces resolve relative paths against these directories by
-default.  For example, passing `--exp-config exp/exp1.yaml` to
-`train_classification.py` looks for the file under `config/exp/exp1.yaml`, and
-providing `--train-pack sun_full` expects the pack under
-`data_packs/sun_full/`.  The `polypdb` utilities follow the same convention for
-corruption specifications and dataset packs.  Absolute paths are still honoured,
-so you can store packs elsewhere if desired.
-
-The following sections describe how to invoke these utilities.
-
-## Usage
-
-### Pretraining
-
-Follow the guidance in this section for obtaining the weights for pretrained models.
-
-+ For encoders pretrained in a supervised manner with ImageNet-1k, the weights provided with the [timm](https://timm.fast.ai/) library (ViT-B) are automatically used by our code and no manual steps are required.
-+ For encoders pretrained in a self-supervised manner with ImageNet-1k, using [MAE](https://github.com/facebookresearch/mae), the weights provided with the codebase should be used.
-+ For encoders pretrained in a self-supervised manner with
-  [Hyperkvasir-unlabelled](https://datasets.simula.no/hyper-kvasir/), using
-  [MAE](https://github.com/facebookresearch/mae), use the helper script
-  `ssl4polyp/models/mae/run_hyperkvasir_pretraining.py` to generate the checkpoint. You can
-  override the default `--batch-size` and `--epochs` values and pass additional
-  options to `main_pretrain.py` via `--extra-args`. By default the script writes
-  checkpoints to `checkpoints/mae/hyperkvasir_pretrain/` and TensorBoard logs to
-  `outputs/mae/hyperkvasir_pretrain/`, but both can be customised. Example:
+| Environment | File | Use |
+|---|---|---|
+| `ssl4polyp-ft` | `env/environment-ft.yml` (exact: `env/pip_freeze-ft.txt`) | All fine-tuning and evaluation runs. Python 3.8, torch 2.4.1+cu121, timm 0.4.12 |
+| `ssl4polyp-pretrain` | `env/environment-pretrain.yml` (exact: `env/pip_freeze-pretrain.txt`) | MAE pretraining only. timm 0.3.2 with a one-line patch (see `env/README.md`) |
+| `ssl4polyp-analysis` | `env/environment-analysis.yml` (lock: `env/environment-analysis.lock.yml`, `env/r_packages-analysis.txt`) | Statistical analysis and figures. Python 3.11, R 4.4 (lme4, lmerTest, pbkrtest); no torch |
 
 ```bash
-python -m ssl4polyp.models.mae.run_hyperkvasir_pretraining \
-    --data-root /path/to/hyperkvasir-unlabelled \
-    --output-dir checkpoints/mae/hyperkvasir_pretrain \
-    --log-dir outputs/mae/hyperkvasir_pretrain \
-    --batch-size 64 --epochs 400
+conda env create -f env/environment-ft.yml
+conda activate ssl4polyp-ft
+pip install --no-deps -e .            # from the repository root
+
+conda env create -f env/environment-pretrain.yml   # then apply the timm patch in env/README.md
+conda activate ssl4polyp-pretrain && pip install --no-deps -e .
+
+conda env create -f env/environment-analysis.yml   # no package install: run with PYTHONPATH=.
 ```
 
-### Finetuning
+Install the package with `--no-deps` so pip keeps the pinned versions. Set
+`CUBLAS_WORKSPACE_CONFIG=:4096:8` before training (deterministic algorithms; the drivers set it). The
+campaign ran on 2 × NVIDIA RTX 6000 Ada (48 GB); `results_v3/environment/` records drivers and packages.
 
-The finetuning scripts currently support frame-level classification. Pretrained weights produced by our experiments are available [here](https://drive.google.com/drive/folders/151BWqsjTV4PuGFxS20L0TpmUQ4DhhpU4?usp=sharing) (released under a CC BY-NC-SA 4.0 license). Place the desired checkpoint in `checkpoints/classification/<exp_seed>/` if you wish to evaluate or make predictions with an already finetuned model.  Non-downloadable ViT-B MAE backbones (ImageNet and Hyperkvasir) should be stored under `checkpoints/pretrained/vit_b/` so the model configs can reference them directly.
+## Data
 
-Prior to running finetuning, download the datasets referenced by the packs you
-intend to use (SUN for the SUN experiments, PolypGen for the transfer study) and
-populate `data/roots.json` with their absolute paths. Dataset splits are described
-by CSV manifests under `data_packs/`; see
-[Experiment definition with manifests](#experiment-definition-with-manifests) for details.
+### Sources
 
-We recommend launching runs via experiment manifests, which resolve datasets,
-models and hyperparameters from the layered config stack:
+Obtain the datasets from their providers, under their terms of use:
 
-```
-python -m ssl4polyp.classification.train_classification \
-    --exp-config exp/exp1.yaml \
-    --model-key sup_imnet \
-    --roots data/roots.json \
-    --output-dir checkpoints/classification/exp1_seed42 \
-    --seed 42
-```
+- **SUN Colonoscopy Video Database** (training and E1/E2): <http://amed8k.sundatabase.org/>
+- **PolypGen** (E3/E4): Ali et al., *Scientific Data* 2023, <https://doi.org/10.7303/syn26376615>
+- **HyperKvasir**, unlabelled images (SSL-colon pretraining): <https://datasets.simula.no/hyper-kvasir/>
+- **ImageNet-1k** (SSL-imnet-matched pretraining): `ILSVRC/imagenet-1k` on Hugging Face, revision
+  `49e2ee26f3810fb5a7536bbf732a7b07389a47b5`
 
-For quick smoke tests, `config/exp/exp1_smoke.yaml` layers the standard
-experiment with the SUN subset manifest (`config/data/sun_subsets.yaml`),
-shrinking the run to 10 % of the data, three epochs and a handful of batches per
-split by default. The CLI exposes matching knobs: `--dataset-percent` and
-`--dataset-seed` pick one of the subset packs declared in
-`config/data/sun_subsets.yaml`, while `--limit-train-batches`,
-`--limit-val-batches` and `--limit-test-batches` cap the number of batches per
-epoch. A fully constrained invocation therefore looks like:
+Pretrained weights go under `checkpoints/pretrained/vit_b/` with the file names and SHA-256 listed in
+`config/model/*.yaml`; the training code refuses a file whose hash differs. SUP-imnet is the AugReg
+`.npz` file named in `config/model/sup_imnet.yaml`; SSL-imnet is the MAE ViT-B/16 ImageNet-1k pretraining
+checkpoint released with MAE; SSL-colon (`mae_hyperkvasir.pth`) and SSL-imnet-matched
+(`mae_imnet_matched.pth`) were pretrained by the authors (see *Reproduction*).
 
-```
-python -m ssl4polyp.classification.train_classification \
-    --exp-config exp/exp1_smoke.yaml \
-    --model-key sup_imnet \
-    --dataset-percent 10 \
-    --dataset-seed 29 \
-    --limit-train-batches 2 \
-    --limit-val-batches 1 \
-    --limit-test-batches 2 \
-    --output-dir checkpoints/classification/exp1_smoke_demo
+### Dataset roots
+
+Image paths in the pack CSVs are relative to named roots. Map them to local directories in
+`data/roots.json` (not tracked; `data/roots.example.json` is a template):
+
+```json
+{
+  "sun": "/path/to/data/sun",
+  "polypgen_clean": "/path/to/data/polypgen"
+}
 ```
 
-Choose a different `--model-key` to fine-tune the MAE variants defined in
-`config/model/*.yaml`.  You can still override individual knobs on the command
-line (for example `--batch-size` or `--lr`) and they will overwrite values from
-the manifest.
+### Packs
 
-If you prefer a fully manual invocation, you can supply the dataset packs and
-model settings explicitly:
+The packs in `data_packs/` were generated with the `polypdb` tool of the authors' `polyp-db-analysis`
+repository, commit `d78ed76e6a70d22631aace92bfe9bf9689f2b496` (not part of this repository). Each
+`manifest.yaml` records the generator commit, the exact command, the seed, the selection policy and the
+SHA-256 of every split CSV. Campaign v3 uses `data_packs/v3/`:
 
-```
-python -m ssl4polyp.classification.train_classification \
-    --architecture vit_b \
-    --pretraining Hyperkvasir \
-    --ss-framework mae \
-    --checkpoint checkpoints/pretrained/vit_b/mae_hyperkvasir.pth \
-    --dataset sun_full \
-    --train-pack sun_full \
-    --val-pack sun_full \
-    --test-pack sun_full \
-    --roots data/roots.json \
-    --batch-size 32 \
-    --scheduler cosine \
-    --warmup-epochs 5
-```
+- `k1`…`k5/base`: SUN partitions (`polypdb sun morph`, 33 frames per case, partition seeds 47, 101, 102,
+  103, 104);
+- `k*/sun_subsets`: nested E1 subsets (seed 13);
+- `k*/polypgen_fewshot/seed{13,29,47}/s{50,100,200,500}`: E4 packs (seed 1000·k + s);
+- `_parent/`: the PolypGen parent packs; `REPORT.txt`: the generation report.
 
-The degree of encoder fine-tuning can be controlled with the
-`protocol.finetune` key inside the experiment manifest (or the corresponding
-command-line overrides):
-
-* `full` (default) trains the entire encoder.
-* `none` trains only the classification head, keeping the encoder frozen as in
-  prior releases.
-* `head+1` unfreezes the classifier head together with the final transformer
-  block, offering a light-touch adaptation.
-* `head+2` updates the head together with the final two transformer blocks for a
-  slightly broader adaptation regime.
-
-### Experiments
-
-The paper’s experiments map to manifests in `config/exp/`.  Launch them with
-`--exp-config` and pick a backbone via `--model-key` (`sup_imnet`, `ssl_imnet`,
-`ssl_colon`).  Outputs default to
-`checkpoints/classification/<exp>_seed<seed>/`.
-
-#### Reproducing the full study: training → reporting → manifests
-
-1. **Environment & data.** Create a fresh virtualenv, install the pinned
-  dependencies (`pip install -r requirements.txt && pip install --no-deps -e .`),
-  and export `CUBLAS_WORKSPACE_CONFIG=:4096:8`.  Populate
-  `data/roots.json` with absolute paths to SUN, PolypGen, etc.  The helper
-  `scripts/check_paths.py` validates that each pack resolves correctly.
-2. **Run the training/evaluation manifests.** Each experiment has a thin shell
-   wrapper that iterates over the seed trio `[13, 29, 47]`, writing
-   checkpoints/logs under `checkpoints/` and refreshing the reporting inputs
-   under `results/reporting_inputs/`.
-
-  ```bash
-  bash scripts/run_exp1.sh
-  bash scripts/run_exp2.sh
-  bash scripts/run_exp3.sh
-  bash scripts/run_exp4.sh
-  bash scripts/run_exp5a.sh
-  bash scripts/run_exp5b.sh
-  bash scripts/run_exp5c.sh
-  ```
-
-  These scripts call `python -m ssl4polyp.classification.train_classification` with
-  the layered configs in `config/exp/`, ensuring dataset packs, model weights
-  and hyperparameters match the paper.
-3. **Aggregate + guardrail reports.** After each run completes, execute the
-  corresponding analysis CLI to bootstrap metrics, enforce provenance checks
-  and write the manifest JSON.  This step is mandatory for **all** experiments,
-  not just the morphology study.
-
-  ```bash
-  python scripts/exp1_report.py  --runs-root results/exp1  --manifest results/exp1/manifest.json
-  python scripts/exp2_report.py  --runs-root results/exp2  --manifest results/exp2/manifest.json
-  python scripts/exp3_morphology_report.py --runs-root results/exp3 --output results/exp3/report.md
-  python scripts/exp4_report.py  --runs-root results/exp4  --manifest results/exp4/manifest.json
-  python scripts/exp5a_report.py --runs-root results/exp5a --output-json results/exp5a/summary.json
-  python scripts/exp5b_report.py --runs-root results/exp5b \
-     --output-json results/exp5b/summary.json --output-dir results/exp5b/tables
-  python scripts/exp5c_report.py --runs-root results/exp5c --output-dir results/exp5c/tables
-  ```
-
-  Each reporter emits Markdown/CSV summaries and records its bootstrap settings.
-  The Exp-1/2/4 reporters additionally accept `--manifest` to write a manifest
-  JSON that captures guardrail digests and threshold provenance (`source_split`,
-  `source_checkpoint`, etc.), so downstream consumers can rely on a single
-  manifest per experiment.
-4. **Optional aggregation.** To mirror the tables in the manuscript, combine the
-  per-seed metric exports using `python scripts/aggregate_metrics.py --metrics-root results`.
-
-With the manifests and reports in place, the `results/` directory contains
-seed-by-seed JSON metrics, summary tables, and provenance records ready for
-archival or publication.
-
-#### Seed protocol
-
-- Unless explicitly noted, every training run repeats across the seed trio
-  `[13, 29, 47]` (set in `config/base.yaml`).
-- Evaluation-only manifests do not retrain models; instead they load the three
-  checkpoints emitted by the paired training experiment(s).
-- Dataset pack seeds remain fixed per configuration (for example, one pack
-  seed per SUN subset percent and per PolypGen few-shot budget).
-
-| Experiment | Config | Description | Seed usage | Finetune mode |
-|-----------:|:-------|:------------|:-----------|:--------------|
-| 1 | `config/exp/exp1.yaml` | Full SUN fine-tuning baseline vs MAE(ImageNet) | Train and evaluate seeds 13/29/47 | `full` |
-| 2 | `config/exp/exp2.yaml` | Full encoder fine-tune: domain MAE vs ImageNet MAE on SUN | Train and evaluate seeds 13/29/47 | `full` |
-| 3 | `config/exp/exp3.yaml` | Morphology fine-tuning on SUN (train on stratified split, monitor val, τ from Youden’s J on val) | Train and evaluate seeds 13/29/47 | `full` |
-| 4 | `config/exp/exp4.yaml` | SUN sample-efficiency study with full encoder updates (5–100%) | Train per subset with seeds 13/29/47 (fixed pack seed per %) | `full` |
-| 5A | `config/exp/exp5a.yaml` | Zero-shot transfer to PolypGen clean test (encoder frozen) | Evaluate exp1/2 checkpoints at seeds 13/29/47 | `none` |
-| 5B | `config/exp/exp5b.yaml` | Zero-shot SUN robustness under perturbations (encoder frozen) | Evaluate exp1/2 checkpoints at seeds 13/29/47 (fixed corruption seed) | `none` |
-| 5C | `config/exp/exp5c.yaml` | Few-shot PolypGen adaptation with shallow encoder tuning (50–500 frames) | Fine-tune per support size with seeds 13/29/47 (fixed pack seed per size) | `head+1`/`head+2` |
-
-Each few-shot pack `polypgen_fewshot_s{S}` reuses the same generation seed and enforces sequence-level disjointness, but its test fold is the complement of that support budget within `polypgen_clean_test_extended`. Results should therefore reference the specific pack size used rather than assuming a shared PolypGen test split across all budgets.
-
-Exp‑5C training follows a two-phase regime defined in `config/exp/exp5c/budgets/*.yaml`: a classifier-head warm-up with the encoder frozen, then a refinement stage that unfreezes the head plus the last encoder block (`head+1` for the 50-frame budget) or the last two blocks (`head+2` for the larger budgets), using a reduced backbone learning rate.
-
-Runs log per-epoch summaries to `*.log` files and TensorBoard: we record `train/loss` together with the active learning rates for each parameter group, plus validation `loss`, `auprc` and `auroc`. The few-shot test remainder is only scored once the schedule finishes.
-
-During the final evaluation pass we freeze the Youden-derived τ and report recall, precision, F1, balanced accuracy, MCC, AUROC, AUPRC and the full confusion matrix (TP/FP/TN/FN) alongside prevalence. Per-frame outputs (frame ID, probability, label, origin, sequence ID, prediction) are written next to the checkpoint stem as `<stem>_test_outputs.csv` to support later uncertainty analysis.
-Exp‑1 runs additionally dump 200-point ROC and precision–recall grids to `<stem>_test_roc_curve.csv` and `<stem>_test_pr_curve.csv`, enabling sweep plots without recomputing logits.
-
-Each support size still repeats across the seed trio `{13, 29, 47}`; use `scripts/aggregate_metrics.py --metrics-root <results_dir>` to compute mean ± std (and confidence intervals) across the three seeds when summarising Exp‑5C.
-
-To sweep subsets/seeds, wrap the command in a shell loop. Example for Exp‑4:
+`data_packs/v3/index.yaml` lists the seeds and the SHA-256 of all 221 CSVs. The CSVs are stored byte for
+byte (CRLF line endings, `-text` in `.gitattributes`). To verify:
 
 ```bash
-for seed in 13 29 47; do
-  for pct in 5 10 25 50 100; do
-    python -m ssl4polyp.classification.train_classification \
-      --exp-config exp/exp4.yaml \
-      --model-key ssl_imnet \
-      --seed "${seed}" \
-      --override dataset.percent="${pct}" dataset.seed="${seed}" \
-      --output-dir "checkpoints/classification/exp4_seed${seed}_p${pct}";
-  done
+python - <<'EOF'
+import hashlib, pathlib, yaml
+idx = yaml.safe_load(open("data_packs/v3/index.yaml"))
+rows = [(rel, h) for p in idx["partitions"].values() for rel, h in p["csv_sha256"].items()]
+rows += list(idx["parent"].items())
+bad = [r for r, h in rows if hashlib.sha256(pathlib.Path("data_packs/v3", r).read_bytes()).hexdigest() != h]
+print(len(rows), "CSVs,", len(bad), "mismatches", bad)
+EOF
+```
+
+Expected output: `221 CSVs, 0 mismatches []`. `scripts/v3/campaign_plan.py` (below) resolves every run against
+these packs. `scripts/v3/verify_data_packs.py` checks the top-level packs of `data_packs/` (from which v3
+partition k = 1 and the PolypGen parent derive) against their manifests, the images under `data/roots.json`
+(existence, size, PolypGen SHA-1) and the configs; pass `--out <dir>` to keep the recorded results intact.
+
+### Placeholders in the records
+
+Absolute paths of the authors' workstation were replaced in the manifests and run records
+(`scripts/v3/release_depersonalize_paths.py`): `<REPO>` is the repository root, `<DATA_ROOT>` the data
+directory (cf. `data/roots.json`), `<CONDA_ROOT>` the conda installation and `<HOME>` any other home
+directory path. Only the manifests changed, not the CSVs, so every CSV hash above is unchanged. The
+`parent_pack.manifest_sha256` fields of the few-shot manifests keep the hash of the parent manifest as it
+was when the packs were generated (before the replacement); it is a provenance record and no longer equals
+the hash of the edited parent manifest. Recorded commands contain `<DATA_ROOT>`, so substitute your own
+paths before running them.
+
+## Reproduction
+
+All commands run from the repository root. The order below is the order of the campaign; the dates,
+commits and checks of each step are in `results_v3/RUNLOG.md`.
+
+### 1. MAE pretraining (`ssl4polyp-pretrain`)
+
+SSL-colon (`mae_hyperkvasir.pth`) was pretrained on HyperKvasir unlabelled images before campaign v3
+(see `src/ssl4polyp/models/mae/run_hyperkvasir_pretraining.py`). SSL-imnet-matched reuses its stored
+arguments on a 99,417-image ImageNet subset:
+
+```bash
+# ImageNet Parquet shards (Hugging Face) to class folders, then the class-stratified subset (seed 99417)
+python scripts/v3/imagenet_hf_to_folders.py --parquet-dir <imagenet-1k>/data --out <DATA_ROOT>/imagenet_train \
+    --records results_v3/imagenet/conversion
+python scripts/v3/imagenet_matched_subset.py --source <DATA_ROOT>/imagenet_train \
+    --out <DATA_ROOT>/imagenet_matched_99417 --records results_v3/imagenet/matched --seed 99417
+# expected SHA-256 of subset_list.csv: 2d987bb096b9c2f0a72be1337282d66a1e176eb4fb7de047cb4a7211230a5030
+
+CUBLAS_WORKSPACE_CONFIG=:4096:8 python src/ssl4polyp/models/mae/main_pretrain.py \
+  --model mae_vit_base_patch16 --batch_size 128 --accum_iter 2 --epochs 400 --warmup_epochs 40 \
+  --blr 1e-3 --lr 0.001 --min_lr 0.0 --weight_decay 0.05 --mask_ratio 0.75 --input_size 224 \
+  --seed 0 --no_train_dir --num_workers 8 --pin_mem --precision amp \
+  --save-freq-epochs 10 --save-freq-mins 15 --keep-last 5 --keep-every-n-epochs 50 \
+  --device cuda --world_size 1 --local_rank -1 --dist_url env:// \
+  --data_path <DATA_ROOT>/imagenet_matched_99417 \
+  --output_dir checkpoints_v3/pretrain/mae_imnet_matched/ckpts --log_dir checkpoints_v3/pretrain/mae_imnet_matched/tb
+```
+
+The checkpoint of epoch 399 is `checkpoints/pretrained/vit_b/mae_imnet_matched.pth`
+(SHA-256 `964089f6…1504c328`; one RTX 6000 Ada, about 18 h).
+
+### 2. Fine-tuning campaign (`ssl4polyp-ft`)
+
+```bash
+bash scripts/v3/run_smoke.sh                      # optional smoke test, partition k = 1, one seed
+bash scripts/v3/run_lr_sweep.sh                   # SAP section 10 learning-rate sweep (validation only)
+python scripts/v3/summarize_lr_sweep.py           # decision rule; chosen rates are in config/model/*.yaml
+python scripts/v3/campaign_plan.py                # dry run: resolves all runs and checks them against the SAP
+for phase in sun_full e2e3 e1 e4; do              # one run per GPU, resumable
+  python scripts/v3/run_campaign.py "$phase" --gpus "0 1"
+  python scripts/v3/verify_phase.py "$phase"      # integrity checks (spec section 6), prints no metrics
 done
 ```
 
-For few-shot Exp‑5C, adjust `dataset.size` (`50`, `100`, `200`, `500`) and
-optionally re-fit the decision threshold on a support fold before testing. After
-training, evaluate runs with `python -m ssl4polyp.classification.eval_classification`
-using the same experiment config or explicit packs.
+`--regimes` restricts a phase to some regimes (campaign 4 ran `--regimes ssl_imnet_matched`; see
+`results_v3/campaign/run_campaign4.sh`). Fine-tuning learning rates: SUP-imnet and SSL-imnet 3e-4,
+SSL-colon and SSL-imnet-matched 1e-4 (`finetune_lr` in `config/model/`). A single run:
 
-To run all three pretraining configurations sequentially (SUP-imnet, SSL-imnet and SSL-colon) you may use the helper module, which loops over the model keys declared in the experiment config:
-```
-python -m ssl4polyp.classification.run_all_pretrainings \
-    --exp-config exp/exp3.yaml \
-    --roots data/roots.json \
-    --seed 42 \
-    --model-keys sup_imnet ssl_imnet ssl_colon
-```
-Optionally set `--batch-size` and `--output-root`, and append any further
-`train_classification.py` options via `--extra-args`. The self-supervised
-checkpoints are read from `config/model/ssl_imnet.yaml` and
-`config/model/ssl_colon.yaml`.
-
-#### Experiment definition with manifests
-
-1. **Prepare split CSVs** inside a pack folder such as
-   `data_packs/hyperkvasir/pathology/` containing at least `frame_path` and
-   `label` columns for `train`, `val` and `test`.
-2. **Create a pack manifest** (for example
-   `data_packs/hyperkvasir/pathology/manifest.yaml`) that references those CSVs
-   and optionally records SHA256 hashes and root identifiers:
-
-   ```yaml
-   train:
-     csv: train.csv
-   val:
-     csv: val.csv
-   test:
-     csv: test.csv
-   roots:
-     data_root: /data/hyperkvasir
-   ```
-3. **Provide a roots mapping** (e.g. `data/roots.json`) so identifiers resolve
-   to absolute paths. A template is provided at `data/roots.example.json`:
-
-   ```json
-   {
-     "data_root": "/absolute/path/to/images"
-   }
-   ```
-4. **Verify paths** with `scripts/check_paths.py`:
-
-   ```bash
-   python scripts/check_paths.py data_packs/hyperkvasir/pathology/train.csv data/roots.json
-   ```
-5. **Launch training** by pointing `--train-pack` / `--val-pack` / `--test-pack`
-   at the pack (a pack name, directory or `manifest.yaml`). Relative pack paths
-   are resolved against `data_packs/`:
-
-   ```bash
-   python -m ssl4polyp.classification.train_classification \
-       --train-pack hyperkvasir/pathology \
-       --val-pack hyperkvasir/pathology \
-       --test-pack hyperkvasir/pathology \
-       --roots data/roots.json \
-       --output-dir checkpoints/classification/exp1
-   ```
-
-   To execute a directory of experiment manifests across their configured seeds
-   use:
-
-   ```bash
-   scripts/run_exps.sh exp data/roots.json checkpoints/classification
-   ```
-
-   The training script snapshots the pack manifests, roots mapping and
-   environment details inside the chosen output directory for reproducibility.
-   Omitting the optional arguments uses the default `data/roots.json` mapping
-   and writes outputs under `checkpoints/classification/`.  When the experiment
-   config directory or `roots.json` are provided as relative paths they are
-   interpreted with respect to the repository root.
-
-For all finetuning runs, the following optional arguments are also available:
-+ `--finetune-mode {none,full,head+1,head+2}` - controls how much of the encoder is trained (see above).
-+ `--frozen` - to freeze the pretrained encoder and only train the decoder (equivalent to `--finetune-mode none`). We did not use this in our experiments.
-+ `--epochs [epochs]` - to set the number of epochs as desired.
-+ `--scheduler plateau` - to use a learning rate scheduler that halves the learning rate when the monitored metric stops improving (tune with `--scheduler-factor` and `--scheduler-patience`). We did use this in our experiments.
-+ `--class-weights w1,w2,...` - comma-separated list of weights to override the automatically computed class weights.
-
-Please also note that, when using MAE, code from the [MAE](https://github.com/facebookresearch/mae) repository is used, which is released under a CC BY-NC 4.0 license. Any results from such runs are therefore covered by a CC BY-NC 4.0 license.
-
-### Evaluation
-
-Ensure that the weights for the desired model are located in `checkpoints/`
-relative to your working directory (or pass `--checkpoint-dir` to override).
-This will have been done automatically if finetuning was run. Download the
-required data and populate `data/roots.json` accordingly.
-
-For evaluating classification models pretrained in a self-supervised manner, run
-the following:
-```
-python -m ssl4polyp.classification.eval_classification \
-    --architecture vit_b \
-    --pretraining Hyperkvasir \
-    --ss-framework mae \
-    --dataset sun_full \
-    --test-pack sun_full \
-    --roots data/roots.json
-```
-For evaluating classification models pretrained in a supervised manner, or not
-pretrained at all, omit the `--ss-framework` argument:
-```
-python -m ssl4polyp.classification.eval_classification \
-    --architecture vit_b \
-    --pretraining ImageNet_class \
-    --dataset sun_full \
-    --test-pack sun_full \
-    --roots data/roots.json
+```bash
+python -m ssl4polyp.classification.train_classification --exp-config exp/v3/sun_full.yaml \
+    --partition 1 --seed 13 --model-key ssl_colon --roots data/roots.json \
+    --output-dir checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13
 ```
 
-* `--architecture` selects the encoder architecture (`vit_b`).
-* `--pretraining` selects the pretraining methodology (`Hyperkvasir`, `ImageNet_self`, `ImageNet_class`, or `random`).
-* For models pretrained in a self-supervised manner, `--ss-framework mae` selects the pretraining algorithm.
-* `--dataset` is the dataset name recorded in the checkpoint metadata (e.g., `sun_full`).
-* `--test-pack` selects the pack providing the held-out split (pack name, directory or manifest).
-* Use `--model-tag`, `--data-tag`, `--seed` and `--best-tag` to disambiguate when
-  `--checkpoint-dir` contains several canonical checkpoints, and
-  `--threshold-policy {auto,youden,none}` (plus `--threshold-pack`/`--threshold-key`)
-  to control how probabilities are converted to labels.
+Each run writes its weights (best epoch only), a canonical metrics JSON, per-frame output CSVs and
+`RUN_COMPLETE.json` under `checkpoints_v3/campaign/classification/`.
 
-All downstream tooling standardises on the `test_*` metric blocks for the held-out split. Some historic manifests labelled that split `eval`, but new runs should always export their primary and sensitivity metrics under the `test_*` keys so reports and aggregators stay consistent.
+### 3. Statistical analysis (`ssl4polyp-analysis`)
 
-In addition to printing the results (mean F1, precision, recall, AUROC and accuracy) the evaluation script also writes them to `eval_results.txt`, and `--predictions` persists frame-level predictions. For further analysis, `ssl4polyp/classification/eval_outputs.py` provides a `write_outputs` helper to persist logits and metadata.
+```bash
+conda activate ssl4polyp-analysis
+PYTHONPATH=. python -m analysis.v3.run_analysis --out results_v3/analysis      # SAP v3.3, B = 2000, seed 12345
+PYTHONPATH=. python -m pytest analysis/v3/tests                                # simulated data only (about 1 h)
+```
 
+All metrics are recomputed from the per-frame CSVs; only τ is read from the JSONs. Outputs:
+`report.md`, `summary.json`, `contrast_summary.csv`, `paired_differences.csv`, `run_metrics.csv`, `tables/`,
+`figures/`. Module-level documentation: [analysis/v3/README.md](analysis/v3/README.md).
+
+Exploratory analyses (not part of the SAP; plans registered before launching, see below):
+`analysis/v3/exploratory_lr_common.py` and `analysis/v3/exploratory_lr_sslimnet.py`, outputs in
+`results_v3/analysis_exploratory_*/`.
+
+### 4. Figures (`ssl4polyp-analysis`)
+
+```bash
+PYTHONPATH=. python -m analysis.v3.figures_final      # Figures 2–6 from the analysis tables
+```
+
+Writes `results_v3/figures_final/figure{2..6}.{pdf,png}` and `plotted_values.csv` (every value drawn).
+
+### Tests
+
+pytest is not part of the locked `ssl4polyp-ft` environment; install it outside the environment (e.g.
+`pip install --target <dir> pytest` and add `<dir>` to `PYTHONPATH`) so the pinned packages stay unchanged.
+
+```bash
+python -m pytest tests                                  # ssl4polyp-ft; tests/legacy is skipped
+SSL4POLYP_LEGACY_TESTS=1 python -m pytest tests         # also the v2 tests (several are known to fail)
+```
+
+## Pre-registration: SAP, amendments and tags
+
+The SAP and its amendments were registered (SHA-256 in `results_v3/RUNLOG.md`, git tag) before the data they
+govern were generated or analysed. Each change is justified in
+[results_v3/SAP_deviations.md](results_v3/SAP_deviations.md). Documents are in `docs/v3/`.
+
+| Date | Document | SHA-256 | Tag | Registered before |
+|---|---|---|---|---|
+| 2026-10-14 | Retraining specification v3.1 (`especificacion_reentrenamiento_v3_1.md`) | `e614ce53…76612d34` | `v3-cmpb-smoke` | Phase 1 |
+| 2026-10-14 | SAP v3 (`plan_analisis_estadistico_v3.md`) | `f2120a09…15cc0474` | `v3-cmpb-smoke` | Phase 1 |
+| 2026-10-15 | SAP v3.1: learning-rate selection (deviation 9.1) | `a2fc1b83…8818e7bd` | `v3-cmpb-lr`[^1] | LR sweep |
+| 2026-10-15 | SAP v3.2: K = 5 partitions, E2 without training, matched LR sweep (deviation 9.2) | `38f8ab05…d2375c70` | `v3-cmpb-sap32` | Any partition |
+| 2026-10-15 | SAP v3.2 revision b: section 10 scope | `d32d53ff…18d0e2c1` | `v3-cmpb-sap32b` | Packs |
+| 2026-10-15 | SAP v3.2 revision c: H6/H7 without s500, E4 AP within pack | `a387aed0…36874d47` | `v3-cmpb-sap32c` | Campaign |
+| 2026-10-17 | **SAP v3.3** (in force): t-test on partition means (deviation 9.3) | `fd6b0342…70f7ff56` | `v3-cmpb-sap33` | Any analysis of real data |
+| 2026-10-17 | Exploratory plan, common LR 1e-3 (`plan_exploratorio_lr_comun.md`) | `739fc133…c3887c1c` | `v3-cmpb-exp-lr-plan` | Its runs |
+| 2026-10-18 | Exploratory plan, SSL-imnet LR 1e-4 (`plan_exploratorio_lr_sslimnet.md`) | `93fdf34d…05fbef1c` | `v3-cmpb-exp-lr2-plan` | Its runs |
+
+Full hashes are in `results_v3/RUNLOG.md`. The file `plan_analisis_estadistico_v3_2.md` now holds revision c;
+the original v3.2 and revision b are at their tags.
+
+[^1]: Registered in commit `213efe5`, before the sweep; `v3-cmpb-lr` is the first tag that contains it.
+
+Other campaign tags:
+
+| Date | Tag | Content |
+|---|---|---|
+| 2026-10-14 | `v3-cmpb-smoke`, `v3-cmpb-smoke2` | Smoke tests (phase 0) |
+| 2026-10-15 | `v3-cmpb-packs`, `v3-cmpb-packs2` | Packs v3 and configs (`packs2`: CSVs stored byte for byte; reference packs) |
+| 2026-10-15 | `v3-cmpb-campaign3` | Campaign, SUP-imnet / SSL-imnet / SSL-colon (540 runs) |
+| 2026-10-16 | `v3-cmpb-analysis-code` | Analysis code validated on simulated data |
+| 2026-10-17 | `v3-cmpb-campaign4` | Campaign, SSL-imnet-matched (180 runs) |
+| 2026-10-17 | `v3-cmpb-analysis-results` | Analysis of the real data (SAP v3.3) |
+| 2026-10-18 | `v3-cmpb-exp-lr-results`, `v3-cmpb-exp-lr2-results` | Exploratory analyses |
+| 2026-10-25 | `v3-cmpb-figures`, `v3-cmpb-figures2` | Manuscript figures 2–6 (`figures2`: revised labels) |
+
+## License
+
+Apache License 2.0 ([LICENSE](LICENSE)), **except** `src/ssl4polyp/models/mae/`, which derives from Meta's MAE
+and is under CC BY-NC 4.0 ([src/ssl4polyp/models/mae/LICENSE](src/ssl4polyp/models/mae/LICENSE)): its use is
+restricted to non-commercial purposes. Attributions for SSL4GIE, MAE, timm and DPT are in [NOTICE](NOTICE).
+Datasets and pretrained weights are subject to their own terms.
+
+## Citation
+
+```bibtex
+@article{ssl4polyp,
+  title   = {Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection:
+             A Morphology-Aware and Sample-Efficient Perspective},
+  author  = {Yip, Vincent and Fdez-Riverola, Florentino and Rodriguez-Conde, Ivan},
+  journal = {Computer Methods and Programs in Biomedicine},
+  year    = {TBD},
+  note    = {Under review; citation details will be added on publication}
+}
+```
+
+Please also cite SSL4GIE (Sanderson and Matuszewski, IEEE Access 2024, doi:10.1109/ACCESS.2024.3381517) and
+MAE (He et al., CVPR 2022).
+
+## Contact
+
+Ivan Rodriguez-Conde, University of Vigo ([ivarodriguez@uvigo.gal](mailto:ivarodriguez@uvigo.gal)).

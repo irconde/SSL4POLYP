@@ -1,3 +1,4 @@
 {
-  "data_root": "/absolute/path/to/datasets/hyperkvasir"
+  "sun": "/absolute/path/to/data/sun",
+  "polypgen_clean": "/absolute/path/to/data/polypgen"
 }
