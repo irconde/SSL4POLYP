@@ -305,7 +305,7 @@ def main() -> int:
         jobs[number]()
     plotted = pd.DataFrame(ROWS)
     if args.only and (OUT / "plotted_values.csv").exists():
-        kept = pd.read_csv(OUT / "plotted_values.csv")
+        kept = pd.read_csv(OUT / "plotted_values.csv", float_precision="round_trip")  # keep the rows bit for bit
         kept = kept[~kept["figure"].isin([f"Figure {n}" for n in selected])]
         plotted = pd.concat([kept, plotted], ignore_index=True)
         plotted["_order"] = plotted["figure"].str.extract(r"(\d+)").astype(int)
