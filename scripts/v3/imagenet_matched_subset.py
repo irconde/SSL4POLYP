@@ -26,8 +26,8 @@ TOTAL, PER_CLASS, EXTRA = 99_417, 99, 417
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--source", type=Path, default=Path("/workspace/data/imagenet_train"))
-    parser.add_argument("--out", type=Path, default=Path("/workspace/data/imagenet_matched_99417"))
+    parser.add_argument("--source", type=Path, required=True, help="class folders written by imagenet_hf_to_folders.py")
+    parser.add_argument("--out", type=Path, required=True, help="destination of the symbolic-link subset (must not exist)")
     parser.add_argument("--records", type=Path, required=True)
     parser.add_argument("--seed", type=int, required=True)
     args = parser.parse_args()

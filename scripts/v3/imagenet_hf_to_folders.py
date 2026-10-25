@@ -78,8 +78,9 @@ def check_image(task: tuple) -> tuple:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--parquet-dir", type=Path, default=Path("/workspace/data/imagenet_hf/data"))
-    parser.add_argument("--out", type=Path, default=Path("/workspace/data/imagenet_train"))
+    parser.add_argument("--parquet-dir", type=Path, required=True,
+                        help="directory with the 294 train-*-of-00294.parquet shards of ILSVRC/imagenet-1k")
+    parser.add_argument("--out", type=Path, required=True, help="destination <out>/<synset>/<name>.JPEG")
     parser.add_argument("--records", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=16)
     args = parser.parse_args()
