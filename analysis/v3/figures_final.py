@@ -184,7 +184,7 @@ def figure5(t8: pd.DataFrame) -> None:
     ymin = t8["balanced_accuracy_mean"].min()
     ymax = t8["balanced_accuracy_mean"].max()
     pad = 0.04 * (ymax - ymin)
-    fig, axes = plt.subplots(1, 4, figsize=(WIDTH_IN, 62 * MM), layout="constrained", sharey=True)
+    fig, axes = plt.subplots(1, 4, figsize=(WIDTH_IN, 68 * MM), layout="constrained", sharey=True)
     for ax, g, letter in zip(axes, REGIMES, "abcd"):
         for arm in ARMS:
             s = t8[(t8["regime"] == g) & (t8["arm"] == arm)].sort_values("budget")
@@ -204,7 +204,7 @@ def figure5(t8: pd.DataFrame) -> None:
     axes[0].set_ylabel("Balanced accuracy")
     handles = [Line2D([], [], color=BLACK, linestyle=ARM_STYLE[a][0], marker=ARM_STYLE[a][1], markersize=3.5,
                       linewidth=1.0, label=ARMS[a]) for a in ARMS]
-    fig.legend(handles=handles, loc="outside lower center", ncol=4, handlelength=2.6, columnspacing=1.0)
+    fig.legend(handles=handles, loc="outside lower center", ncol=2, handlelength=2.6, columnspacing=2.0)
     save(fig, "figure5_e4_arms")
 
 
