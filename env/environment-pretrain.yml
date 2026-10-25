@@ -116,7 +116,7 @@ dependencies:
       - rsa==4.9.1
       - scikit-learn==1.0.2
       - scipy==1.10.1
-      - ssl4polyp==0.1.0
+      # ssl4polyp itself: pip install --no-deps -e . (from the repository root)
       - sympy==1.13.3
       - tensorboard==2.14.0
       - tensorboard-data-server==0.7.2

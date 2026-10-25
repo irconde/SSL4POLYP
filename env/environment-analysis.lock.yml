@@ -267,4 +267,3 @@ dependencies:
   - zlib-ng=2.3.3
   - zstd=1.5.7
 
-prefix: "/home/irconde/miniforge3/envs/ssl4polyp-analysis"
