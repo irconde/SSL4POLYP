@@ -1,0 +1,152 @@
+figure,element,key,x,value,lo,hi,source,source_key
+Figure 2,estimate,H1,,0.04746948828,,,results_v3/analysis/tables/table_hypotheses.csv,H1.estimate
+Figure 2,t-test CI (partition means),H1,,,0.028619313930000001,0.066319662639999999,results_v3/analysis/tables/table_hypotheses.csv,H1.model_ci
+Figure 2,bootstrap CI,H1,,,0.035452996819999999,0.059156810999999997,results_v3/analysis/tables/table_hypotheses.csv,H1.boot
+Figure 2,confirmed (filled marker),H1,,1,,,results_v3/analysis/tables/table_hypotheses.csv,H1.confirmed
+Figure 2,estimate,H2,,-0.01384092072,,,results_v3/analysis/tables/table_hypotheses.csv,H2.estimate
+Figure 2,t-test CI (partition means),H2,,,-0.028548888809999999,0.00086704737149999995,results_v3/analysis/tables/table_hypotheses.csv,H2.model_ci
+Figure 2,bootstrap CI,H2,,,-0.021434320789999999,-0.0063687846190000003,results_v3/analysis/tables/table_hypotheses.csv,H2.boot
+Figure 2,confirmed (filled marker),H2,,0,,,results_v3/analysis/tables/table_hypotheses.csv,H2.confirmed
+Figure 2,estimate,H3,,0.038018161410000001,,,results_v3/analysis/tables/table_hypotheses.csv,H3.estimate
+Figure 2,t-test CI (partition means),H3,,,0.012168003050000001,0.063868319770000001,results_v3/analysis/tables/table_hypotheses.csv,H3.model_ci
+Figure 2,bootstrap CI,H3,,,0.020188735839999999,0.059256606470000001,results_v3/analysis/tables/table_hypotheses.csv,H3.boot
+Figure 2,confirmed (filled marker),H3,,1,,,results_v3/analysis/tables/table_hypotheses.csv,H3.confirmed
+Figure 2,estimate,H4,,-0.072001479320000006,,,results_v3/analysis/tables/table_hypotheses.csv,H4.estimate
+Figure 2,t-test CI (partition means),H4,,,-0.098530045019999998,-0.045472913619999999,results_v3/analysis/tables/table_hypotheses.csv,H4.model_ci
+Figure 2,bootstrap CI,H4,,,-0.34470907810000001,0.09437007117,results_v3/analysis/tables/table_hypotheses.csv,H4.boot
+Figure 2,confirmed (filled marker),H4,,0,,,results_v3/analysis/tables/table_hypotheses.csv,H4.confirmed
+Figure 2,estimate,H5,,0.1548491374,,,results_v3/analysis/tables/table_hypotheses.csv,H5.estimate
+Figure 2,t-test CI (partition means),H5,,,0.120221915,0.18947635979999999,results_v3/analysis/tables/table_hypotheses.csv,H5.model_ci
+Figure 2,bootstrap CI,H5,,,-0.031012671070000001,0.30934815529999998,results_v3/analysis/tables/table_hypotheses.csv,H5.boot
+Figure 2,confirmed (filled marker),H5,,0,,,results_v3/analysis/tables/table_hypotheses.csv,H5.confirmed
+Figure 2,estimate,H6,,-0.0063512210869999999,,,results_v3/analysis/tables/table_hypotheses.csv,H6.estimate
+Figure 2,t-test CI (partition means),H6,,,-0.024059125680000001,0.01135668351,results_v3/analysis/tables/table_hypotheses.csv,H6.model_ci
+Figure 2,bootstrap CI,H6,,,-0.018377219970000001,0.0057772773880000001,results_v3/analysis/tables/table_hypotheses.csv,H6.boot
+Figure 2,confirmed (filled marker),H6,,0,,,results_v3/analysis/tables/table_hypotheses.csv,H6.confirmed
+Figure 2,estimate,H7,,-0.074840290219999994,,,results_v3/analysis/tables/table_hypotheses.csv,H7.estimate
+Figure 2,t-test CI (partition means),H7,,,-0.1012042138,-0.048476366649999998,results_v3/analysis/tables/table_hypotheses.csv,H7.model_ci
+Figure 2,bootstrap CI,H7,,,-0.13528506970000001,-0.014993374029999999,results_v3/analysis/tables/table_hypotheses.csv,H7.boot
+Figure 2,confirmed (filled marker),H7,,1,,,results_v3/analysis/tables/table_hypotheses.csv,H7.confirmed
+Figure 3,AUPRC mean (band ± SD of partition means),SUP-imnet,5,0.76350953519999998,0.66165124730000002,0.86536782309999993,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=sup_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SUP-imnet,10,0.75692469890000003,0.67151073628000002,0.84233866152000003,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=sup_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SUP-imnet,25,0.87317570030000002,0.84201572603000008,0.90433567456999997,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=sup_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SUP-imnet,50,0.93528901419999999,0.91757053101999997,0.95300749738000001,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=sup_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SUP-imnet,100,0.97485312950000003,0.96418670578999999,0.98551955321000007,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=sup_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet,5,0.71720016809999998,0.65241094244999998,0.78198939374999998,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=ssl_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet,10,0.79457981519999998,0.70622397137000004,0.88293565902999993,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=ssl_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet,25,0.92791591740000001,0.89902239700999997,0.95680943779000005,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=ssl_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet,50,0.9788233985,0.95830132023000003,0.99934547676999996,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=ssl_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet,100,0.99633709059999997,0.99289610739799994,0.99977807380200001,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=ssl_imnet,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-colon,5,0.88322528850000004,0.83138332837000006,0.93506724863000001,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=ssl_colon,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-colon,10,0.89478425699999997,0.85142785729999992,0.93814065670000002,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=ssl_colon,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-colon,25,0.91845967159999997,0.89868779780999997,0.93823154538999998,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=ssl_colon,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-colon,50,0.97367247260000001,0.95542818957999998,0.99191675562000003,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=ssl_colon,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-colon,100,0.99431942179999999,0.98849760743799997,1.0001412361619999,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=ssl_colon,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet-matched,5,0.8449482371,0.76176035168,0.92813612252,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=ssl_imnet_matched,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet-matched,10,0.90958709800000004,0.86062133248000006,0.95855286352000002,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=ssl_imnet_matched,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet-matched,25,0.95391442459999998,0.92267826370999995,0.98515058549000001,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=ssl_imnet_matched,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet-matched,50,0.98685627419999999,0.97726818990999997,0.99644435849000002,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=ssl_imnet_matched,auprc_mean/auprc_sd_partition"
+Figure 3,AUPRC mean (band ± SD of partition means),SSL-imnet-matched,100,0.9966819844,0.99318006688500005,1.0001839019150001,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=ssl_imnet_matched,auprc_mean/auprc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SUP-imnet,5,0.79143774440000003,0.7084029396,0.87447254920000006,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=sup_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SUP-imnet,10,0.78643662209999998,0.71987675740000001,0.85299648679999995,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=sup_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SUP-imnet,25,0.87596558170000005,0.84394514806000009,0.90798601534000001,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=sup_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SUP-imnet,50,0.92664258749999995,0.90553338975999997,0.94775178523999992,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=sup_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SUP-imnet,100,0.97171907629999998,0.95960503699999999,0.98383311559999997,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=sup_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet,5,0.72941536579999999,0.66973765330000001,0.78909307829999997,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=ssl_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet,10,0.79486963919999998,0.70185288694000003,0.88788639145999992,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=ssl_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet,25,0.92058415810000005,0.88744495111999999,0.95372336508000011,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=ssl_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet,50,0.97603455429999997,0.95042539893,1.0016437096699999,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=ssl_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet,100,0.9961994354,0.99254808647199999,0.99985078432800001,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=ssl_imnet,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-colon,5,0.87110349279999999,0.81263879228000002,0.92956819331999996,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=ssl_colon,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-colon,10,0.88181069960000003,0.82891363272000007,0.93470776647999998,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=ssl_colon,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-colon,25,0.91356147330000004,0.88982871845,0.93729422815000007,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=ssl_colon,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-colon,50,0.97138577699999995,0.9524271367699999,0.99034441723,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=ssl_colon,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-colon,100,0.99369996260000004,0.98696094298900006,1.000438982211,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=ssl_colon,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet-matched,5,0.84085542290000004,0.75806154654000002,0.92364929926000006,results_v3/analysis/tables/table3_e1_performance.csv,"percent=5,regime=ssl_imnet_matched,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet-matched,10,0.90252885760000001,0.85099962061000001,0.95405809459000002,results_v3/analysis/tables/table3_e1_performance.csv,"percent=10,regime=ssl_imnet_matched,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet-matched,25,0.9464450566,0.90892559233000003,0.98396452086999997,results_v3/analysis/tables/table3_e1_performance.csv,"percent=25,regime=ssl_imnet_matched,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet-matched,50,0.98650314589999999,0.97680206992899998,0.996204221871,results_v3/analysis/tables/table3_e1_performance.csv,"percent=50,regime=ssl_imnet_matched,auroc_mean/auroc_sd_partition"
+Figure 3,AUROC mean (band ± SD of partition means),SSL-imnet-matched,100,0.99659055200000002,0.99289204310400003,1.000289060896,results_v3/analysis/tables/table3_e1_performance.csv,"percent=100,regime=ssl_imnet_matched,auroc_mean/auroc_sd_partition"
+Figure 4,"ΔAUROC SSL-colon − SUP-imnet, 95% CI (t-test on partition means)",All centres,,-0.072001479320000006,-0.098530045019999998,-0.045472913619999999,results_v3/analysis/tables/table_hypotheses.csv,H4
+Figure 4,"ΔAUROC SSL-colon − SUP-imnet, 95% CI (t-test on partition means)",Without C1,,-0.046316781289999998,-0.068064789079999993,-0.024568773499999998,results_v3/analysis/tables/table_loco_e3.csv,excluded=C1
+Figure 4,"ΔAUROC SSL-colon − SUP-imnet, 95% CI (t-test on partition means)",Without C2,,-0.031388092880000003,-0.057607414629999999,-0.0051687711360000003,results_v3/analysis/tables/table_loco_e3.csv,excluded=C2
+Figure 4,"ΔAUROC SSL-colon − SUP-imnet, 95% CI (t-test on partition means)",Without C3,,-0.1640436737,-0.21225795559999999,-0.11582939189999999,results_v3/analysis/tables/table_loco_e3.csv,excluded=C3
+Figure 4,"ΔAUROC SSL-colon − SUP-imnet, 95% CI (t-test on partition means)",Without C4,,-0.045123140909999998,-0.07068234625,-0.01956393557,results_v3/analysis/tables/table_loco_e3.csv,excluded=C4
+Figure 4,"ΔAUROC SSL-colon − SUP-imnet, 95% CI (t-test on partition means)",Without C5,,-0.098035004300000006,-0.12758966829999999,-0.068480340289999997,results_v3/analysis/tables/table_loco_e3.csv,excluded=C5
+Figure 4,"ΔAUROC SSL-colon − SUP-imnet, 95% CI (t-test on partition means)",Without C6,,-0.065934378530000004,-0.092319078169999999,-0.039549678890000002,results_v3/analysis/tables/table_loco_e3.csv,excluded=C6
+Figure 5,balanced accuracy mean,SUP-imnet arm A,50,0.78059993539999994,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=A,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm A,100,0.78246875299999996,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=A,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm A,200,0.78575057159999995,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=A,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm A,500,0.7700888266,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=A,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm B,50,0.76955016060000003,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=B,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm B,100,0.78492283380000005,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=B,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm B,200,0.78463483629999997,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=B,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm B,500,0.78574983909999996,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=B,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm C,50,0.68047599390000002,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=C,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm C,100,0.64392974749999998,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=C,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm C,200,0.6550265435,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=C,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm C,500,0.69478143209999998,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=C,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm D,50,0.73599923320000005,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=D,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm D,100,0.75695662139999997,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=D,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm D,200,0.74035816740000004,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=D,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SUP-imnet arm D,500,0.82129185770000002,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=D,regime=sup_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm A,50,0.71133926039999995,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=A,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm A,100,0.71271796909999996,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=A,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm A,200,0.71426896149999997,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=A,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm A,500,0.69876949330000004,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=A,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm B,50,0.73498931749999996,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=B,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm B,100,0.71470286240000003,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=B,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm B,200,0.72947540749999995,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=B,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm B,500,0.72074454020000001,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=B,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm C,50,0.64024639930000005,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=C,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm C,100,0.68232222980000001,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=C,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm C,200,0.68526354909999998,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=C,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm C,500,0.77873297289999999,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=C,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm D,50,0.6764668224,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=D,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm D,100,0.70541069810000001,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=D,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm D,200,0.69059357079999995,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=D,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet arm D,500,0.82953933069999997,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=D,regime=ssl_imnet,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm A,50,0.71023991959999999,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=A,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm A,100,0.71168374440000004,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=A,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm A,200,0.71395826650000005,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=A,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm A,500,0.70079799269999998,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=A,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm B,50,0.70294049209999998,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=B,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm B,100,0.68896534880000004,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=B,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm B,200,0.69790841979999996,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=B,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm B,500,0.69265117539999999,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=B,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm C,50,0.64417887679999997,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=C,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm C,100,0.62625484249999996,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=C,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm C,200,0.62109128270000002,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=C,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm C,500,0.7187709766,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=C,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm D,50,0.6632888079,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=D,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm D,100,0.63706204619999995,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=D,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm D,200,0.6624153961,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=D,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-colon arm D,500,0.78312013270000003,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=D,regime=ssl_colon,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm A,50,0.7099312807,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=A,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm A,100,0.71131936870000001,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=A,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm A,200,0.7135957302,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=A,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm A,500,0.69556427249999997,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=A,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm B,50,0.68516792879999999,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=B,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm B,100,0.6735405981,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=B,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm B,200,0.68942678820000003,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=B,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm B,500,0.66610426020000002,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=B,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm C,50,0.56237745250000004,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=C,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm C,100,0.54887865430000005,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=C,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm C,200,0.55625033749999997,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=C,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm C,500,0.6870684118,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=C,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm D,50,0.59351374010000002,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=50,arm=D,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm D,100,0.61268322070000003,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=100,arm=D,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm D,200,0.59450404369999998,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=200,arm=D,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 5,balanced accuracy mean,SSL-imnet-matched arm D,500,0.7794337294,,,results_v3/analysis/tables/table8_e4_arms.csv,"budget=500,arm=D,regime=ssl_imnet_matched,balanced_accuracy_mean"
+Figure 6,"Selected learning rate per regime: estimate, 95% CI t-test / bootstrap",H1,,0.04746948828,0.028619313930000001,0.066319662639999999,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H1.v3_estimate/v3_t_ci
+Figure 6,Selected learning rate per regime: bootstrap CI,H1,,,0.035452996819999999,0.059156810999999997,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H1.v3_boot
+Figure 6,"Common learning rate (1e-3): estimate, 95% CI t-test / bootstrap",H1,,0.10466460819999999,0.049498419779999997,0.15983079659999999,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H1.common_estimate/common_t_ci
+Figure 6,Common learning rate (1e-3): bootstrap CI,H1,,,0.083584332119999993,0.1226891058,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H1.common_boot
+Figure 6,"Selected learning rate per regime: estimate, 95% CI t-test / bootstrap",H3,,0.038018161410000001,0.012168003050000001,0.063868319770000001,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H3.v3_estimate/v3_t_ci
+Figure 6,Selected learning rate per regime: bootstrap CI,H3,,,0.020188735839999999,0.059256606470000001,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H3.v3_boot
+Figure 6,"Common learning rate (1e-3): estimate, 95% CI t-test / bootstrap",H3,,0.072066931949999996,0.0071606995349999996,0.13697316440000001,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H3.common_estimate/common_t_ci
+Figure 6,Common learning rate (1e-3): bootstrap CI,H3,,,0.040141720229999997,0.1100251199,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H3.common_boot
+Figure 6,"Selected learning rate per regime: estimate, 95% CI t-test / bootstrap",H4,,-0.072001479320000006,-0.098530045019999998,-0.045472913619999999,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H4.v3_estimate/v3_t_ci
+Figure 6,Selected learning rate per regime: bootstrap CI,H4,,,-0.34470907810000001,0.09437007117,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H4.v3_boot
+Figure 6,"Common learning rate (1e-3): estimate, 95% CI t-test / bootstrap",H4,,0.079184580360000006,0.028430312249999999,0.12993884850000001,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H4.common_estimate/common_t_ci
+Figure 6,Common learning rate (1e-3): bootstrap CI,H4,,,0.0022257917220000001,0.1512518628,results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv,H4.common_boot

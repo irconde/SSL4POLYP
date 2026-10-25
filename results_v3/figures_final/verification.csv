@@ -1,0 +1,220 @@
+figure,item,plotted,reference,reference_source,abs_diff,match
+Figure 2,H1 estimate,0.04746948828,0.04746948828,contrast_summary.csv,0,True
+Figure 2,H1 model_ci_lo,0.028619313930000001,0.028619313930000001,contrast_summary.csv,0,True
+Figure 2,H1 model_ci_hi,0.066319662639999999,0.066319662639999999,contrast_summary.csv,0,True
+Figure 2,H1 boot_lo,0.035452996819999999,0.035452996819999999,contrast_summary.csv,0,True
+Figure 2,H1 boot_hi,0.059156810999999997,0.059156810999999997,contrast_summary.csv,0,True
+Figure 2,H1 estimate = mean of per-run differences,0.04746948828,0.047469488283533333,paired_differences.csv (mean of d),3.533333348126888e-12,False
+Figure 2,H2 estimate,-0.01384092072,-0.01384092072,contrast_summary.csv,0,True
+Figure 2,H2 model_ci_lo,-0.028548888809999999,-0.028548888809999999,contrast_summary.csv,0,True
+Figure 2,H2 model_ci_hi,0.00086704737149999995,0.00086704737149999995,contrast_summary.csv,0,True
+Figure 2,H2 boot_lo,-0.021434320789999999,-0.021434320789999999,contrast_summary.csv,0,True
+Figure 2,H2 boot_hi,-0.0063687846190000003,-0.0063687846190000003,contrast_summary.csv,0,True
+Figure 2,H2 estimate = mean of per-run differences,-0.01384092072,-0.013840920717813336,paired_differences.csv (mean of d),2.1866640442791407e-12,False
+Figure 2,H3 estimate,0.038018161410000001,0.038018161410000001,contrast_summary.csv,0,True
+Figure 2,H3 model_ci_lo,0.012168003050000001,0.012168003050000001,contrast_summary.csv,0,True
+Figure 2,H3 model_ci_hi,0.063868319770000001,0.063868319770000001,contrast_summary.csv,0,True
+Figure 2,H3 boot_lo,0.020188735839999999,0.020188735839999999,contrast_summary.csv,0,True
+Figure 2,H3 boot_hi,0.059256606470000001,0.059256606470000001,contrast_summary.csv,0,True
+Figure 2,H3 estimate = mean of per-run differences,0.038018161410000001,0.038018161408866671,paired_differences.csv (mean of d),1.1333295413251676e-12,False
+Figure 2,H4 estimate,-0.072001479320000006,-0.072001479320000006,contrast_summary.csv,0,True
+Figure 2,H4 model_ci_lo,-0.098530045019999998,-0.098530045019999998,contrast_summary.csv,0,True
+Figure 2,H4 model_ci_hi,-0.045472913619999999,-0.045472913619999999,contrast_summary.csv,0,True
+Figure 2,H4 boot_lo,-0.34470907810000001,-0.34470907810000001,contrast_summary.csv,0,True
+Figure 2,H4 boot_hi,0.09437007117,0.09437007117,contrast_summary.csv,0,True
+Figure 2,H4 estimate = mean of per-run differences,-0.072001479320000006,-0.072001479325666681,paired_differences.csv (mean of d),5.6666754622014537e-12,False
+Figure 2,H5 estimate,0.1548491374,0.1548491374,contrast_summary.csv,0,True
+Figure 2,H5 model_ci_lo,0.120221915,0.120221915,contrast_summary.csv,0,True
+Figure 2,H5 model_ci_hi,0.18947635979999999,0.18947635979999999,contrast_summary.csv,0,True
+Figure 2,H5 boot_lo,-0.031012671070000001,-0.031012671070000001,contrast_summary.csv,0,True
+Figure 2,H5 boot_hi,0.30934815529999998,0.30934815529999998,contrast_summary.csv,0,True
+Figure 2,H5 estimate = mean of per-run differences,0.1548491374,0.15484913743999998,paired_differences.csv (mean of d),3.9999975554039224e-11,False
+Figure 2,H6 estimate,-0.0063512210869999999,-0.0063512210869999999,contrast_summary.csv,0,True
+Figure 2,H6 model_ci_lo,-0.024059125680000001,-0.024059125680000001,contrast_summary.csv,0,True
+Figure 2,H6 model_ci_hi,0.01135668351,0.01135668351,contrast_summary.csv,0,True
+Figure 2,H6 boot_lo,-0.018377219970000001,-0.018377219970000001,contrast_summary.csv,0,True
+Figure 2,H6 boot_hi,0.0057772773880000001,0.0057772773880000001,contrast_summary.csv,0,True
+Figure 2,H6 estimate = mean of per-run differences,-0.0063512210869999999,-0.0063512210868400002,paired_differences.csv (mean of d),1.5999961772150684e-13,False
+Figure 2,H7 estimate,-0.074840290219999994,-0.074840290219999994,contrast_summary.csv,0,True
+Figure 2,H7 model_ci_lo,-0.1012042138,-0.1012042138,contrast_summary.csv,0,True
+Figure 2,H7 model_ci_hi,-0.048476366649999998,-0.048476366649999998,contrast_summary.csv,0,True
+Figure 2,H7 boot_lo,-0.13528506970000001,-0.13528506970000001,contrast_summary.csv,0,True
+Figure 2,H7 boot_hi,-0.014993374029999999,-0.014993374029999999,contrast_summary.csv,0,True
+Figure 2,H7 estimate = mean of per-run differences,-0.074840290219999994,-0.074840290215399993,paired_differences.csv (mean of d),4.6000009357172189e-12,False
+Figure 3,sup_imnet p5 auprc mean,0.76350953519999998,0.76350953518666664,run_metrics.csv (mean of 15 runs),1.333333443653828e-11,False
+Figure 3,sup_imnet p5 auprc SD of partition means,0.1018582879,0.10185828785076015,run_metrics.csv (SD of 5 partition means),4.9239848309845513e-11,False
+Figure 3,sup_imnet p5 auroc mean,0.79143774440000003,0.79143774444666659,run_metrics.csv (mean of 15 runs),4.6666559505581517e-11,False
+Figure 3,sup_imnet p5 auroc SD of partition means,0.083034804800000001,0.083034804803773676,run_metrics.csv (SD of 5 partition means),3.7736758162765227e-12,False
+Figure 3,ssl_imnet p5 auprc mean,0.71720016809999998,0.71720016806666653,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 3,ssl_imnet p5 auprc SD of partition means,0.064789225650000004,0.064789225646445958,run_metrics.csv (SD of 5 partition means),3.5540459464300511e-12,False
+Figure 3,ssl_imnet p5 auroc mean,0.72941536579999999,0.72941536577999999,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 3,ssl_imnet p5 auroc SD of partition means,0.059677712500000001,0.059677712495790312,run_metrics.csv (SD of 5 partition means),4.2096881536224373e-12,False
+Figure 3,ssl_colon p5 auprc mean,0.88322528850000004,0.88322528849333326,run_metrics.csv (mean of 15 runs),6.6667782405716025e-12,False
+Figure 3,ssl_colon p5 auprc SD of partition means,0.051841960130000003,0.051841960133597403,run_metrics.csv (SD of 5 partition means),3.5974001555416635e-12,False
+Figure 3,ssl_colon p5 auroc mean,0.87110349279999999,0.87110349285333333,run_metrics.csv (mean of 15 runs),5.333333774615312e-11,False
+Figure 3,ssl_colon p5 auroc SD of partition means,0.058464700520000003,0.058464700521154808,run_metrics.csv (SD of 5 partition means),1.1548054179577605e-12,False
+Figure 3,ssl_imnet_matched p5 auprc mean,0.8449482371,0.84494823706000011,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 3,ssl_imnet_matched p5 auprc SD of partition means,0.083187885419999996,0.083187885406081422,run_metrics.csv (SD of 5 partition means),1.3918574626181623e-11,False
+Figure 3,ssl_imnet_matched p5 auroc mean,0.84085542290000004,0.84085542290666671,run_metrics.csv (mean of 15 runs),6.66666721826914e-12,False
+Figure 3,ssl_imnet_matched p5 auroc SD of partition means,0.082793876360000004,0.082793876377205491,run_metrics.csv (SD of 5 partition means),1.7205487035099054e-11,False
+Figure 3,sup_imnet p10 auprc mean,0.75692469890000003,0.75692469892666669,run_metrics.csv (mean of 15 runs),2.666666887307656e-11,False
+Figure 3,sup_imnet p10 auprc SD of partition means,0.085413962620000006,0.085413962619006023,run_metrics.csv (SD of 5 partition means),9.9398267394690265e-13,False
+Figure 3,sup_imnet p10 auroc mean,0.78643662209999998,0.78643662211999998,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 3,sup_imnet p10 auroc SD of partition means,0.066559864699999999,0.066559864713432809,run_metrics.csv (SD of 5 partition means),1.3432810419544694e-11,False
+Figure 3,ssl_imnet p10 auprc mean,0.79457981519999998,0.79457981517999987,run_metrics.csv (mean of 15 runs),2.0000112677109882e-11,False
+Figure 3,ssl_imnet p10 auprc SD of partition means,0.088355843830000003,0.088355843834859268,run_metrics.csv (SD of 5 partition means),4.8592657675428086e-12,False
+Figure 3,ssl_imnet p10 auroc mean,0.79486963919999998,0.79486963915333331,run_metrics.csv (mean of 15 runs),4.666667052788398e-11,False
+Figure 3,ssl_imnet p10 auroc SD of partition means,0.093016752260000002,0.093016752266271874,run_metrics.csv (SD of 5 partition means),6.2718719107124343e-12,False
+Figure 3,ssl_colon p10 auprc mean,0.89478425699999997,0.89478425704000009,run_metrics.csv (mean of 15 runs),4.0000114331917302e-11,False
+Figure 3,ssl_colon p10 auprc SD of partition means,0.043356399699999999,0.04335639970130202,run_metrics.csv (SD of 5 partition means),1.3020209910230562e-12,False
+Figure 3,ssl_colon p10 auroc mean,0.88181069960000003,0.8818106995866668,run_metrics.csv (mean of 15 runs),1.3333223414235817e-11,False
+Figure 3,ssl_colon p10 auroc SD of partition means,0.052897066880000003,0.052897066879916847,run_metrics.csv (SD of 5 partition means),8.3155704544424225e-14,False
+Figure 3,ssl_imnet_matched p10 auprc mean,0.90958709800000004,0.9095870980266666,run_metrics.csv (mean of 15 runs),2.6666557850774097e-11,False
+Figure 3,ssl_imnet_matched p10 auprc SD of partition means,0.048965765520000003,0.048965765520475033,run_metrics.csv (SD of 5 partition means),4.7502973776758495e-13,False
+Figure 3,ssl_imnet_matched p10 auroc mean,0.90252885760000001,0.90252885760666657,run_metrics.csv (mean of 15 runs),6.6665561959666775e-12,False
+Figure 3,ssl_imnet_matched p10 auroc SD of partition means,0.051529236989999998,0.051529236991214915,run_metrics.csv (SD of 5 partition means),1.2149170558473088e-12,False
+Figure 3,sup_imnet p25 auprc mean,0.87317570030000002,0.87317570033333325,run_metrics.csv (mean of 15 runs),3.3333225069043237e-11,False
+Figure 3,sup_imnet p25 auprc SD of partition means,0.031159974270000002,0.031159974286245243,run_metrics.csv (SD of 5 partition means),1.6245241263312948e-11,False
+Figure 3,sup_imnet p25 auroc mean,0.87596558170000005,0.87596558175999994,run_metrics.csv (mean of 15 runs),5.9999893942119797e-11,False
+Figure 3,sup_imnet p25 auroc SD of partition means,0.032020433639999998,0.032020433635704899,run_metrics.csv (SD of 5 partition means),4.2950989986856314e-12,False
+Figure 3,ssl_imnet p25 auprc mean,0.92791591740000001,0.9279159173599999,run_metrics.csv (mean of 15 runs),4.0000114331917302e-11,False
+Figure 3,ssl_imnet p25 auprc SD of partition means,0.02889352039,0.028893520377934391,run_metrics.csv (SD of 5 partition means),1.2065608928635285e-11,False
+Figure 3,ssl_imnet p25 auroc mean,0.92058415810000005,0.92058415807333338,run_metrics.csv (mean of 15 runs),2.666666887307656e-11,False
+Figure 3,ssl_imnet p25 auroc SD of partition means,0.033139206980000002,0.033139206969993347,run_metrics.csv (SD of 5 partition means),1.0006655226657557e-11,False
+Figure 3,ssl_colon p25 auprc mean,0.91845967159999997,0.91845967158666686,run_metrics.csv (mean of 15 runs),1.3333112391933355e-11,False
+Figure 3,ssl_colon p25 auprc SD of partition means,0.019771873789999998,0.019771873788386903,run_metrics.csv (SD of 5 partition means),1.6130950741821692e-12,False
+Figure 3,ssl_colon p25 auroc mean,0.91356147330000004,0.9135614733266666,run_metrics.csv (mean of 15 runs),2.6666557850774097e-11,False
+Figure 3,ssl_colon p25 auroc SD of partition means,0.023732754849999999,0.02373275485624135,run_metrics.csv (SD of 5 partition means),6.2413511858760984e-12,False
+Figure 3,ssl_imnet_matched p25 auprc mean,0.95391442459999998,0.95391442457999998,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 3,ssl_imnet_matched p25 auprc SD of partition means,0.03123616089,0.031236160873829671,run_metrics.csv (SD of 5 partition means),1.6170328964726366e-11,False
+Figure 3,ssl_imnet_matched p25 auroc mean,0.9464450566,0.94644505663333323,run_metrics.csv (mean of 15 runs),3.3333225069043237e-11,False
+Figure 3,ssl_imnet_matched p25 auroc SD of partition means,0.037519464269999997,0.037519464269128548,run_metrics.csv (SD of 5 partition means),8.714487464978049e-13,False
+Figure 3,sup_imnet p50 auprc mean,0.93528901419999999,0.93528901422666677,run_metrics.csv (mean of 15 runs),2.6666779895379022e-11,False
+Figure 3,sup_imnet p50 auprc SD of partition means,0.017718483180000001,0.017718483190624228,run_metrics.csv (SD of 5 partition means),1.0624227192446156e-11,False
+Figure 3,sup_imnet p50 auroc mean,0.92664258749999995,0.92664258747999995,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 3,sup_imnet p50 auroc SD of partition means,0.021109197739999998,0.021109197741156924,run_metrics.csv (SD of 5 partition means),1.1569252500454041e-12,False
+Figure 3,ssl_imnet p50 auprc mean,0.9788233985,0.97882339847333333,run_metrics.csv (mean of 15 runs),2.666666887307656e-11,False
+Figure 3,ssl_imnet p50 auprc SD of partition means,0.020522078270000001,0.020522078275226511,run_metrics.csv (SD of 5 partition means),5.2265101968540506e-12,False
+Figure 3,ssl_imnet p50 auroc mean,0.97603455429999997,0.97603455429333341,run_metrics.csv (mean of 15 runs),6.6665561959666775e-12,False
+Figure 3,ssl_imnet p50 auroc SD of partition means,0.025609155370000001,0.025609155363106231,run_metrics.csv (SD of 5 partition means),6.8937702768501197e-12,False
+Figure 3,ssl_colon p50 auprc mean,0.97367247260000001,0.97367247258,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 3,ssl_colon p50 auprc SD of partition means,0.018244283020000002,0.018244283031997505,run_metrics.csv (SD of 5 partition means),1.1997503684968436e-11,False
+Figure 3,ssl_colon p50 auroc mean,0.97138577699999995,0.97138577695999995,run_metrics.csv (mean of 15 runs),4.000000330961484e-11,False
+Figure 3,ssl_colon p50 auroc SD of partition means,0.018958640230000001,0.018958640238559612,run_metrics.csv (SD of 5 partition means),8.5596113530428397e-12,False
+Figure 3,ssl_imnet_matched p50 auprc mean,0.98685627419999999,0.98685627423999989,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 3,ssl_imnet_matched p50 auprc SD of partition means,0.0095880842899999999,0.0095880842882378765,run_metrics.csv (SD of 5 partition means),1.7621234332798608e-12,False
+Figure 3,ssl_imnet_matched p50 auroc mean,0.98650314589999999,0.98650314594000021,run_metrics.csv (mean of 15 runs),4.0000225354219765e-11,False
+Figure 3,ssl_imnet_matched p50 auroc SD of partition means,0.0097010759710000009,0.0097010759795289961,run_metrics.csv (SD of 5 partition means),8.528995218415325e-12,False
+Figure 3,sup_imnet p100 auprc mean,0.97485312950000003,0.97485312945333336,run_metrics.csv (mean of 15 runs),4.666667052788398e-11,False
+Figure 3,sup_imnet p100 auprc SD of partition means,0.010666423709999999,0.010666423697037897,run_metrics.csv (SD of 5 partition means),1.2962101877955767e-11,False
+Figure 3,sup_imnet p100 auroc mean,0.97171907629999998,0.97171907628666676,run_metrics.csv (mean of 15 runs),1.3333223414235817e-11,False
+Figure 3,sup_imnet p100 auroc SD of partition means,0.012114039300000001,0.012114039306756438,run_metrics.csv (SD of 5 partition means),6.7564374234274638e-12,False
+Figure 3,ssl_imnet p100 auprc mean,0.99633709059999997,0.9963370906400002,run_metrics.csv (mean of 15 runs),4.0000225354219765e-11,False
+Figure 3,ssl_imnet p100 auprc SD of partition means,0.0034409832019999999,0.0034409832047811902,run_metrics.csv (SD of 5 partition means),2.781190208689388e-12,False
+Figure 3,ssl_imnet p100 auroc mean,0.9961994354,0.99619943541333333,run_metrics.csv (mean of 15 runs),1.333333443653828e-11,False
+Figure 3,ssl_imnet p100 auroc SD of partition means,0.0036513489280000002,0.0036513489207008871,run_metrics.csv (SD of 5 partition means),7.2991131368216333e-12,False
+Figure 3,ssl_colon p100 auprc mean,0.99431942179999999,0.99431942180666666,run_metrics.csv (mean of 15 runs),6.66666721826914e-12,False
+Figure 3,ssl_colon p100 auprc SD of partition means,0.0058218143620000001,0.0058218143723415073,run_metrics.csv (SD of 5 partition means),1.0341507164501884e-11,False
+Figure 3,ssl_colon p100 auroc mean,0.99369996260000004,0.99369996260000015,run_metrics.csv (mean of 15 runs),1.1102230246251565e-16,False
+Figure 3,ssl_colon p100 auroc SD of partition means,0.0067390196110000003,0.0067390196117522883,run_metrics.csv (SD of 5 partition means),7.5228798884774406e-13,False
+Figure 3,ssl_imnet_matched p100 auprc mean,0.9966819844,0.99668198438666666,run_metrics.csv (mean of 15 runs),1.333333443653828e-11,False
+Figure 3,ssl_imnet_matched p100 auprc SD of partition means,0.0035019175149999999,0.0035019175254548509,run_metrics.csv (SD of 5 partition means),1.0454850960656126e-11,False
+Figure 3,ssl_imnet_matched p100 auroc mean,0.99659055200000002,0.99659055198666679,run_metrics.csv (mean of 15 runs),1.3333223414235817e-11,False
+Figure 3,ssl_imnet_matched p100 auroc SD of partition means,0.003698508896,0.0036985089050831838,run_metrics.csv (SD of 5 partition means),9.0831838578386837e-12,False
+Figure 4,without C1 mean,-0.046316781289999998,-0.046316781289999998,contrast_summary.csv,0,True
+Figure 4,without C1 model_ci_lo,-0.068064789079999993,-0.068064789079999993,contrast_summary.csv,0,True
+Figure 4,without C1 model_ci_hi,-0.024568773499999998,-0.024568773499999998,contrast_summary.csv,0,True
+Figure 4,without C2 mean,-0.031388092880000003,-0.031388092880000003,contrast_summary.csv,0,True
+Figure 4,without C2 model_ci_lo,-0.057607414629999999,-0.057607414629999999,contrast_summary.csv,0,True
+Figure 4,without C2 model_ci_hi,-0.0051687711360000003,-0.0051687711360000003,contrast_summary.csv,0,True
+Figure 4,without C3 mean,-0.1640436737,-0.1640436737,contrast_summary.csv,0,True
+Figure 4,without C3 model_ci_lo,-0.21225795559999999,-0.21225795559999999,contrast_summary.csv,0,True
+Figure 4,without C3 model_ci_hi,-0.11582939189999999,-0.11582939189999999,contrast_summary.csv,0,True
+Figure 4,without C4 mean,-0.045123140909999998,-0.045123140909999998,contrast_summary.csv,0,True
+Figure 4,without C4 model_ci_lo,-0.07068234625,-0.07068234625,contrast_summary.csv,0,True
+Figure 4,without C4 model_ci_hi,-0.01956393557,-0.01956393557,contrast_summary.csv,0,True
+Figure 4,without C5 mean,-0.098035004300000006,-0.098035004300000006,contrast_summary.csv,0,True
+Figure 4,without C5 model_ci_lo,-0.12758966829999999,-0.12758966829999999,contrast_summary.csv,0,True
+Figure 4,without C5 model_ci_hi,-0.068480340289999997,-0.068480340289999997,contrast_summary.csv,0,True
+Figure 4,without C6 mean,-0.065934378530000004,-0.065934378530000004,contrast_summary.csv,0,True
+Figure 4,without C6 model_ci_lo,-0.092319078169999999,-0.092319078169999999,contrast_summary.csv,0,True
+Figure 4,without C6 model_ci_hi,-0.039549678890000002,-0.039549678890000002,contrast_summary.csv,0,True
+Figure 5,sup_imnet s50 arm A balanced accuracy mean,0.78059993539999994,0.78059993539999994,run_metrics.csv (mean of 15 runs),0,True
+Figure 5,ssl_imnet s50 arm A balanced accuracy mean,0.71133926039999995,0.71133926039333351,run_metrics.csv (mean of 15 runs),6.666445173664215e-12,False
+Figure 5,ssl_colon s50 arm A balanced accuracy mean,0.71023991959999999,0.71023991957333332,run_metrics.csv (mean of 15 runs),2.666666887307656e-11,False
+Figure 5,ssl_imnet_matched s50 arm A balanced accuracy mean,0.7099312807,0.70993128066,run_metrics.csv (mean of 15 runs),4.000000330961484e-11,False
+Figure 5,sup_imnet s50 arm B balanced accuracy mean,0.76955016060000003,0.76955016061333337,run_metrics.csv (mean of 15 runs),1.333333443653828e-11,False
+Figure 5,ssl_imnet s50 arm B balanced accuracy mean,0.73498931749999996,0.73498931749333329,run_metrics.csv (mean of 15 runs),6.66666721826914e-12,False
+Figure 5,ssl_colon s50 arm B balanced accuracy mean,0.70294049209999998,0.70294049214666665,run_metrics.csv (mean of 15 runs),4.666667052788398e-11,False
+Figure 5,ssl_imnet_matched s50 arm B balanced accuracy mean,0.68516792879999999,0.68516792878666666,run_metrics.csv (mean of 15 runs),1.333333443653828e-11,False
+Figure 5,sup_imnet s50 arm C balanced accuracy mean,0.68047599390000002,0.68047599390666669,run_metrics.csv (mean of 15 runs),6.66666721826914e-12,False
+Figure 5,ssl_imnet s50 arm C balanced accuracy mean,0.64024639930000005,0.64024639928000004,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,ssl_colon s50 arm C balanced accuracy mean,0.64417887679999997,0.64417887677999996,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,ssl_imnet_matched s50 arm C balanced accuracy mean,0.56237745250000004,0.56237745249333337,run_metrics.csv (mean of 15 runs),6.66666721826914e-12,False
+Figure 5,sup_imnet s50 arm D balanced accuracy mean,0.73599923320000005,0.7359992332266666,run_metrics.csv (mean of 15 runs),2.6666557850774097e-11,False
+Figure 5,ssl_imnet s50 arm D balanced accuracy mean,0.6764668224,0.67646682236666666,run_metrics.csv (mean of 15 runs),3.33333360913457e-11,False
+Figure 5,ssl_colon s50 arm D balanced accuracy mean,0.6632888079,0.66328880786,run_metrics.csv (mean of 15 runs),4.000000330961484e-11,False
+Figure 5,ssl_imnet_matched s50 arm D balanced accuracy mean,0.59351374010000002,0.59351374012000002,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,sup_imnet s100 arm A balanced accuracy mean,0.78246875299999996,0.78246875303999996,run_metrics.csv (mean of 15 runs),4.000000330961484e-11,False
+Figure 5,ssl_imnet s100 arm A balanced accuracy mean,0.71271796909999996,0.71271796911333329,run_metrics.csv (mean of 15 runs),1.333333443653828e-11,False
+Figure 5,ssl_colon s100 arm A balanced accuracy mean,0.71168374440000004,0.71168374440000015,run_metrics.csv (mean of 15 runs),1.1102230246251565e-16,False
+Figure 5,ssl_imnet_matched s100 arm A balanced accuracy mean,0.71131936870000001,0.71131936866000001,run_metrics.csv (mean of 15 runs),4.000000330961484e-11,False
+Figure 5,sup_imnet s100 arm B balanced accuracy mean,0.78492283380000005,0.78492283376666661,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 5,ssl_imnet s100 arm B balanced accuracy mean,0.71470286240000003,0.71470286236000002,run_metrics.csv (mean of 15 runs),4.000000330961484e-11,False
+Figure 5,ssl_colon s100 arm B balanced accuracy mean,0.68896534880000004,0.68896534882000005,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,ssl_imnet_matched s100 arm B balanced accuracy mean,0.6735405981,0.67354059806000011,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 5,sup_imnet s100 arm C balanced accuracy mean,0.64392974749999998,0.64392974746666665,run_metrics.csv (mean of 15 runs),3.33333360913457e-11,False
+Figure 5,ssl_imnet s100 arm C balanced accuracy mean,0.68232222980000001,0.68232222981333346,run_metrics.csv (mean of 15 runs),1.3333445458840743e-11,False
+Figure 5,ssl_colon s100 arm C balanced accuracy mean,0.62625484249999996,0.62625484246666685,run_metrics.csv (mean of 15 runs),3.3333114046740775e-11,False
+Figure 5,ssl_imnet_matched s100 arm C balanced accuracy mean,0.54887865430000005,0.5488786542666666,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 5,sup_imnet s100 arm D balanced accuracy mean,0.75695662139999997,0.75695662139333342,run_metrics.csv (mean of 15 runs),6.6665561959666775e-12,False
+Figure 5,ssl_imnet s100 arm D balanced accuracy mean,0.70541069810000001,0.70541069814000013,run_metrics.csv (mean of 15 runs),4.0000114331917302e-11,False
+Figure 5,ssl_colon s100 arm D balanced accuracy mean,0.63706204619999995,0.63706204615333328,run_metrics.csv (mean of 15 runs),4.666667052788398e-11,False
+Figure 5,ssl_imnet_matched s100 arm D balanced accuracy mean,0.61268322070000003,0.61268322065999992,run_metrics.csv (mean of 15 runs),4.0000114331917302e-11,False
+Figure 5,sup_imnet s200 arm A balanced accuracy mean,0.78575057159999995,0.78575057159999995,run_metrics.csv (mean of 15 runs),0,True
+Figure 5,ssl_imnet s200 arm A balanced accuracy mean,0.71426896149999997,0.7142689615133333,run_metrics.csv (mean of 15 runs),1.333333443653828e-11,False
+Figure 5,ssl_colon s200 arm A balanced accuracy mean,0.71395826650000005,0.71395826651333349,run_metrics.csv (mean of 15 runs),1.3333445458840743e-11,False
+Figure 5,ssl_imnet_matched s200 arm A balanced accuracy mean,0.7135957302,0.71359573016666666,run_metrics.csv (mean of 15 runs),3.33333360913457e-11,False
+Figure 5,sup_imnet s200 arm B balanced accuracy mean,0.78463483629999997,0.78463483631999997,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,ssl_imnet s200 arm B balanced accuracy mean,0.72947540749999995,0.72947540749333328,run_metrics.csv (mean of 15 runs),6.66666721826914e-12,False
+Figure 5,ssl_colon s200 arm B balanced accuracy mean,0.69790841979999996,0.69790841978666684,run_metrics.csv (mean of 15 runs),1.3333112391933355e-11,False
+Figure 5,ssl_imnet_matched s200 arm B balanced accuracy mean,0.68942678820000003,0.68942678815333347,run_metrics.csv (mean of 15 runs),4.6666559505581517e-11,False
+Figure 5,sup_imnet s200 arm C balanced accuracy mean,0.6550265435,0.65502654353333334,run_metrics.csv (mean of 15 runs),3.33333360913457e-11,False
+Figure 5,ssl_imnet s200 arm C balanced accuracy mean,0.68526354909999998,0.68526354906000009,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 5,ssl_colon s200 arm C balanced accuracy mean,0.62109128270000002,0.62109128272000003,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,ssl_imnet_matched s200 arm C balanced accuracy mean,0.55625033749999997,0.5562503374733333,run_metrics.csv (mean of 15 runs),2.666666887307656e-11,False
+Figure 5,sup_imnet s200 arm D balanced accuracy mean,0.74035816740000004,0.74035816739999982,run_metrics.csv (mean of 15 runs),2.2204460492503131e-16,False
+Figure 5,ssl_imnet s200 arm D balanced accuracy mean,0.69059357079999995,0.69059357076000005,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 5,ssl_colon s200 arm D balanced accuracy mean,0.6624153961,0.66241539614,run_metrics.csv (mean of 15 runs),4.000000330961484e-11,False
+Figure 5,ssl_imnet_matched s200 arm D balanced accuracy mean,0.59450404369999998,0.59450404372666654,run_metrics.csv (mean of 15 runs),2.6666557850774097e-11,False
+Figure 5,sup_imnet s500 arm A balanced accuracy mean,0.7700888266,0.77008882657333333,run_metrics.csv (mean of 15 runs),2.666666887307656e-11,False
+Figure 5,ssl_imnet s500 arm A balanced accuracy mean,0.69876949330000004,0.6987694932666666,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 5,ssl_colon s500 arm A balanced accuracy mean,0.70079799269999998,0.70079799271999998,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,ssl_imnet_matched s500 arm A balanced accuracy mean,0.69556427249999997,0.69556427246000008,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 5,sup_imnet s500 arm B balanced accuracy mean,0.78574983909999996,0.78574983906666651,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 5,ssl_imnet s500 arm B balanced accuracy mean,0.72074454020000001,0.72074454016666656,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 5,ssl_colon s500 arm B balanced accuracy mean,0.69265117539999999,0.69265117537333343,run_metrics.csv (mean of 15 runs),2.6666557850774097e-11,False
+Figure 5,ssl_imnet_matched s500 arm B balanced accuracy mean,0.66610426020000002,0.66610426024000013,run_metrics.csv (mean of 15 runs),4.0000114331917302e-11,False
+Figure 5,sup_imnet s500 arm C balanced accuracy mean,0.69478143209999998,0.69478143206666643,run_metrics.csv (mean of 15 runs),3.3333558135950625e-11,False
+Figure 5,ssl_imnet s500 arm C balanced accuracy mean,0.77873297289999999,0.77873297286000009,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 5,ssl_colon s500 arm C balanced accuracy mean,0.7187709766,0.71877097659333322,run_metrics.csv (mean of 15 runs),6.6667782405716025e-12,False
+Figure 5,ssl_imnet_matched s500 arm C balanced accuracy mean,0.6870684118,0.68706841178000011,run_metrics.csv (mean of 15 runs),1.9999890632504957e-11,False
+Figure 5,sup_imnet s500 arm D balanced accuracy mean,0.82129185770000002,0.82129185768000001,run_metrics.csv (mean of 15 runs),2.000000165480742e-11,False
+Figure 5,ssl_imnet s500 arm D balanced accuracy mean,0.82953933069999997,0.82953933066666652,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 5,ssl_colon s500 arm D balanced accuracy mean,0.78312013270000003,0.78312013273333347,run_metrics.csv (mean of 15 runs),3.3333447113648162e-11,False
+Figure 5,ssl_imnet_matched s500 arm D balanced accuracy mean,0.7794337294,0.7794337293600001,run_metrics.csv (mean of 15 runs),3.9999892287312377e-11,False
+Figure 6,H1 v3_estimate,0.04746948828,0.04746948828,table_hypotheses.csv,0,True
+Figure 6,H1 v3_t_ci_lo,0.028619313930000001,0.028619313930000001,table_hypotheses.csv,0,True
+Figure 6,H1 v3_t_ci_hi,0.066319662639999999,0.066319662639999999,table_hypotheses.csv,0,True
+Figure 6,H1 v3_boot_lo,0.035452996819999999,0.035452996819999999,table_hypotheses.csv,0,True
+Figure 6,H1 v3_boot_hi,0.059156810999999997,0.059156810999999997,table_hypotheses.csv,0,True
+Figure 6,H3 v3_estimate,0.038018161410000001,0.038018161410000001,table_hypotheses.csv,0,True
+Figure 6,H3 v3_t_ci_lo,0.012168003050000001,0.012168003050000001,table_hypotheses.csv,0,True
+Figure 6,H3 v3_t_ci_hi,0.063868319770000001,0.063868319770000001,table_hypotheses.csv,0,True
+Figure 6,H3 v3_boot_lo,0.020188735839999999,0.020188735839999999,table_hypotheses.csv,0,True
+Figure 6,H3 v3_boot_hi,0.059256606470000001,0.059256606470000001,table_hypotheses.csv,0,True
+Figure 6,H4 v3_estimate,-0.072001479320000006,-0.072001479320000006,table_hypotheses.csv,0,True
+Figure 6,H4 v3_t_ci_lo,-0.098530045019999998,-0.098530045019999998,table_hypotheses.csv,0,True
+Figure 6,H4 v3_t_ci_hi,-0.045472913619999999,-0.045472913619999999,table_hypotheses.csv,0,True
+Figure 6,H4 v3_boot_lo,-0.34470907810000001,-0.34470907810000001,table_hypotheses.csv,0,True
+Figure 6,H4 v3_boot_hi,0.09437007117,0.09437007117,table_hypotheses.csv,0,True
