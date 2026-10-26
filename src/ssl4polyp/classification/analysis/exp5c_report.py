@@ -14,7 +14,7 @@ from typing import Any, DefaultDict, Dict, Iterable, List, Mapping, Optional, Se
 import numpy as np
 import yaml
 
-from reporting.metrics import bce_loss_from_csv
+from legacy.reporting.metrics import bce_loss_from_csv
 
 from .common_loader import CommonFrame, CommonRun, get_default_loader, load_common_run, load_outputs_csv
 from .result_loader import GuardrailViolation, ResultLoader

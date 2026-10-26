@@ -13,7 +13,7 @@ from typing import Any, Callable, DefaultDict, Dict, Iterable, List, Mapping, Mu
 
 import numpy as np
 
-from reporting.threshold_specs import THRESHOLD_SPECS
+from legacy.reporting.threshold_specs import THRESHOLD_SPECS
 
 from .common_loader import (
     CommonFrame,

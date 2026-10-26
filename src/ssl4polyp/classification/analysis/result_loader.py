@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence, Tuple
 
-from reporting.threshold_specs import THRESHOLD_SPECS
+from legacy.reporting.threshold_specs import THRESHOLD_SPECS
 
 import numpy as np
 

@@ -44,3 +44,5 @@ __pycache__/
 .claude/
 analysis_v2/
 analysis_v2.zip
+.mypy_cache/
+.pytest_cache/
