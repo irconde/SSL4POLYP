@@ -1,5 +1,5 @@
 SSL4POLYP
-Copyright 2025-2026 Ivan Rodriguez-Conde, Vincent Yip and Florentino Fdez-Riverola.
+Copyright 2025-2026 The SSL4POLYP authors (see the author list in README.md).
 
 This repository is distributed under the Apache License, Version 2.0 (see LICENSE), EXCEPT for the
 directory src/ssl4polyp/models/mae/, which is distributed under the Creative Commons

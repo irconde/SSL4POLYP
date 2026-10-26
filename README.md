@@ -3,8 +3,8 @@
 Reference implementation and run records of the article
 
 > **Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection: A Morphology-Aware and
-> Sample-Efficient Perspective.** Vincent Yip, Florentino Fdez-Riverola and Ivan Rodriguez-Conde.
-> Submitted to *Computer Methods and Programs in Biomedicine*.
+> Sample-Efficient Perspective.** Vincent Yip, Ahmed Abuhalimeh, Celso Campos, Florentino Fdez-Riverola
+> and Ivan Rodriguez-Conde. 2026, submitted to *Computer Methods and Programs in Biomedicine*.
 
 This branch holds **campaign v3**, the retraining from scratch whose results are reported in the article.
 The code that produced the earlier version of the study (v2) is on `main`; its README is kept in
@@ -55,6 +55,7 @@ campaign is recorded in [results_v3/RUNLOG.md](results_v3/RUNLOG.md).
 | `env/` | Conda environments and exact package lists |
 | `results_v3/` | Run log, SAP deviations, verification records, analysis outputs and final figures |
 | `tests/` | Package tests (`tests/legacy/`: v2 tests, skipped by default) |
+| `legacy/` | v2 files kept for reference: `reporting/` helpers of the v2 reports, v2 `environment.yml` |
 
 Weights (`checkpoints/`, `checkpoints_v3/`) and data (`data/`) are not distributed.
 
@@ -89,11 +90,12 @@ campaign ran on 2 × NVIDIA RTX 6000 Ada (48 GB); `results_v3/environment/` reco
 
 Obtain the datasets from their providers, under their terms of use:
 
-- **SUN Colonoscopy Video Database** (training and E1/E2): <http://amed8k.sundatabase.org/>
-- **PolypGen** (E3/E4): Ali et al., *Scientific Data* 2023, <https://doi.org/10.7303/syn26376615>
-- **HyperKvasir**, unlabelled images (SSL-colon pretraining): <https://datasets.simula.no/hyper-kvasir/>
-- **ImageNet-1k** (SSL-imnet-matched pretraining): `ILSVRC/imagenet-1k` on Hugging Face, revision
-  `49e2ee26f3810fb5a7536bbf732a7b07389a47b5`
+- **SUN Colonoscopy Video Database** (training and E1/E2): <https://sundatabase.org>
+- **PolypGen** (E3/E4): <https://www.synapse.org/#!Synapse:syn26376615/wiki/613312>
+- **HyperKvasir**, unlabelled images (SSL-colon pretraining): <https://datasets.simula.no/hyper-kvasir>
+- **ImageNet (ILSVRC-2012)**, training set (SSL-imnet-matched pretraining): <https://image-net.org>. Campaign v3
+  read it from the `ILSVRC/imagenet-1k` Parquet copy on Hugging Face, revision
+  `49e2ee26f3810fb5a7536bbf732a7b07389a47b5` (see *Reproduction*).
 
 Pretrained weights go under `checkpoints/pretrained/vit_b/` with the file names and SHA-256 listed in
 `config/model/*.yaml`; the training code refuses a file whose hash differs. SUP-imnet is the AugReg
@@ -127,23 +129,22 @@ SHA-256 of every split CSV. Campaign v3 uses `data_packs/v3/`:
 - `_parent/`: the PolypGen parent packs; `REPORT.txt`: the generation report.
 
 `data_packs/v3/index.yaml` lists the seeds and the SHA-256 of all 221 CSVs. The CSVs are stored byte for
-byte (CRLF line endings, `-text` in `.gitattributes`). To verify:
+byte (CRLF line endings, `-text` in `.gitattributes`). To verify them (`ssl4polyp-ft`):
 
 ```bash
-python - <<'EOF'
-import hashlib, pathlib, yaml
-idx = yaml.safe_load(open("data_packs/v3/index.yaml"))
-rows = [(rel, h) for p in idx["partitions"].values() for rel, h in p["csv_sha256"].items()]
-rows += list(idx["parent"].items())
-bad = [r for r, h in rows if hashlib.sha256(pathlib.Path("data_packs/v3", r).read_bytes()).hexdigest() != h]
-print(len(rows), "CSVs,", len(bad), "mismatches", bad)
-EOF
+python scripts/v3/verify_data_packs.py --v3 --out <dir>                 # CSVs and images
+python scripts/v3/verify_data_packs.py --v3 --skip-images --out <dir>   # CSVs only (no data needed)
 ```
 
-Expected output: `221 CSVs, 0 mismatches []`. `scripts/v3/campaign_plan.py` (below) resolves every run against
-these packs. `scripts/v3/verify_data_packs.py` checks the top-level packs of `data_packs/` (from which v3
-partition k = 1 and the PolypGen parent derive) against their manifests, the images under `data/roots.json`
-(existence, size, PolypGen SHA-1) and the configs; pass `--out <dir>` to keep the recorded results intact.
+For each of the 91 pack directories of `data_packs/v3/` the script checks every CSV SHA-256 against
+`index.yaml` and against the pack's `manifest.yaml`, the frame, positive and negative counts, the parent hashes
+declared by the subsets and few-shot packs, and that the index and the files on disk list the same 221 CSVs.
+Without `--skip-images` it also checks that every referenced image exists under the roots of `data/roots.json`,
+that its size matches the CSV and, for PolypGen, its SHA-1 against `manifests/frames.csv`. It writes
+`pack_hashes_v3.csv` and `pack_verification_v3.json` to `--out`, prints the summary (`"passed": true`, no
+`failures`) and exits non-zero on any mismatch. Without `--v3` it checks the top-level packs of `data_packs/`
+(from which v3 partition k = 1 and the PolypGen parent derive) and the configs; the default `--out` is
+`results_v3/verification/`, which holds the recorded results, so pass another directory to keep them intact.
 
 ### Placeholders in the records
 
@@ -201,8 +202,8 @@ for phase in sun_full e2e3 e1 e4; do              # one run per GPU, resumable
 done
 ```
 
-`--regimes` restricts a phase to some regimes (campaign 4 ran `--regimes ssl_imnet_matched`; see
-`results_v3/campaign/run_campaign4.sh`). Fine-tuning learning rates: SUP-imnet and SSL-imnet 3e-4,
+`--regimes` restricts a phase to some regimes: campaign 4 ran the same loop with
+`--regimes ssl_imnet_matched` on both commands, stopping at the first failed phase or check. Fine-tuning learning rates: SUP-imnet and SSL-imnet 3e-4,
 SSL-colon and SSL-imnet-matched 1e-4 (`finetune_lr` in `config/model/`). A single run:
 
 ```bash
@@ -294,13 +295,13 @@ Datasets and pretrained weights are subject to their own terms.
 ## Citation
 
 ```bibtex
-@article{ssl4polyp,
-  title   = {Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection:
-             A Morphology-Aware and Sample-Efficient Perspective},
-  author  = {Yip, Vincent and Fdez-Riverola, Florentino and Rodriguez-Conde, Ivan},
-  journal = {Computer Methods and Programs in Biomedicine},
-  year    = {TBD},
-  note    = {Under review; citation details will be added on publication}
+@unpublished{ssl4polyp,
+  title  = {Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection:
+            A Morphology-Aware and Sample-Efficient Perspective},
+  author = {Yip, Vincent and Abuhalimeh, Ahmed and Campos, Celso and Fdez-Riverola, Florentino and
+            Rodriguez-Conde, Ivan},
+  year   = {2026},
+  note   = {Submitted to Computer Methods and Programs in Biomedicine}
 }
 ```
 
@@ -309,4 +310,4 @@ MAE (He et al., CVPR 2022).
 
 ## Contact
 
-Ivan Rodriguez-Conde, University of Vigo ([ivarodriguez@uvigo.gal](mailto:ivarodriguez@uvigo.gal)).
+Corresponding author: Ivan Rodriguez-Conde ([ivarodriguez@uvigo.gal](mailto:ivarodriguez@uvigo.gal)).
