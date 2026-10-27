@@ -120,7 +120,21 @@ Image paths in the pack CSVs are relative to named roots. Map them to local dire
 The packs in `data_packs/` were generated with the `polypdb` tool of the authors' `polyp-db-analysis`
 repository, commit `d78ed76e6a70d22631aace92bfe9bf9689f2b496` (not part of this repository). Each
 `manifest.yaml` records the generator commit, the exact command, the seed, the selection policy and the
-SHA-256 of every split CSV. Campaign v3 uses `data_packs/v3/`:
+SHA-256 of every split CSV.
+
+> **Generator commit hashes.** The history of `polyp-db-analysis` was later rewritten, with identical file
+> contents, so the commits cited in the manifests now have other hashes:
+>
+> | Cited in manifests | Current commit | Tag |
+> |---|---|---|
+> | `7de86f7` | `6dbcb2b` | `v2-packs` |
+> | `dafb5a5` | `4486226` | `v2-subsets-fewshot` |
+> | `d78ed76` | `73729bf` | `v3-packs` |
+>
+> Full mapping: [docs/history-rewrite.csv](https://github.com/irconde/polyp-db-analysis/blob/main/docs/history-rewrite.csv)
+> in `polyp-db-analysis`.
+
+Campaign v3 uses `data_packs/v3/`:
 
 - `k1`…`k5/base`: SUN partitions (`polypdb sun morph`, 33 frames per case, partition seeds 47, 101, 102,
   103, 104);
