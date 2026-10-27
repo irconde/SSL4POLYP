@@ -12,8 +12,8 @@
    "runlog_matches": true
   },
   "roots": [
-   "/tmp/claude-1000/-home-irconde-workspace-code-SSL4POLYP/4f2e43b3-e494-4cbb-88f9-b500d7aeaa91/scratchpad/sim_final/campaign/classification",
-   "/tmp/claude-1000/-home-irconde-workspace-code-SSL4POLYP/4f2e43b3-e494-4cbb-88f9-b500d7aeaa91/scratchpad/sim_final/campaign_matched/classification"
+   "<SCRATCH>/sim_final/campaign/classification",
+   "<SCRATCH>/sim_final/campaign_matched/classification"
   ],
   "regimes": [
    "sup_imnet",

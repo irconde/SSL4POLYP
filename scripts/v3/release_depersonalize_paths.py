@@ -6,7 +6,8 @@ touched), ``results_v3/RUNLOG.md``, ``results_v3/analysis/``, ``results_v3/analy
 ``results_v3/verification/`` and ``results_v3/environment/``.
 
 Placeholders: ``<REPO>`` (repository root), ``<DATA_ROOT>`` (data directory, cf. ``data/roots.json``),
-``<CONDA_ROOT>`` (conda installation) and ``<HOME>`` (any other home-directory path).
+``<CONDA_ROOT>`` (conda installation), ``<SCRATCH>`` (the coding assistant's session scratch directory,
+whose name encodes the home directory as ``-home-<user>-``) and ``<HOME>`` (any other home-directory path).
 Rules are applied in order, most specific first. Prints a summary; ``--check`` exits non-zero if any
 personal path is left.
 """
@@ -24,6 +25,8 @@ NOT_DATA_PACKS = r"(?![A-Za-z0-9_])"  # ".../data" but not ".../data_packs"
 HOME = r"/(?:Users|home)/[A-Za-z0-9_.-]+"  # any user's home directory
 ANY = r"(?:/[A-Za-z0-9_.-]+)*?"  # any intermediate directories
 RULES = [
+    (r"/tmp/claude-[0-9]+/-(?:home|Users)-[A-Za-z0-9_.-]+?(?:/[0-9a-f-]{36})?/scratchpad", "<SCRATCH>"),
+    (r"/tmp/claude-[0-9]+/-(?:home|Users)-[A-Za-z0-9_.-]+", "<SCRATCH>"),
     (HOME + ANY + r"/workspace/code/SSL4(?:POLYP|GIE)/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
     (r"/workspace/code/SSL4(?:POLYP|GIE)/data" + NOT_DATA_PACKS, "<DATA_ROOT>"),
     (HOME + ANY + r"/workspace/code/SSL4(?:POLYP|GIE)", "<REPO>"),
@@ -36,7 +39,7 @@ RULES = [
     (r"/home/(?!conda/)[A-Za-z0-9_.-]+", "<HOME>"),  # /home/conda/... are conda-forge build paths
     (r"/Users/[A-Za-z0-9_.-]+", "<HOME>"),
 ]
-LEFT = re.compile(r"/Users/[A-Za-z]|/home/(?!conda/)[A-Za-z]|/workspace/(code|data)")
+LEFT = re.compile(r"/Users/[A-Za-z]|/home/(?!conda/)[A-Za-z]|-(?:home|Users)-[A-Za-z]|/workspace/(code|data)")
 
 
 def targets() -> list:

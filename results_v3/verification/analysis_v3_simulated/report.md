@@ -1,7 +1,7 @@
 # Campaign v3 analysis (SAP v3.3) — SIMULATED DATA (effects scenario, sim seed 2026)
 
 - SAP implemented: v3.3, SHA-256 `fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56`; file matches: True; last SAP registered in RUNLOG: SAP v3.3 (`fd6b0342d529…`), matches: True.
-- Roots: `/tmp/claude-1000/-home-irconde-workspace-code-SSL4POLYP/4f2e43b3-e494-4cbb-88f9-b500d7aeaa91/scratchpad/sim_final/campaign/classification`, `/tmp/claude-1000/-home-irconde-workspace-code-SSL4POLYP/4f2e43b3-e494-4cbb-88f9-b500d7aeaa91/scratchpad/sim_final/campaign_matched/classification`
+- Roots: `<SCRATCH>/sim_final/campaign/classification`, `<SCRATCH>/sim_final/campaign_matched/classification`
 - Runs: 720; regimes: sup_imnet, ssl_imnet, ssl_colon, ssl_imnet_matched; partitions: [1, 2, 3, 4, 5]; seeds: [13, 29, 47].
 - Views evaluated: 3060; contrasts: 2313; bootstrap B = 2000, seed 12345.
 - Integrity checks: 840 run, 0 failed.
