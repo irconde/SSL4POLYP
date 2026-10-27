@@ -285,23 +285,6 @@ Other campaign tags:
 | 2026-10-18 | `v3-cmpb-exp-lr-results`, `v3-cmpb-exp-lr2-results` | Exploratory analyses |
 | 2026-10-25 | `v3-cmpb-figures`, `v3-cmpb-figures2` | Manuscript figures 2–6 (`figures2`: revised labels) |
 
-## History rewrite
-
-On 2026-10-27, before the repository was made public, the history of the campaign v3 commits (`refactoring`
-and the branches and tags built on it) was rewritten with `git filter-repo` for one reason only: to remove the
-`Co-Authored-By:` lines of the AI coding assistant from 67 commit messages. Nothing else changed: every rewritten
-commit has the same tree (identical content) as the original, the same author, committer and dates, and the rest
-of its message byte for byte (abbreviated hashes cited in messages were left as written). The annotated `v3-cmpb-*`
-tags were moved to the rewritten commits with their original tagger, date and message. Commits before
-`d166ee2` (the first campaign v3 commit), including the v2 history, were not rewritten.
-
-As a consequence, the commit hashes cited in the run records (`results_v3/RUNLOG.md`,
-`results_v3/SAP_deviations.md`, `docs/v3/`, the per-run records in `results_v3/verification/` and this README)
-are those of the original history and were not edited. [docs/history-rewrite.csv](docs/history-rewrite.csv)
-translates them: one row per rewritten commit with the original hash, the current hash, the (unchanged) tree hash
-and the author and commit dates. A cited abbreviated hash is the prefix of `old_commit`. The SHA-256 of the SAP
-documents and of the pack CSVs are hashes of file contents and are not affected.
-
 ## License
 
 Apache License 2.0 ([LICENSE](LICENSE)), **except** `src/ssl4polyp/models/mae/`, which derives from Meta's MAE
