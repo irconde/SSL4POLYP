@@ -1,6 +1,6 @@
 # Legacy (campaign v2)
 
-Files of the earlier version of the study (v2, branch `main`), kept for reference. Campaign v3 does not use them.
+Files of the earlier version of the study (v2, tags `v2-asoc-2025` and `v2-eaai-2026`), kept for reference. Campaign v3 does not use them.
 
 | Path | Content |
 |---|---|

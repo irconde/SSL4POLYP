@@ -2,13 +2,13 @@
 
 Reference implementation and run records of the article
 
-> **Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection: A Morphology-Aware and
-> Sample-Efficient Perspective.** Vincent Yip, Ahmed Abuhalimeh, Celso Campos, Florentino Fdez-Riverola
+> **Self-supervised pretraining for colonoscopy polyp classification: a pre-registered controlled evaluation
+> of domain, scale and deployment protocol.** Vincent Yip, Ahmed Abuhalimeh, Celso Campos, Florentino Fdez-Riverola
 > and Ivan Rodriguez-Conde. 2026, submitted to *Computer Methods and Programs in Biomedicine*.
 
-This branch holds **campaign v3**, the retraining from scratch whose results are reported in the article.
-The code that produced the earlier version of the study (v2) is on `main`; its README is kept in
-[docs/legacy/README_v2.md](docs/legacy/README_v2.md).
+This repository holds **campaign v3**, the retraining from scratch whose results are reported in the article.
+The code that produced the earlier version of the study (v2) is preserved at the tags `v2-asoc-2025` and
+`v2-eaai-2026`; its README is kept in [docs/legacy/README_v2.md](docs/legacy/README_v2.md).
 
 The repository started as a fork of [SSL4GIE](https://github.com/ESandML/SSL4GIE) (Sanderson and
 Matuszewski, IEEE Access 2024). See [NOTICE](NOTICE) for third-party code and licenses.
@@ -293,7 +293,7 @@ and the branches and tags built on it) was rewritten with `git filter-repo` for 
 commit has the same tree (identical content) as the original, the same author, committer and dates, and the rest
 of its message byte for byte (abbreviated hashes cited in messages were left as written). The annotated `v3-cmpb-*`
 tags were moved to the rewritten commits with their original tagger, date and message. Commits before
-`d166ee2` (the first campaign v3 commit) and the `main` branch were not rewritten.
+`d166ee2` (the first campaign v3 commit), including the v2 history, were not rewritten.
 
 As a consequence, the commit hashes cited in the run records (`results_v3/RUNLOG.md`,
 `results_v3/SAP_deviations.md`, `docs/v3/`, the per-run records in `results_v3/verification/` and this README)
@@ -313,8 +313,8 @@ Datasets and pretrained weights are subject to their own terms.
 
 ```bibtex
 @unpublished{ssl4polyp,
-  title  = {Evaluating Domain-Specific Self-Supervised Pre-training for Polyp Detection:
-            A Morphology-Aware and Sample-Efficient Perspective},
+  title  = {Self-supervised pretraining for colonoscopy polyp classification: a pre-registered
+            controlled evaluation of domain, scale and deployment protocol},
   author = {Yip, Vincent and Abuhalimeh, Ahmed and Campos, Celso and Fdez-Riverola, Florentino and
             Rodriguez-Conde, Ivan},
   year   = {2026},
