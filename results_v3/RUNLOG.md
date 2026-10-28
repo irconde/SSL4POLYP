@@ -970,3 +970,20 @@ No metric was computed or reported.
   [−0.004, 0.025]. SSL-imnet-matched − SSL-imnet AUPRC: 5 % +0.087 [−0.007, 0.180] vs +0.128 [0.067, 0.189]; 10 % +0.042
   [0.007, 0.077] vs +0.115 [0.049, 0.181]; AULC +0.015 [−0.008, 0.038] vs +0.024 [0.007, 0.042].
 - Exploratory: no Holm, no verdicts.
+
+## Exploratory experiment: learning-rate selection per E1 budget (not registered in the SAP)
+
+### 2026-10-28: plan registered before launching, tag `v3-cmpb-exp-lr-budget-plan`
+
+| Document | Path | SHA-256 | Registered |
+|---|---|---|---|
+| Exploratory plan | `docs/v3/exploratory_lr_per_budget_plan.md` | `0a2556f687ed0fc0f64c01c6a1c7355c4ee6781c615968cae18ae88428890e9b` | 2026-10-28 20:41 +0100 |
+
+- Exploratory, decided after seeing results (review comment on the single learning rate applied to every E1 budget);
+  no Holm, no verdicts. Four regimes × learning rates 1e-4, 3e-4, 1e-3 × E1 budgets 5–100 % × 5 partitions × 3 seeds;
+  the runs at each regime's registered learning rate are reused from the registered campaigns; 600 new runs.
+- Selection per regime and budget: highest mean validation AP (best-epoch weights, 15 runs); the registered learning
+  rate is kept when the best exceeds it by less than 1e-4; the test split takes no part.
+- Output roots `checkpoints_v3/exp_lr_per_budget/lr<lr>/classification`, records `results_v3/exp_lr_per_budget/`;
+  best-epoch weights deleted per batch after the section 6 checks and the hashed manifest (disk space).
+- No run launched before this entry.
