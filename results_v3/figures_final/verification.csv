@@ -218,3 +218,83 @@ Figure 6,H4 v3_t_ci_lo,-0.098530045019999998,-0.098530045019999998,table_hypothe
 Figure 6,H4 v3_t_ci_hi,-0.045472913619999999,-0.045472913619999999,table_hypotheses.csv,0,True
 Figure 6,H4 v3_boot_lo,-0.34470907810000001,-0.34470907810000001,table_hypotheses.csv,0,True
 Figure 6,H4 v3_boot_hi,0.09437007117,0.09437007117,table_hypotheses.csv,0,True
+Figure S2,SUN test (full budget) sup_imnet: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,SUN test (full budget) sup_imnet: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,SUN test (full budget) ssl_imnet: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,SUN test (full budget) ssl_imnet: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,SUN test (full budget) ssl_colon: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,SUN test (full budget) ssl_colon: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,SUN test (full budget) ssl_imnet_matched: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,SUN test (full budget) ssl_imnet_matched: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,PolypGen zero-shot (E3) sup_imnet: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,PolypGen zero-shot (E3) sup_imnet: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,PolypGen zero-shot (E3) ssl_imnet: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,PolypGen zero-shot (E3) ssl_imnet: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,PolypGen zero-shot (E3) ssl_colon: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,PolypGen zero-shot (E3) ssl_colon: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,PolypGen zero-shot (E3) ssl_imnet_matched: bins plotted,15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,PolypGen zero-shot (E3) ssl_imnet_matched: runs per bin (min),15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, unadapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, unadapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, unadapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, unadapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, unadapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, unadapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, unadapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, unadapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, adapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, adapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, adapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, adapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, adapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, adapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 50 frames, adapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 50 frames, adapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, unadapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, unadapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, unadapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, unadapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, unadapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, unadapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, unadapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, unadapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, adapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, adapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, adapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, adapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, adapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, adapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 100 frames, adapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 100 frames, adapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, unadapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, unadapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, unadapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, unadapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, unadapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, unadapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, unadapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, unadapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, adapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, adapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, adapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, adapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, adapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, adapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 200 frames, adapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 200 frames, adapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, unadapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, unadapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, unadapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, unadapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, unadapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, unadapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, unadapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, unadapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, adapted sup_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, adapted sup_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, adapted ssl_imnet: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, adapted ssl_imnet: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, adapted ssl_colon: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, adapted ssl_colon: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True
+Figure S2,"E4, 500 frames, adapted ssl_imnet_matched: bins plotted",15,15,15 equal-mass bins (analysis/v3 ECE_BINS),0,True
+Figure S2,"E4, 500 frames, adapted ssl_imnet_matched: runs per bin (min)",15,15,5 partitions x 3 seeds,0,True

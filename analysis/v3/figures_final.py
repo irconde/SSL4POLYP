@@ -6,11 +6,13 @@ Reads only files already written by the analysis (nothing is recomputed for plot
   results_v3/analysis/tables/table_loco_e3.csv             Figure 4 (E3 leave-one-centre-out)
   results_v3/analysis/tables/table8_e4_arms.csv            Figure 5 (E4 arms)
   results_v3/analysis_exploratory_lr_common/contrasts_common_vs_v3.csv   Figure 6 (exploratory)
+  results_v3/analysis/tables/table_reliability.csv         Figure S2 (reliability diagrams, supplementary)
 and, only to cross-check the plotted values, ``contrast_summary.csv``, ``run_metrics.csv`` and
 ``paired_differences.csv``.
 
-Writes ``results_v3/figures_final/figure{2..6}.{pdf,png}`` (vector PDF; PNG at 300 dpi), 174 mm wide, no
-title inside the image, and ``plotted_values.csv`` (every value drawn) plus ``verification.csv``.
+Writes ``results_v3/figures_final/figure{2..6}.{pdf,png}`` and ``figureS2_reliability.{pdf,png}`` (vector PDF;
+PNG at 300 dpi), 174 mm wide, no title inside the image, and ``plotted_values.csv`` (every value drawn) plus
+``verification.csv``.
 
 Run from the repository root in the ``ssl4polyp-analysis`` environment:
     python -m analysis.v3.figures_final
@@ -59,6 +61,13 @@ HYP_SHORT = {
     "H6": "H6: arm B − arm A, balanced accuracy",
     "H7": "H7: arm C − arm A, balanced accuracy",
 }
+E4_BUDGETS = [50, 100, 200, 500]
+# Reliability panels: (family, budget, arm, title); E4 arm A = unadapted model, arm C = adapted model.
+RELIABILITY_PANELS = [("sun_full", None, "all", "SUN test (full budget)"), ("e3", None, "all", "PolypGen zero-shot (E3)")]
+RELIABILITY_PANELS += [("e4", b, arm, f"E4, {b} frames, {'unadapted' if arm == 'A' else 'adapted'}")
+                       for b in E4_BUDGETS for arm in ("A", "C")]
+# Two-line panel titles (the panels are about 30 mm wide); E4 titles break after "frames,".
+TITLE_BREAK = {"SUN test (full budget)": "SUN test\n(full budget)", "PolypGen zero-shot (E3)": "PolypGen zero-shot\n(E3)"}
 
 
 def _font() -> str:
@@ -239,7 +248,39 @@ def figure6(c: pd.DataFrame) -> None:
     save(fig, "figure6_exploratory_lr")
 
 
-def verify(h, t3, loco, t8, c) -> pd.DataFrame:
+def _reliability_panel(rel: pd.DataFrame, fam: str, budget, slot: str) -> pd.DataFrame:
+    sub = rel[(rel["family"] == fam) & (rel["slot"] == slot)]
+    return sub[sub["variant"].isna()] if budget is None else sub[sub["variant"] == budget]
+
+
+def figureS2(rel: pd.DataFrame) -> None:
+    src = "results_v3/analysis/tables/table_reliability.csv"
+    fig, axes = plt.subplots(2, 5, figsize=(WIDTH_IN, 92 * MM), layout="constrained", sharex=True, sharey=True)
+    for ax, (fam, budget, slot, title) in zip(axes.ravel(), RELIABILITY_PANELS):
+        sub = _reliability_panel(rel, fam, budget, slot)
+        ax.plot([0, 1], [0, 1], color=GREY, linewidth=0.6, linestyle="--", zorder=0)
+        for g in REGIMES:
+            s = sub[sub["regime"] == g].sort_values("bin")
+            ax.plot(s["mean_prob"], s["frac_pos"], color=COLOR[g], marker=MARKER[g], markersize=2.5, linewidth=0.9,
+                    label=LABEL[g])
+            for _, r in s.iterrows():
+                record("Figure S2", "reliability: observed fraction of positives (x = mean predicted probability)",
+                       f"{title} | {LABEL[g]} | bin {int(r['bin'])}", r["mean_prob"], r["frac_pos"], source=src,
+                       source_key=f"family={fam},variant={'' if budget is None else budget},slot={slot},regime={g},bin={int(r['bin'])}")
+        ax.set_title(TITLE_BREAK.get(title, title.replace(" frames, ", " frames,\n")), loc="left")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xticks([0, 0.5, 1], ["0", "0.5", "1"])
+        ax.set_yticks([0, 0.5, 1], ["0", "0.5", "1"])
+        ax.set_aspect("equal")
+    fig.supxlabel("Mean predicted probability (15 equal-mass bins)", fontsize=8)
+    fig.supylabel("Observed fraction of positives", fontsize=8)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside upper center", ncol=4)  # top: the shared x label sits below
+    save(fig, "figureS2_reliability")
+
+
+def verify(h, t3, loco, t8, c, rel=None) -> pd.DataFrame:
     """Compare every plotted value with the manuscript tables and with independent analysis outputs."""
 
     checks = []
@@ -285,22 +326,30 @@ def verify(h, t3, loco, t8, c) -> pd.DataFrame:
         for col_c, col_h in (("v3_estimate", "estimate"), ("v3_t_ci_lo", "model_ci_lo"), ("v3_t_ci_hi", "model_ci_hi"),
                              ("v3_boot_lo", "boot_lo"), ("v3_boot_hi", "boot_hi")):
             add("Figure 6", f"{hid} {col_c}", cc.loc[hid, col_c], hi.loc[hid, col_h], "table_hypotheses.csv")
+    if rel is not None:  # no other output holds the binned curves: check completeness of every plotted curve
+        for fam, budget, slot, title in RELIABILITY_PANELS:
+            sub = _reliability_panel(rel, fam, budget, slot)
+            for g in REGIMES:
+                s = sub[sub["regime"] == g]
+                add("Figure S2", f"{title} {g}: bins plotted", len(s), 15, "15 equal-mass bins (analysis/v3 ECE_BINS)")
+                add("Figure S2", f"{title} {g}: runs per bin (min)", s["n_runs"].min(), 15, "5 partitions x 3 seeds")
     return pd.DataFrame(checks)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--only", nargs="+", type=int, choices=[2, 3, 4, 5, 6],
+    parser.add_argument("--only", nargs="+", choices=["2", "3", "4", "5", "6", "S2"],
                         help="regenerate only these figures; their rows in plotted_values.csv are replaced")
     args = parser.parse_args()
-    selected = set(args.only or [2, 3, 4, 5, 6])
+    selected = set(args.only or ["2", "3", "4", "5", "6", "S2"])
     h = pd.read_csv(TABLES / "table_hypotheses.csv")
     t3 = pd.read_csv(TABLES / "table3_e1_performance.csv")
     loco = pd.read_csv(TABLES / "table_loco_e3.csv")
     t8 = pd.read_csv(TABLES / "table8_e4_arms.csv")
     c = pd.read_csv(EXPLORATORY / "contrasts_common_vs_v3.csv")
-    jobs = {2: lambda: figure2(h), 3: lambda: figure3(t3), 4: lambda: figure4(loco, h), 5: lambda: figure5(t8),
-            6: lambda: figure6(c)}
+    rel = pd.read_csv(TABLES / "table_reliability.csv", float_precision="round_trip")
+    jobs = {"2": lambda: figure2(h), "3": lambda: figure3(t3), "4": lambda: figure4(loco, h), "5": lambda: figure5(t8),
+            "6": lambda: figure6(c), "S2": lambda: figureS2(rel)}
     for number in sorted(selected):
         jobs[number]()
     plotted = pd.DataFrame(ROWS)
@@ -308,10 +357,11 @@ def main() -> int:
         kept = pd.read_csv(OUT / "plotted_values.csv", float_precision="round_trip")  # keep the rows bit for bit
         kept = kept[~kept["figure"].isin([f"Figure {n}" for n in selected])]
         plotted = pd.concat([kept, plotted], ignore_index=True)
-        plotted["_order"] = plotted["figure"].str.extract(r"(\d+)").astype(int)
+        # main figures first, then supplementary ones (Figure S2 after Figure 6)
+        plotted["_order"] = plotted["figure"].str.extract(r"(\d+)")[0].astype(int) + 100 * plotted["figure"].str.contains("S")
         plotted = plotted.sort_values("_order", kind="stable").drop(columns="_order")
     plotted.to_csv(OUT / "plotted_values.csv", index=False, float_format="%.17g")
-    checks = verify(h, t3, loco, t8, c)
+    checks = verify(h, t3, loco, t8, c, rel)
     checks.to_csv(OUT / "verification.csv", index=False, float_format="%.17g")
     worst = checks["abs_diff"].max()
     print(f"font: {FONT}; figures: {sorted(selected)}; plotted values: {len(plotted)}; checks: {len(checks)}, exact matches: {int(checks['match'].sum())}, "

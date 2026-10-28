@@ -248,10 +248,11 @@ Exploratory analyses (not part of the SAP; plans registered before launching, se
 ### 4. Figures (`ssl4polyp-analysis`)
 
 ```bash
-PYTHONPATH=. python -m analysis.v3.figures_final      # Figures 2–6 from the analysis tables
+PYTHONPATH=. python -m analysis.v3.figures_final      # Figures 2–6 and S2 from the analysis tables
 ```
 
-Writes `results_v3/figures_final/figure{2..6}.{pdf,png}` and `plotted_values.csv` (every value drawn).
+Writes `results_v3/figures_final/figure{2..6}.{pdf,png}`, `figureS2_reliability.{pdf,png}` (supplementary
+reliability diagrams, from `table_reliability.csv`) and `plotted_values.csv` (every value drawn).
 
 ### Tests
 
