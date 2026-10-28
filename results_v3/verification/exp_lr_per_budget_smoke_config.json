@@ -1,0 +1,56 @@
+[
+  {
+    "regime": "sup_imnet",
+    "lr": "1e-4",
+    "run": "k1 seed13 p5",
+    "registered_run": "checkpoints_v3/campaign/classification/k1/e1/p5/sup_imnet_seed13",
+    "differences": [
+      "args.lr: new=0.0001 stored=0.0003",
+      "args.lr_source: new='override' stored='model config (sup_imnet)'",
+      "args.overrides: new=['lr=1e-4'] stored=[]",
+      "config_overrides: missing in stored",
+      "experiment.lr: new='1e-4' stored=0.001",
+      "experiment.models: new=['model/sup_imnet', 'model/ssl_imnet', 'model/ssl_colon', 'model/ssl_imnet_matched'] stored=['model/sup_imnet', 'model/ssl_imnet', 'model/ssl_colon']"
+    ]
+  },
+  {
+    "regime": "ssl_colon",
+    "lr": "3e-4",
+    "run": "k1 seed13 p5",
+    "registered_run": "checkpoints_v3/campaign/classification/k1/e1/p5/ssl_colon_seed13",
+    "differences": [
+      "args.lr: new=0.0003 stored=0.0001",
+      "args.lr_source: new='override' stored='model config (ssl_colon)'",
+      "args.overrides: new=['lr=3e-4'] stored=[]",
+      "config_overrides: missing in stored",
+      "experiment.lr: new='3e-4' stored=0.001",
+      "experiment.models: new=['model/sup_imnet', 'model/ssl_imnet', 'model/ssl_colon', 'model/ssl_imnet_matched'] stored=['model/sup_imnet', 'model/ssl_imnet', 'model/ssl_colon']"
+    ]
+  },
+  {
+    "regime": "ssl_imnet_matched",
+    "lr": "3e-4",
+    "run": "k1 seed13 p5",
+    "registered_run": "checkpoints_v3/campaign/classification/k1/e1/p5/ssl_imnet_matched_seed13",
+    "differences": [
+      "args.lr: new=0.0003 stored=0.0001",
+      "args.lr_source: new='override' stored='model config (ssl_imnet_matched)'",
+      "args.overrides: new=['lr=3e-4'] stored=[]",
+      "config_overrides: missing in stored",
+      "experiment.lr: new='3e-4' stored=0.001"
+    ]
+  },
+  {
+    "regime": "ssl_imnet_matched",
+    "lr": "1e-3",
+    "run": "k1 seed13 p5",
+    "registered_run": "checkpoints_v3/campaign/classification/k1/e1/p5/ssl_imnet_matched_seed13",
+    "differences": [
+      "args.lr: new=0.001 stored=0.0001",
+      "args.lr_source: new='override' stored='model config (ssl_imnet_matched)'",
+      "args.overrides: new=['lr=1e-3'] stored=[]",
+      "config_overrides: missing in stored",
+      "experiment.lr: new='1e-3' stored=0.001"
+    ]
+  }
+]

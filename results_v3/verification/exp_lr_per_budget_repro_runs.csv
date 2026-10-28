@@ -1,0 +1,5 @@
+run,output_dir,gpu,attempt,elapsed_s,commit,evaluated_checkpoint,checkpoint_epoch,checkpoint_bytes,checkpoint_sha256,checkpoint_sha256_matches_metrics_json
+ssl_imnet_seed13,checkpoints_v3/exp_lr_per_budget/repro/lr1e-3/classification/k1/e1/p10/ssl_imnet_seed13,,,,,SSLImNet_SUNP10_s13_e31_valLoss.pth,31,1030228094,8722b66eb47e48f87a0b03c885d3472fe876785acd97095505454bc17d745170,True
+ssl_colon_seed13,checkpoints_v3/exp_lr_per_budget/repro/lr1e-3/classification/k1/e1/p25/ssl_colon_seed13,,,,,SSLColon_SUNP25_s13_e02_valLoss.pth,2,1030228094,5d226d74d0f0a184741cf6271cf38582bd7068f3b6bd13c436a02c79454c2269,True
+sup_imnet_seed13,checkpoints_v3/exp_lr_per_budget/repro/lr1e-3/classification/k1/e1/p5/sup_imnet_seed13,,,,,SUPImNet_SUNP5_s13_e45_valLoss.pth,45,1029823811,3093409789588fbb81fcaf42389f5fb2877a7333234ecf1eea01efbfca6924d1,True
+ssl_imnet_seed13,checkpoints_v3/exp_lr_per_budget/repro/lr1e-4/classification/k1/e1/p50/ssl_imnet_seed13,,,,,SSLImNet_SUNP50_s13_e17_valLoss.pth,17,1030228030,75a49cc34d4b35e307ab686f2f6975c552ae41bbfa267730b5ff76c58f86dd94,True

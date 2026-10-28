@@ -1,0 +1,11 @@
+{
+  "check": "1b reruns: evaluated checkpoint of each rerun vs the original run's evaluated checkpoint (torch.load, every entry compared; tensors with torch.equal)",
+  "runs": ["k1/e1/p5/sup_imnet_seed13 lr 1e-3", "k1/e1/p10/ssl_imnet_seed13 lr 1e-3", "k1/e1/p25/ssl_colon_seed13 lr 1e-3", "k1/e1/p50/ssl_imnet_seed13 lr 1e-4"],
+  "same_evaluated_checkpoint_name_and_epoch": "4/4",
+  "file_sha256_equal": "0/4 (the files store the output path in thresholds_root)",
+  "entries_compared": "model_state_dict, optimizer_state_dict, scheduler_state_dict, scaler_state_dict, torch/np/py RNG states, epoch, losses, monitor values, thresholds, val/test performance (609-610 tensors per checkpoint)",
+  "differing_entries": {"thresholds_root": "output directory path (repro root vs original root), 4/4"},
+  "all_other_entries_identical": "4/4",
+  "rerun_checkpoint_hashes": "results_v3/verification/exp_lr_per_budget_repro_runs.csv",
+  "rerun_weights": "deleted after this record (plan revision 1, approved 2026-10-28)"
+}
