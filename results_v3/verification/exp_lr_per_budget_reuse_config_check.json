@@ -1,0 +1,39 @@
+{
+  "runs": 300,
+  "argv_match": 300,
+  "config_match": 300,
+  "head": "31ae601db40e84c648cb80b19db69cd957f91ef5",
+  "training_commits": {
+    "be04f7b74ebfd403a2788b3ed678482241ebce4a": {
+      "current_hash": "f55d0041bf1a75fb771790e1920a50f75f372004",
+      "changed_files": [
+        "src/ssl4polyp/classification/analysis/exp5a_report.py",
+        "src/ssl4polyp/classification/analysis/exp5c_report.py",
+        "src/ssl4polyp/classification/analysis/result_loader.py",
+        "src/ssl4polyp/models/mae/demo/mae_visualize.ipynb"
+      ],
+      "finetune_code_changed": []
+    },
+    "bf93a155e38604bcbd7b7b2c3947372683ad63bf": {
+      "current_hash": "8ad2bfed3edcf41b8d5a988e10d749c3da4d09f8",
+      "changed_files": [
+        "src/ssl4polyp/classification/analysis/exp5a_report.py",
+        "src/ssl4polyp/classification/analysis/exp5c_report.py",
+        "src/ssl4polyp/classification/analysis/result_loader.py",
+        "src/ssl4polyp/models/mae/demo/mae_visualize.ipynb"
+      ],
+      "finetune_code_changed": []
+    },
+    "c31b1d909ae7669926d1b3622e066e2b536b8fbb": {
+      "current_hash": "eca43395bc4879066ef3b4e93c78d030dc2587a9",
+      "changed_files": [
+        "src/ssl4polyp/classification/analysis/exp5a_report.py",
+        "src/ssl4polyp/classification/analysis/exp5c_report.py",
+        "src/ssl4polyp/classification/analysis/result_loader.py",
+        "src/ssl4polyp/models/mae/demo/mae_visualize.ipynb"
+      ],
+      "finetune_code_changed": []
+    }
+  },
+  "passed": true
+}

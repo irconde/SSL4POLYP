@@ -1,0 +1,60 @@
+[load] checkpoints_v3/campaign/classification: 720 runs
+[bootstrap] 54 contrasts, units {('sun', 1): {'y0': 15, 'y1': 15}, ('sun', 2): {'y0': 15, 'y1': 15}, ('sun', 3): {'y0': 15, 'y1': 15}, ('sun', 4): {'y0': 15, 'y1': 15}, ('sun', 5): {'y0': 15, 'y1': 15}} (133s)
+{
+ "mode": "registered",
+ "candidate_lrs": [
+  "1e-3",
+  "1e-4",
+  "3e-4"
+ ],
+ "registered_lrs": {
+  "sup_imnet": "3e-4",
+  "ssl_imnet": "3e-4",
+  "ssl_colon": "1e-4",
+  "ssl_imnet_matched": "1e-4"
+ },
+ "selected": {
+  "ssl_colon|p5": "1e-4",
+  "ssl_colon|p10": "1e-4",
+  "ssl_colon|p25": "1e-4",
+  "ssl_colon|p50": "1e-4",
+  "ssl_colon|p100": "1e-4",
+  "ssl_imnet|p5": "3e-4",
+  "ssl_imnet|p10": "3e-4",
+  "ssl_imnet|p25": "3e-4",
+  "ssl_imnet|p50": "3e-4",
+  "ssl_imnet|p100": "3e-4",
+  "ssl_imnet_matched|p5": "1e-4",
+  "ssl_imnet_matched|p10": "1e-4",
+  "ssl_imnet_matched|p25": "1e-4",
+  "ssl_imnet_matched|p50": "1e-4",
+  "ssl_imnet_matched|p100": "1e-4",
+  "sup_imnet|p5": "3e-4",
+  "sup_imnet|p10": "3e-4",
+  "sup_imnet|p25": "3e-4",
+  "sup_imnet|p50": "3e-4",
+  "sup_imnet|p100": "3e-4"
+ },
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "val_ap_json_vs_csv_max_abs_diff": 2.220446049250313e-16,
+ "registered_check": {
+  "n": 108,
+  "exact": 108,
+  "max_abs_diff": 3.937619674765358e-11
+ },
+ "elapsed_s": 133.2
+}

@@ -134,3 +134,56 @@ The registered values are recomputed by the same code and must equal those of th
   campaigns 3 and 4. Since campaign 3, the fine-tuning code changed only to accept the SSL-imnet-matched
   initialisation; the other source changes affect MAE pretraining or are an import fallback. The reproducibility check
   above measures any non-determinism between launches.
+
+## Revision 1 (2026-10-28)
+
+**Reason:** avoid redundant runs, given that the fine-tuning is deterministic (verified below), and fix the analysis
+code before any new data exist. Registered before any run of the experiment was launched. This section supersedes the
+sections above where they differ.
+
+1. **Reused runs instead of repeated ones.** The 300 existing E1 runs that the original design would have repeated are
+   reused:
+   - 1e-3 for SUP-imnet, SSL-imnet and SSL-colon: the 225 E1 runs of the common-lr experiment
+     (`checkpoints_v3/campaign_lr_common/classification`);
+   - 1e-4 for SSL-imnet: the 75 E1 runs of the SSL-imnet lr 1e-4 experiment
+     (`checkpoints_v3/campaign_lr_sslimnet_1e-4/classification`).
+
+   They count as valid only after two checks.
+   - **a) Configuration and code.** For each of the 300 runs, the configuration it recorded (`config.yaml`) and its
+     command line (`RUN_COMPLETE.json`) must equal those the equivalent new run would have, apart from the output path.
+     The new run's configuration is resolved by the training code's own `prepare_run` (`scripts/v3/check_reused_runs.py`).
+     The fine-tuning code of the commits they were trained on must not differ from the current one.
+   - **b) Bit-for-bit reproduction.** Four of them are trained again with the command line of the equivalent new run
+     (`scripts/v3/repro_reused_runs.py`, k = 1, seed 13):
+     - SUP-imnet 1e-3 at 5 %;
+     - SSL-imnet 1e-3 at 10 %;
+     - SSL-colon 1e-3 at 25 %;
+     - SSL-imnet 1e-4 at 50 %.
+
+     Their validation and test per-frame output CSVs must be byte-identical to the originals. Any mismatch stops the
+     experiment.
+
+   **New runs: only the remaining 300**, in batches of one learning rate:
+
+   | Batch | Regimes | Runs |
+   |---|---|---|
+   | 1e-4 | SUP-imnet | 75 |
+   | 3e-4 | SSL-colon, SSL-imnet-matched | 150 |
+   | 1e-3 | SSL-imnet-matched | 75 |
+
+   The reproducibility check of the original design (comparing new runs with existing equivalents) is replaced by
+   check b.
+2. **Weights.** Each batch's best-epoch checkpoints are deleted once the batch passes the section 6 checks and its
+   manifest records every checkpoint's SHA-256. The weights of any other experiment are not touched.
+3. **Analysis code fixed before the data:** `analysis/v3/exploratory_lr_per_budget/`, committed with this revision.
+   - It was tested on the registered runs and the 300 reused runs only:
+     - with the selection disabled (`--selection registered`);
+     - with the selection restricted to those runs.
+   - In both tests it must reproduce the registered H1 and E1 contrasts of the registered analysis
+     (`results_v3/analysis/contrast_summary.csv`). The test outputs are in
+     `results_v3/verification/exp_lr_per_budget_analysis_check/`.
+   - It is run on the new runs only after all three batches have finished and passed their checks.
+   - Every contrast references only E1 views, so its cluster bootstrap draws the same case resamples as the registered
+     E1 family (same seed, same resampling units).
+4. **Selection data:** for each regime and budget, the candidates are the registered runs, the reused runs and the new
+   runs, 15 runs per learning rate in every case. The selection rule, estimands, inference and scope are unchanged.

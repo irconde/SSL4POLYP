@@ -987,3 +987,36 @@ No metric was computed or reported.
 - Output roots `checkpoints_v3/exp_lr_per_budget/lr<lr>/classification`, records `results_v3/exp_lr_per_budget/`;
   best-epoch weights deleted per batch after the section 6 checks and the hashed manifest (disk space).
 - No run launched before this entry.
+
+### 2026-10-28: plan revision 1 registered before launching, tag `v3-cmpb-exp-lr-budget-plan-r1`
+
+| Document | Path | SHA-256 | Registered |
+|---|---|---|---|
+| Exploratory plan, revision 1 | `docs/v3/exploratory_lr_per_budget_plan.md` | `e99ce6494230a9272ef7769c30ddf43f34d38ee96fbfc48320d44ec02974ad71` | 2026-10-28 20:59 +0100 |
+
+Supersedes `0a2556f6…890e9b`. Reason: avoid redundant runs given the verified determinism, and fix the analysis
+code before the data. The 300 existing E1 runs (1e-3 for SUP-imnet, SSL-imnet and SSL-colon from the common-lr
+experiment; 1e-4 for SSL-imnet) are reused. Only the remaining 300 runs are new, in batches of one learning rate:
+- 1e-4: SUP-imnet;
+- 3e-4: SSL-colon and SSL-imnet-matched;
+- 1e-3: SSL-imnet-matched.
+
+Checks before registration (`ssl4polyp-ft`, commit `31ae601`; analysis in `ssl4polyp-analysis`):
+- **1a, configuration** (`scripts/v3/check_reused_runs.py`): for 300/300 reused runs, the stored `config.yaml` and
+  command line equal those of the equivalent new run resolved by `prepare_run`, apart from the output root. A negative
+  test (another learning rate or budget) reports 4 and 14 differing fields. The fine-tuning code of the training commits
+  `c31b1d9`, `bf93a15` and `be04f7b` (current `eca4339`, `8ad2bfe`, `f55d004`) equals HEAD; the only differences
+  are the v2 report modules' import path and an MAE demo notebook. Record:
+  `results_v3/verification/exp_lr_per_budget_reuse_config_check.{csv,json}`.
+- **1b, bit-for-bit reproduction** (`scripts/v3/repro_reused_runs.py`): four runs trained again under
+  `checkpoints_v3/exp_lr_per_budget/repro/` with k = 1 and seed 13: SUP-imnet 1e-3 p5 (GPU 0), SSL-imnet 1e-3 p10
+  (GPU 1), SSL-colon 1e-3 p25 (GPU 1) and SSL-imnet 1e-4 p50 (GPU 0; the original ran on GPU 1). 8/8 validation and
+  test output CSVs are byte-identical to the originals. Record: `results_v3/verification/exp_lr_per_budget_repro_check.{csv,json}`.
+- **3, analysis code** (`analysis/v3/exploratory_lr_per_budget/`): run on the registered runs with the selection
+  disabled, and with the selection restricted to the registered and the 300 reused runs. In both, the recomputed
+  registered values of H1, the AULC of AUPRC of the three SSL-colon comparisons and their AUPRC at the five budgets
+  (18 contrasts: estimate, t-test CI, bootstrap CI and bootstrap B) equal `results_v3/analysis/contrast_summary.csv`
+  in 108/108 quantities at its stored 10 significant digits (max |diff| 3.9e-11). The validation AP from the JSON
+  equals its recomputation from the CSV (max |diff| 2.2e-16). Outputs:
+  `results_v3/verification/exp_lr_per_budget_analysis_check/`. The code has not been run on any new run.
+- No run of the 300 new runs launched before this entry.
