@@ -1020,3 +1020,29 @@ Checks before registration (`ssl4polyp-ft`, commit `31ae601`; analysis in `ssl4p
   equals its recomputation from the CSV (max |diff| 2.2e-16). Outputs:
   `results_v3/verification/exp_lr_per_budget_analysis_check/`. The code has not been run on any new run.
 - No run of the 300 new runs launched before this entry.
+
+### 2026-10-29: three batches and exploratory analysis, tag `v3-cmpb-exp-lr-budget-results`
+
+Batches launched in sequence by `results_v3/verification/exp_lr_per_budget_driver.sh` (`ssl4polyp-ft`, commit
+`90ed40e`, GPUs 0 and 1, one run per GPU). Log: `results_v3/verification/exp_lr_per_budget_driver.log`.
+
+| Batch | Regimes | Runs | Start | End | GPU-hours | Failures | Retries | Section 6 checks |
+|---|---|---|---|---|---|---|---|---|
+| lr 1e-4 | SUP-imnet | 75 | 10-28 21:05 | 10-28 22:44 | 3.19 | 0 | 0 | 900/900 |
+| lr 3e-4 | SSL-colon, SSL-imnet-matched | 150 | 10-28 22:44 | 10-29 03:02 | 8.34 | 0 | 0 | 1800/1800 |
+| lr 1e-3 | SSL-imnet-matched | 75 | 10-29 03:02 | 10-29 05:21 | 4.41 | 0 | 0 | 900/900 |
+
+- 300/300 runs complete at the first attempt; 15.94 GPU-hours (sum of per-run durations), 8 h 16 min wall time.
+- Per batch, before deleting its weights: verification `results_v3/verification/exp_lr_per_budget_lr<lr>_e1_{verification.json,events.jsonl}`;
+  per-run records `…_lr<lr>_runs.csv` (GPU, attempt, duration, evaluated checkpoint and its SHA-256 recomputed from the
+  file, equal to the metrics JSON in 300/300); hashed manifest of every file `…_lr<lr>_results_manifest.csv`. Then all
+  `.pth` of the batch deleted (0 left); the weights of the four 1b reruns deleted likewise. No other weights touched.
+- Analysis (`ssl4polyp-analysis`): `python -m analysis.v3.exploratory_lr_per_budget --out results_v3/analysis_exploratory_lr_per_budget`,
+  code unchanged since `90ed40e`, plan SHA-256 `e99ce649…74ad71` unchanged. Registered values recomputed equal in
+  108/108 quantities (max |diff| 3.9e-11). Output: `results_v3/analysis_exploratory_lr_per_budget/` (`run_log.txt`).
+- Selection differs from the registered learning rate in 6 of 20 regime × budget cells: SUP-imnet 1e-4 at 10/25/50 %,
+  SSL-imnet 1e-4 at 5/10/25 %, SSL-imnet-matched 3e-4 at 50 %. At 100 % every regime keeps its registered learning rate.
+- H1 (AULC of AUPRC, SSL-colon − SUP-imnet): 0.0287 with per-budget selection (t CI 0.0197 to 0.0376; bootstrap
+  0.0155 to 0.0434) vs 0.0475 registered; difference −0.0188 (t CI −0.0308 to −0.0068; bootstrap −0.0297 to −0.0065).
+  SSL-colon − SSL-imnet: −0.0011 vs 0.0104 (difference −0.0115). SSL-colon − SSL-imnet-matched: −0.0146 vs −0.0138
+  (difference −0.0008). Exploratory: no Holm, no verdicts; the registered results are unchanged.

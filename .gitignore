@@ -28,6 +28,7 @@
 !/results_v3/analysis/
 !/results_v3/analysis_exploratory_lr_common/
 !/results_v3/analysis_exploratory_lr_sslimnet/
+!/results_v3/analysis_exploratory_lr_per_budget/
 
 # Python cache and virtual environment files
 __pycache__/
