@@ -163,21 +163,24 @@ be 0 up to floating-point rounding (|diff| < 1e-15).
 
 The code is not changed after this plan, except for a bug fix that is reported.
 
-## Interpretation fixed in advance
+## Interpretation fixed in advance (revision 1)
 
-"Null" = both CIs (t-test and bootstrap) include 0. "Negative" or "advantage" = both CIs below or above 0. "Differs
-much" = both CIs of the paired SSL-colon-r − SSL-colon difference in AULC of AUPRC exclude 0, or its absolute value
-exceeds that of the registered H2 (0.0138).
+"Interval" = the t-test CI or the bootstrap CI of H2 with SSL-colon-r (both computed as registered). An interval is
+"above zero" when its lower bound is greater than 0.
 
-- **(a)** H2 with SSL-colon-r is still null or negative → the environment confounder is ruled out as the explanation
-  of the H2 result.
-- **(b)** SSL-colon-r differs much from SSL-colon → the variability between pretrainings matters, and H2 is presented
-  with that caution. That difference mixes environment, the rerun itself and the preprocessing (declared deviation), and
-  this experiment cannot separate them.
-- **(c)** H2 with SSL-colon-r shows a domain advantage → the conclusion about the domain is not robust.
+Rules (a), (a') and (c) are mutually exclusive and cover every case; (b) is evaluated separately.
 
-(a) and (b) can occur together. The other hypotheses (H1, H3–H7) are reported with their `diff`, without a separate
-rule.
+- **(a) No domain advantage:** neither interval of H2 with SSL-colon-r lies entirely above zero. This includes null,
+  negative and mixed results. The environment confounder is ruled out as the explanation of the absent domain advantage.
+- **(a') Weak indication:** one interval lies entirely above zero and the other does not. It is reported as an
+  unconfirmed indication of a domain advantage, and the conclusion about the domain is presented with caution.
+- **(c) Domain advantage:** both intervals of H2 with SSL-colon-r lie entirely above zero. The conclusion about the
+  domain is not robust and is reworded.
+- **(b) Relevant variability between pretrainings:** the absolute value of the paired SSL-colon-r − SSL-colon difference
+  in AULC of AUPRC exceeds that of the registered H2 (0.0138). It is reported with its intervals. That difference mixes
+  environment, the rerun itself and the preprocessing (declared deviation), and this experiment cannot separate them.
+
+The other hypotheses (H1, H3–H7) are reported with their `diff`, without a separate rule.
 
 ## Outputs
 
@@ -190,3 +193,22 @@ rule.
 - **Analysis:** `results_v3/analysis_exploratory_sslcolon_r/`.
 - **RUNLOG and tags:** a RUNLOG entry per stage; tag `v3-cmpb-exp-sslcolon-r-plan` (this plan and the analysis code) and,
   at the end, `v3-cmpb-exp-sslcolon-r-results`.
+
+## Revision 1 (2026-10-29)
+
+Registered before any pretraining or fine-tuning run; it changes only the interpretation rules.
+
+- **Reason:** the original rules left results with mixed intervals unclassified, such as the registered H2 (t-test CI
+  −0.0285 to 0.0009, bootstrap CI −0.0214 to −0.0064).
+  - "Null" required both CIs to include 0, and "negative" or "advantage" required both to exclude it on the same side.
+  - "Differs much" combined two criteria.
+- **Change:** the rules in "Interpretation fixed in advance" were replaced by (a), (a'), (c), which are exclusive and
+  exhaustive, and (b), which is evaluated separately.
+- **Superseded rules (original plan, SHA-256 `1a64dfed976fd3a5efb46f918838acceee78896f1767fd85822757430c201eba`):**
+  - "Null" = both CIs include 0; "negative" or "advantage" = both CIs below or above 0; "differs much" = both CIs of the
+    paired SSL-colon-r − SSL-colon difference in AULC of AUPRC exclude 0, or its absolute value exceeds 0.0138.
+  - (a) H2 null or negative → environment confounder ruled out.
+  - (b) differs much → H2 presented with caution.
+  - (c) domain advantage → the domain conclusion is not robust.
+- **Unchanged:** design, estimands, analysis code (`analysis/v3/exploratory_sslcolon_r.py`, identity check 84/84) and
+  outputs.

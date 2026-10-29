@@ -1076,3 +1076,21 @@ Batches launched in sequence by `results_v3/verification/exp_lr_per_budget_drive
 - Estimates: pretraining ~18 h on one GPU; campaign 180 runs, ~7.7 GPU-hours (~4 h on two GPUs); disk peak ~135 GB,
   ~75 GB after deleting E1 weights; 334 GB free.
 - Nothing pretrained or fine-tuned before this entry.
+
+### 2026-10-29: plan revision 1 registered before launching, tag `v3-cmpb-exp-sslcolon-r-plan-r1`
+
+| Document | Path | SHA-256 | Registered |
+|---|---|---|---|
+| Exploratory plan, revision 1 | `docs/v3/exploratory_sslcolon_repretrain_plan.md` | `78028b013dff66ae150d4d0b3b522e6ea914964255a0202403d6d14160acf71a` | 2026-10-29 |
+
+Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
+- **Reason:** the previous rules left mixed-interval results unclassified, such as the registered H2 (t-test CI includes
+  0, bootstrap CI below 0).
+- **New rules** (H2 with SSL-colon-r):
+  - (a) no interval entirely above 0 → no domain advantage;
+  - (a') exactly one interval above 0 → weak, unconfirmed indication;
+  - (c) both intervals above 0 → domain advantage; the conclusion is reworded.
+
+  (a), (a') and (c) are exclusive and exhaustive.
+- **Separately, (b):** |SSL-colon-r − SSL-colon AULC of AUPRC| > 0.0138 → relevant variability between pretrainings.
+- Nothing pretrained or fine-tuned before this entry.
