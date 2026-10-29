@@ -1040,7 +1040,7 @@ Batches launched in sequence by `results_v3/verification/exp_lr_per_budget_drive
 - Analysis (`ssl4polyp-analysis`): `python -m analysis.v3.exploratory_lr_per_budget --out results_v3/analysis_exploratory_lr_per_budget`,
   code unchanged since `90ed40e`, plan SHA-256 `e99ce649…74ad71` unchanged. Registered values recomputed equal in
   108/108 quantities (max |diff| 3.9e-11). Output: `results_v3/analysis_exploratory_lr_per_budget/` (`run_log.txt`).
-- Selection differs from the registered learning rate in 6 of 20 regime × budget cells: SUP-imnet 1e-4 at 10/25/50 %,
+- Selection differs from the registered learning rate in 7 of 20 regime × budget cells: SUP-imnet 1e-4 at 10/25/50 %,
   SSL-imnet 1e-4 at 5/10/25 %, SSL-imnet-matched 3e-4 at 50 %. At 100 % every regime keeps its registered learning rate.
 - H1 (AULC of AUPRC, SSL-colon − SUP-imnet): 0.0287 with per-budget selection (t CI 0.0197 to 0.0376; bootstrap
   0.0155 to 0.0434) vs 0.0475 registered; difference −0.0188 (t CI −0.0308 to −0.0068; bootstrap −0.0297 to −0.0065).
