@@ -1,0 +1,7 @@
+test,pos_cases_val,pos_cases_shared,pos_frames_val_in_shared_cases,pos_frames_shared,neg_cases_val,neg_cases_shared,neg_frames_val_in_shared_cases,neg_frames_shared,neg_source_videos_val,neg_source_videos_shared,neg_cases_val_from_shared_sources
+k1,15,2,66,66,15,0,0,0,3,0,0
+k2,15,2,66,10,15,1,33,33,3,1,6
+k3,15,6,198,38,15,0,0,0,3,0,0
+k4,15,3,99,6,15,0,0,0,3,1,6
+k5,15,3,99,6,15,0,0,0,3,1,6
+union of all campaign tests,15,9,297,107,15,1,33,33,3,2,12

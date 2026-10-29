@@ -1,0 +1,5 @@
+regime,registered_lr,all_selected_lr,no_shared_cases_selected_lr,no_shared_cases_or_neg_sources_selected_lr,changes_without_shared_cases,changes_without_shared_cases_or_neg_sources
+sup_imnet,3e-4,3e-4,3e-4,1e-4,False,True
+ssl_imnet,3e-4,3e-4,3e-4,1e-4,False,True
+ssl_colon,1e-4,1e-4,1e-4,1e-4,False,False
+ssl_imnet_matched,1e-4,1e-4,1e-4,1e-4,False,False
