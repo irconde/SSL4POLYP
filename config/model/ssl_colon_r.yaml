@@ -1,0 +1,14 @@
+model:
+  key: ssl_colon_r
+  name: SSL-colon-r
+  arch: vit_b
+  pretraining: Hyperkvasir
+  # Exploratory (docs/v3/exploratory_sslcolon_repretrain_plan.md): MAE pretrained again on the rebuilt HyperKvasir
+  # unlabelled set with the SSL-imnet-matched arguments and environment
+  # (checkpoints_v3/pretrain/mae_sslcolon_r/ckpts/ckpts/checkpoint-399.pth, results_v3/RUNLOG.md).
+  checkpoint: checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth
+  checkpoint_sha256: PENDING
+  frozen: false
+  ss_framework: mae
+  # Fine-tuning learning rate (sun_full, E1) = SSL-colon's registered rate, not chosen again. E4 keeps its staged schedule.
+  finetune_lr: 1.0e-4

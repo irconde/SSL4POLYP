@@ -37,7 +37,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("phase", choices=sorted(rc.PHASES))
     parser.add_argument("--out", type=Path, default=None)
-    parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.REGIMES))
+    parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.ALL_REGIMES))
     parser.add_argument("--root", default=cp.CKPT_ROOT)
     parser.add_argument("--lr-override", default=None)
     parser.add_argument("--records", default="results_v3/campaign")

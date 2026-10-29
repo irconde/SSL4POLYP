@@ -1094,3 +1094,27 @@ Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
   (a), (a') and (c) are exclusive and exhaustive.
 - **Separately, (b):** |SSL-colon-r − SSL-colon AULC of AUPRC| > 0.0138 → relevant variability between pretrainings.
 - Nothing pretrained or fine-tuned before this entry.
+
+### 2026-10-29: SSL-colon-r launch preparation (before pretraining)
+
+- **Regime `ssl_colon_r`:**
+  - `config/model/ssl_colon_r.yaml`: pretraining `Hyperkvasir` (MAE initialisation), checkpoint
+    `checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth`, `finetune_lr` 1e-4. `checkpoint_sha256` stays `PENDING`
+    until the pretraining ends.
+  - `model/ssl_colon_r` added to `config/exp/v3/{sun_full,e1,e2,e3,e4}.yaml`.
+  - `campaign_plan.py`, `run_campaign.py` and `verify_phase.py` accept it through `--regimes`
+    (`EXTRA_REGIMES`, tag `SSLColonR`). It is not part of the default matrix.
+  - Training code unchanged.
+- **Registered plan unchanged:** the four-regime matrix resolved at HEAD and with the change is byte-identical (720
+  runs, checks and few-shot composition).
+- **Dry run** (`campaign_plan.py --regimes ssl_colon_r --root checkpoints_v3/exp_sslcolon_r/classification`):
+  180 runs (sun_full 15, E1 75, E2 15, E3 15, E4 60), 0 failures, SAP hash match. Records:
+  `results_v3/verification/campaign_plan_exp_sslcolon_r.csv`, `campaign_plan_checks_exp_sslcolon_r.json`,
+  `fewshot_composition_exp_sslcolon_r.csv`.
+- **Configuration check against SSL-colon** (`scripts/v3/compare_regime_configs.py`,
+  `results_v3/verification/exp_sslcolon_r_config_check.json`), passed:
+  - 13 smoke runs (k = 1, seed 13: sun_full, E1 p5–p100, E2, E3, E4 s50–s500) differ only in the regime identity, the
+    initial checkpoint (path, SHA-256), and the paths containing them (output, metrics, TensorBoard, thresholds,
+    parent);
+  - across all 180 runs, packs, splits, learning rate and source, fine-tuning mode, threshold policy, partition, seed,
+    budget and epochs are equal.

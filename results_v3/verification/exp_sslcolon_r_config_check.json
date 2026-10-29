@@ -1,0 +1,707 @@
+{
+  "regime": "ssl_colon_r",
+  "root": "checkpoints_v3/exp_sslcolon_r/classification",
+  "reference": "ssl_colon",
+  "runs": 180,
+  "smoke_runs": 12,
+  "smoke_unexpected_differences": [],
+  "matrix_fields_compared": [
+    "train_pack",
+    "val_pack",
+    "test_pack",
+    "train_split",
+    "val_split",
+    "test_split",
+    "lr",
+    "lr_source",
+    "finetune_mode",
+    "threshold_policy",
+    "partition",
+    "seed",
+    "dataset_percent",
+    "morphology_eval",
+    "epochs"
+  ],
+  "matrix_differences": [],
+  "passed": true,
+  "smoke": [
+    {
+      "experiment": "E1",
+      "variant": "p10",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p10/ssl_colon_r_seed13/sun_subsets/p10/seed13/SSLColonR_SUNP10_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p10/ssl_colon_seed13/sun_subsets/p10/seed13/SSLColon_SUNP10_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p10/ssl_colon_r_seed13/sun_subsets/p10/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p10/ssl_colon_seed13/sun_subsets/p10/seed13"
+        },
+        "run_stem": {
+          "new": "SSLColonR_SUNP10_s13",
+          "reference": "SSLColon_SUNP10_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p10/ssl_colon_r_seed13/sun_subsets/p10/seed13/tb/SSLColonR_SUNP10_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p10/ssl_colon_seed13/sun_subsets/p10/seed13/tb/SSLColon_SUNP10_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p10/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p10/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E1",
+      "variant": "p100",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p100/ssl_colon_r_seed13/sun_subsets/p100/seed13/SSLColonR_SUNP100_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p100/ssl_colon_seed13/sun_subsets/p100/seed13/SSLColon_SUNP100_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p100/ssl_colon_r_seed13/sun_subsets/p100/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p100/ssl_colon_seed13/sun_subsets/p100/seed13"
+        },
+        "run_stem": {
+          "new": "SSLColonR_SUNP100_s13",
+          "reference": "SSLColon_SUNP100_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p100/ssl_colon_r_seed13/sun_subsets/p100/seed13/tb/SSLColonR_SUNP100_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p100/ssl_colon_seed13/sun_subsets/p100/seed13/tb/SSLColon_SUNP100_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p100/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p100/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E1",
+      "variant": "p25",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p25/ssl_colon_r_seed13/sun_subsets/p25/seed13/SSLColonR_SUNP25_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p25/ssl_colon_seed13/sun_subsets/p25/seed13/SSLColon_SUNP25_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p25/ssl_colon_r_seed13/sun_subsets/p25/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p25/ssl_colon_seed13/sun_subsets/p25/seed13"
+        },
+        "run_stem": {
+          "new": "SSLColonR_SUNP25_s13",
+          "reference": "SSLColon_SUNP25_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p25/ssl_colon_r_seed13/sun_subsets/p25/seed13/tb/SSLColonR_SUNP25_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p25/ssl_colon_seed13/sun_subsets/p25/seed13/tb/SSLColon_SUNP25_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p25/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p25/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E1",
+      "variant": "p5",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p5/ssl_colon_r_seed13/sun_subsets/p5/seed13/SSLColonR_SUNP5_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p5/ssl_colon_seed13/sun_subsets/p5/seed13/SSLColon_SUNP5_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p5/ssl_colon_r_seed13/sun_subsets/p5/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p5/ssl_colon_seed13/sun_subsets/p5/seed13"
+        },
+        "run_stem": {
+          "new": "SSLColonR_SUNP5_s13",
+          "reference": "SSLColon_SUNP5_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p5/ssl_colon_r_seed13/sun_subsets/p5/seed13/tb/SSLColonR_SUNP5_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p5/ssl_colon_seed13/sun_subsets/p5/seed13/tb/SSLColon_SUNP5_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p5/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p5/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E1",
+      "variant": "p50",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p50/ssl_colon_r_seed13/sun_subsets/p50/seed13/SSLColonR_SUNP50_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p50/ssl_colon_seed13/sun_subsets/p50/seed13/SSLColon_SUNP50_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p50/ssl_colon_r_seed13/sun_subsets/p50/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p50/ssl_colon_seed13/sun_subsets/p50/seed13"
+        },
+        "run_stem": {
+          "new": "SSLColonR_SUNP50_s13",
+          "reference": "SSLColon_SUNP50_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p50/ssl_colon_r_seed13/sun_subsets/p50/seed13/tb/SSLColonR_SUNP50_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p50/ssl_colon_seed13/sun_subsets/p50/seed13/tb/SSLColon_SUNP50_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e1/p50/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e1/p50/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E2",
+      "variant": "",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "parent_checkpoint",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e2/ssl_colon_r_seed13/sun_morphology/SSLColonR_SUNMorph_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e2/ssl_colon_seed13/sun_morphology/SSLColon_SUNMorph_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e2/ssl_colon_r_seed13/sun_morphology",
+          "reference": "checkpoints_v3/campaign/classification/k1/e2/ssl_colon_seed13/sun_morphology"
+        },
+        "parent_checkpoint": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/SSLColonR_SUNFull_s13.pth",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13.pth"
+        },
+        "run_stem": {
+          "new": "SSLColonR_SUNMorph_s13",
+          "reference": "SSLColon_SUNMorph_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e2/ssl_colon_r_seed13/sun_morphology/tb/SSLColonR_SUNMorph_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e2/ssl_colon_seed13/sun_morphology/tb/SSLColon_SUNMorph_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e2/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e2/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E3",
+      "variant": "",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "parent_checkpoint",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e3/ssl_colon_r_seed13/polypgen_clean_test/SSLColonR_PolypGenClean_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e3/ssl_colon_seed13/polypgen_clean_test/SSLColon_PolypGenClean_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e3/ssl_colon_r_seed13/polypgen_clean_test",
+          "reference": "checkpoints_v3/campaign/classification/k1/e3/ssl_colon_seed13/polypgen_clean_test"
+        },
+        "parent_checkpoint": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/SSLColonR_SUNFull_s13.pth",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13.pth"
+        },
+        "run_stem": {
+          "new": "SSLColonR_PolypGenClean_s13",
+          "reference": "SSLColon_PolypGenClean_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e3/ssl_colon_r_seed13/polypgen_clean_test/tb/SSLColonR_PolypGenClean_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e3/ssl_colon_seed13/polypgen_clean_test/tb/SSLColon_PolypGenClean_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e3/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e3/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E4",
+      "variant": "s100",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "parent_checkpoint",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s100/ssl_colon_r_seed13/polypgen_fewshot/s100/seed13/SSLColonR_PolypGenFew100_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s100/ssl_colon_seed13/polypgen_fewshot/s100/seed13/SSLColon_PolypGenFew100_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s100/ssl_colon_r_seed13/polypgen_fewshot/s100/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s100/ssl_colon_seed13/polypgen_fewshot/s100/seed13"
+        },
+        "parent_checkpoint": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/SSLColonR_SUNFull_s13.pth",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13.pth"
+        },
+        "run_stem": {
+          "new": "SSLColonR_PolypGenFew100_s13",
+          "reference": "SSLColon_PolypGenFew100_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s100/ssl_colon_r_seed13/polypgen_fewshot/s100/seed13/tb/SSLColonR_PolypGenFew100_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s100/ssl_colon_seed13/polypgen_fewshot/s100/seed13/tb/SSLColon_PolypGenFew100_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s100/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s100/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E4",
+      "variant": "s200",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "parent_checkpoint",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s200/ssl_colon_r_seed13/polypgen_fewshot/s200/seed13/SSLColonR_PolypGenFew200_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s200/ssl_colon_seed13/polypgen_fewshot/s200/seed13/SSLColon_PolypGenFew200_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s200/ssl_colon_r_seed13/polypgen_fewshot/s200/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s200/ssl_colon_seed13/polypgen_fewshot/s200/seed13"
+        },
+        "parent_checkpoint": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/SSLColonR_SUNFull_s13.pth",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13.pth"
+        },
+        "run_stem": {
+          "new": "SSLColonR_PolypGenFew200_s13",
+          "reference": "SSLColon_PolypGenFew200_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s200/ssl_colon_r_seed13/polypgen_fewshot/s200/seed13/tb/SSLColonR_PolypGenFew200_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s200/ssl_colon_seed13/polypgen_fewshot/s200/seed13/tb/SSLColon_PolypGenFew200_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s200/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s200/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E4",
+      "variant": "s50",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "parent_checkpoint",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s50/ssl_colon_r_seed13/polypgen_fewshot/s50/seed13/SSLColonR_PolypGenFew50_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s50/ssl_colon_seed13/polypgen_fewshot/s50/seed13/SSLColon_PolypGenFew50_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s50/ssl_colon_r_seed13/polypgen_fewshot/s50/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s50/ssl_colon_seed13/polypgen_fewshot/s50/seed13"
+        },
+        "parent_checkpoint": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/SSLColonR_SUNFull_s13.pth",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13.pth"
+        },
+        "run_stem": {
+          "new": "SSLColonR_PolypGenFew50_s13",
+          "reference": "SSLColon_PolypGenFew50_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s50/ssl_colon_r_seed13/polypgen_fewshot/s50/seed13/tb/SSLColonR_PolypGenFew50_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s50/ssl_colon_seed13/polypgen_fewshot/s50/seed13/tb/SSLColon_PolypGenFew50_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s50/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s50/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "E4",
+      "variant": "s500",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "parent_checkpoint",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s500/ssl_colon_r_seed13/polypgen_fewshot/s500/seed13/SSLColonR_PolypGenFew500_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s500/ssl_colon_seed13/polypgen_fewshot/s500/seed13/SSLColon_PolypGenFew500_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s500/ssl_colon_r_seed13/polypgen_fewshot/s500/seed13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s500/ssl_colon_seed13/polypgen_fewshot/s500/seed13"
+        },
+        "parent_checkpoint": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/SSLColonR_SUNFull_s13.pth",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13.pth"
+        },
+        "run_stem": {
+          "new": "SSLColonR_PolypGenFew500_s13",
+          "reference": "SSLColon_PolypGenFew500_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s500/ssl_colon_r_seed13/polypgen_fewshot/s500/seed13/tb/SSLColonR_PolypGenFew500_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s500/ssl_colon_seed13/polypgen_fewshot/s500/seed13/tb/SSLColon_PolypGenFew500_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/e4/s500/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/e4/s500/thresholds"
+        }
+      }
+    },
+    {
+      "experiment": "sun_full",
+      "variant": "",
+      "differing_fields": [
+        "ckpt",
+        "ckpt_sha256",
+        "metrics_path",
+        "model_key",
+        "model_tag",
+        "output_dir",
+        "run_stem",
+        "tensorboard_dir",
+        "thresholds_root"
+      ],
+      "unexpected": [],
+      "diff": {
+        "ckpt": {
+          "new": "checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth",
+          "reference": "checkpoints/pretrained/vit_b/mae_hyperkvasir.pth"
+        },
+        "ckpt_sha256": {
+          "new": "PENDING",
+          "reference": "faf5d0b1c67eeaf3ab333fc4dd0da23b3d294d998aa946a150ac59cf1d1d728f"
+        },
+        "metrics_path": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/SSLColonR_SUNFull_s13.metrics.json",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13.metrics.json"
+        },
+        "model_key": {
+          "new": "ssl_colon_r",
+          "reference": "ssl_colon"
+        },
+        "model_tag": {
+          "new": "SSLColonR",
+          "reference": "SSLColon"
+        },
+        "output_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines"
+        },
+        "run_stem": {
+          "new": "SSLColonR_SUNFull_s13",
+          "reference": "SSLColon_SUNFull_s13"
+        },
+        "tensorboard_dir": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/ssl_colon_r_seed13/sun_baselines/tb/SSLColonR_SUNFull_s13",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/ssl_colon_seed13/sun_baselines/tb/SSLColon_SUNFull_s13"
+        },
+        "thresholds_root": {
+          "new": "checkpoints_v3/exp_sslcolon_r/classification/k1/sun_full/thresholds",
+          "reference": "checkpoints_v3/campaign/classification/k1/sun_full/thresholds"
+        }
+      }
+    }
+  ]
+}

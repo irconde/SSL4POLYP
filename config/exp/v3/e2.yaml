@@ -11,6 +11,7 @@ models:
   - model/ssl_imnet
   - model/ssl_colon
   - model/ssl_imnet_matched
+  - model/ssl_colon_r
 protocol:
   init_from: explicit_parent
   finetune: none

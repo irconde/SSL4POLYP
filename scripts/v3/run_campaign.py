@@ -67,7 +67,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("phase", choices=sorted(PHASES))
     parser.add_argument("--gpus", default="0 1")
-    parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.REGIMES))
+    parser.add_argument("--regimes", nargs="+", default=list(cp.REGIMES), choices=list(cp.ALL_REGIMES))
     parser.add_argument("--root", default=cp.CKPT_ROOT, help="checkpoint root (default: the registered campaign)")
     parser.add_argument("--lr-override", default=None, help="explicit --override lr=<value> for sun_full and E1")
     parser.add_argument("--records", default="results_v3/campaign", help="directory for events and logs")

@@ -33,9 +33,14 @@ V3 = PACKS / "v3"
 PARTITIONS = (1, 2, 3, 4, 5)
 SEEDS = (13, 29, 47)
 REGIMES = ("sup_imnet", "ssl_imnet", "ssl_colon", "ssl_imnet_matched")
+# Exploratory regimes: accepted by --regimes, never in the default (registered) matrix.
+# ssl_colon_r: SSL-colon pretrained again (docs/v3/exploratory_sslcolon_repretrain_plan.md).
+EXTRA_REGIMES = ("ssl_colon_r",)
+ALL_REGIMES = REGIMES + EXTRA_REGIMES
 PERCENTS = (5, 10, 25, 50, 100)
 SIZES = (50, 100, 200, 500)
-TAG = {"sup_imnet": "SUPImNet", "ssl_imnet": "SSLImNet", "ssl_colon": "SSLColon", "ssl_imnet_matched": "SSLImNetMatched"}
+TAG = {"sup_imnet": "SUPImNet", "ssl_imnet": "SSLImNet", "ssl_colon": "SSLColon", "ssl_imnet_matched": "SSLImNetMatched",
+       "ssl_colon_r": "SSLColonR"}
 
 
 def selected_lr(regime: str) -> Optional[float]:
@@ -250,7 +255,7 @@ def fewshot_composition() -> List[Dict[str, object]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=REPO / "results_v3/verification")
-    parser.add_argument("--regimes", nargs="+", default=list(REGIMES), choices=list(REGIMES))
+    parser.add_argument("--regimes", nargs="+", default=list(REGIMES), choices=list(ALL_REGIMES))
     parser.add_argument("--tag", default="", help="suffix for the output file names")
     parser.add_argument("--root", default=CKPT_ROOT, help="checkpoint root of the campaign")
     parser.add_argument("--lr-override", default=None, help="explicit --override lr=<value> for sun_full and E1")
