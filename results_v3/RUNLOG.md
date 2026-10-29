@@ -1046,3 +1046,33 @@ Batches launched in sequence by `results_v3/verification/exp_lr_per_budget_drive
   0.0155 to 0.0434) vs 0.0475 registered; difference −0.0188 (t CI −0.0308 to −0.0068; bootstrap −0.0297 to −0.0065).
   SSL-colon − SSL-imnet: −0.0011 vs 0.0104 (difference −0.0115). SSL-colon − SSL-imnet-matched: −0.0146 vs −0.0138
   (difference −0.0008). Exploratory: no Holm, no verdicts; the registered results are unchanged.
+
+## Exploratory experiment: SSL-colon pretrained again in the SSL-imnet-matched environment (not registered in the SAP)
+
+### 2026-10-29: plan registered before launching, tag `v3-cmpb-exp-sslcolon-r-plan`
+
+| Document | Path | SHA-256 | Registered |
+|---|---|---|---|
+| Exploratory plan | `docs/v3/exploratory_sslcolon_repretrain_plan.md` | `1a64dfed976fd3a5efb46f918838acceee78896f1767fd85822757430c201eba` | 2026-10-29 |
+
+- Question: do H2 and the other SSL-colon comparisons hold when SSL-colon is pretrained in the same environment as
+  SSL-imnet-matched (`ssl4polyp-pretrain`, torch 2.4.1, timm 0.3.2, RTX 6000 Ada GPU 1, continuous 400 epochs)?
+  Exploratory: no Holm, no verdicts; the registered analysis is unchanged.
+- Declared deviation: pretraining data = rebuild of HyperKvasir unlabelled (`<DATA_ROOT>/hyperkvasir-unlabeled-r`,
+  polyp-db-analysis `d917e41`), equivalent but not identical to the original set, which was not kept.
+- Phase 0 checks (nothing trained):
+  - **Data:** 99,417 files, one per raw image. The hash list recomputed with `scripts/verify_hyperkvasir_rebuild.py` is
+    byte-identical to the committed `hyperkvasir_unlabeled_r_sha256.csv.gz` (list SHA-256 `d9ad754e…5782b25`). All
+    images decode as RGB JPEG.
+  - **Configuration:** the arguments stored in `mae_hyperkvasir.pth` and `mae_imnet_matched.pth` differ only in
+    `data_path`, `output_dir`, `log_dir`, `resume` and `start_epoch` (SSL-colon: resumed from `checkpoint-99.pth` at
+    epoch 100).
+  - **Data loading:** `ImageFolder` needs a class folder, so `data_path` will be a folder with one link `images ->` the
+    rebuild. It gives 99,417 images and 776 iterations per epoch (batch 128, `drop_last`), as for SSL-imnet-matched.
+  - **MAE code:** unchanged since `d109d28` (formerly `32ca324`), except an unrelated demo notebook.
+- Analysis code `analysis/v3/exploratory_sslcolon_r.py`, identity check (original SSL-colon substituted for itself):
+  84/84 registered H1–H7 quantities equal, versions `r` and `registered` (max |diff| 4.7e-11); `diff` ≤ 3e-17. Record:
+  `results_v3/verification/exp_sslcolon_r_analysis_check/`.
+- Estimates: pretraining ~18 h on one GPU; campaign 180 runs, ~7.7 GPU-hours (~4 h on two GPUs); disk peak ~135 GB,
+  ~75 GB after deleting E1 weights; 334 GB free.
+- Nothing pretrained or fine-tuned before this entry.

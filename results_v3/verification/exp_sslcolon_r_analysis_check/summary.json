@@ -1,0 +1,34 @@
+{
+ "reg_roots": [
+  "checkpoints_v3/campaign/classification"
+ ],
+ "r_root": "checkpoints_v3/campaign/classification",
+ "r_regime": "ssl_colon",
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "n_contrasts": 21,
+ "n_extra_bootstrapped": 1757,
+ "registered_check": {
+  "n": 84,
+  "exact": 84,
+  "max_abs_diff": 4.717001789167341e-11
+ },
+ "loss_epochs": {
+  "r": 400,
+  "matched": 400
+ },
+ "elapsed_s": 979.0
+}

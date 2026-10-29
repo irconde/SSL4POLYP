@@ -1,0 +1,4 @@
+id,paired_difference,hypothesis,version,family,definition,comparison,metric,estimate,sd_partition,sd_seed,n_runs,method,t_ci_lo,t_ci_hi,p_unadjusted,boot_lo,boot_hi,boot_B
+diff|H1,"SSL-colon-r − SSL-colon, AULC(auprc), E1",H1,diff,e1,"E1, SSL-colon − SUP-imnet, AULC of AUPRC (5–100 %)",ssl_colon - sup_imnet,AULC(auprc),5.551115123e-18,1.241267077e-17,2.149937642e-17,15,partition_means_t,-9.861251289e-18,2.096348154e-17,0.3739009663,-1.480297366e-17,1.480297366e-17,2000
+diff|H3,"SSL-colon-r − SSL-colon, AUROC, E2 flat stratum",H3,diff,e2,"E2, SSL-colon − SUP-imnet, AUROC, flat stratum",ssl_colon - sup_imnet,auroc,0,0,0,15,constant,,,,0,0,2000
+diff|H4,"SSL-colon-r − SSL-colon, AUROC, E3 zero-shot (polypgen_clean_test)",H4,diff,e3,"E3, SSL-colon − SUP-imnet, AUROC, polypgen_clean_test",ssl_colon - sup_imnet,auroc,0,0,0,15,constant,,,,0,0,2000
