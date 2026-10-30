@@ -1,0 +1,13 @@
+family,regime,n_runs,n_degenerate_0.05,n_degenerate_0.10,n_degenerate_0.20
+e1,ssl_colon,75,0,0,0
+e1,ssl_imnet,75,1,2,3
+e1,ssl_imnet_matched,75,0,0,1
+e1,sup_imnet,75,0,0,0
+e3,ssl_colon,15,4,6,12
+e3,ssl_imnet,15,0,0,8
+e3,ssl_imnet_matched,15,2,5,8
+e3,sup_imnet,15,0,4,10
+e4,ssl_colon,240,5,9,18
+e4,ssl_imnet,240,3,5,13
+e4,ssl_imnet_matched,240,17,26,44
+e4,sup_imnet,240,5,9,18

@@ -1,0 +1,67 @@
+condition,family,variant,slot,regime,k,seed,tau,tp,fp,tn,fn,specificity,sensitivity,degenerate_0.05,degenerate_0.10,degenerate_0.20
+E3 zero-shot,e3,,all,ssl_colon,1,47,0.1037074029,1228,179,5,26,0.02717391304,0.9792663477,True,True,True
+E3 zero-shot,e3,,all,ssl_imnet_matched,1,29,0.1885171086,1184,168,16,70,0.08695652174,0.9441786284,False,True,True
+E3 zero-shot,e3,,all,ssl_imnet_matched,1,47,0.6314761639,1181,175,9,73,0.04891304348,0.9417862839,True,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet_matched,1,29,0.1885171086,1204,3324,0,0,0,1,True,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet,1,47,0.6902389526,35,1,3323,1169,0.9996991576,0.02906976744,True,True,True
+"E4 arm C, 100 frames",e4,100,C,sup_imnet,1,13,0.887090981,37,1,3323,1167,0.9996991576,0.03073089701,True,True,True
+"E4 arm C, 100 frames",e4,100,C,sup_imnet,1,29,0.8126096129,52,2,3322,1152,0.9993983153,0.04318936877,True,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_colon,1,29,0.6828101873,24,12,3262,1130,0.9963347587,0.02079722704,True,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_imnet_matched,1,29,0.1885171086,1153,3268,6,1,0.001832620648,0.9991334489,True,True,True
+"E4 arm C, 200 frames",e4,200,C,sup_imnet,1,13,0.887090981,14,0,3274,1140,1,0.01213171577,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet,1,47,0.6902389526,70,6,3343,1159,0.9982084204,0.05695687551,False,True,True
+"E4 arm C, 500 frames",e4,500,C,sup_imnet,1,13,0.887090981,64,0,506,940,1,0.06374501992,False,True,True
+E3 zero-shot,e3,,all,ssl_colon,2,13,0.3209424019,1214,178,6,40,0.03260869565,0.9681020734,True,True,True
+E3 zero-shot,e3,,all,ssl_colon,2,29,0.9261302352,1225,177,7,29,0.03804347826,0.9768740032,True,True,True
+E3 zero-shot,e3,,all,ssl_colon,2,47,0.5990536213,1228,179,5,26,0.02717391304,0.9792663477,True,True,True
+E3 zero-shot,e3,,all,ssl_imnet_matched,2,13,0.4701329172,1234,177,7,20,0.03804347826,0.9840510367,True,True,True
+E3 zero-shot,e3,,all,ssl_imnet_matched,2,29,0.5658580661,1182,166,18,72,0.09782608696,0.9425837321,False,True,True
+E3 zero-shot,e3,,all,ssl_imnet_matched,2,47,0.5405808091,1192,169,15,62,0.08152173913,0.9505582137,False,True,True
+E3 zero-shot,e3,,all,sup_imnet,2,13,0.2647975087,1235,170,14,19,0.07608695652,0.9848484848,False,True,True
+E3 zero-shot,e3,,all,sup_imnet,2,29,0.8049259782,1228,167,17,26,0.09239130435,0.9792663477,False,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_colon,2,29,0.9261302352,9,6,3318,1195,0.9981949458,0.007475083056,True,True,True
+"E4 arm D, 100 frames",e4,100,D,ssl_imnet_matched,2,47,0.4142569602,1095,3100,224,109,0.06738868833,0.9094684385,False,True,True
+"E4 arm C, 100 frames",e4,100,C,sup_imnet,2,47,0.8600552082,70,36,3288,1134,0.9891696751,0.05813953488,False,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_colon,2,29,0.9261302352,11,6,3268,1143,0.9981673794,0.009532062392,True,True,True
+"E4 arm C, 200 frames",e4,200,C,sup_imnet,2,47,0.8600552082,86,12,3262,1068,0.9963347587,0.07452339688,False,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_colon,2,29,0.9261302352,44,24,3325,1185,0.9928336817,0.03580146461,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet_matched,2,47,0.5405808091,70,1191,2158,1159,0.6443714542,0.05695687551,False,True,True
+"E4 arm C, 500 frames",e4,500,C,ssl_colon,2,29,0.9261302352,12,0,850,992,1,0.01195219124,True,True,True
+"E4 arm A, 500 frames",e4,500,A,ssl_colon,2,47,0.5990536213,984,779,83,20,0.09628770302,0.9800796813,False,True,True
+"E4 arm B, 500 frames",e4,500,B,ssl_imnet_matched,2,47,0.0782334134,994,799,63,10,0.07308584687,0.9900398406,False,True,True
+E1 5 %,e1,5,all,ssl_imnet,3,29,0.3120082617,486,448,47,9,0.09494949495,0.9818181818,False,True,True
+E1 5 %,e1,5,all,ssl_imnet,3,47,0.2573740184,495,476,19,0,0.03838383838,1,True,True,True
+"E4 arm D, 100 frames",e4,100,D,ssl_colon,3,29,0.2918660045,1067,3122,202,137,0.06077015644,0.8862126246,False,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet_matched,3,13,0.5796386003,5,0,3324,1199,1,0.00415282392,True,True,True
+"E4 arm C, 100 frames",e4,100,C,sup_imnet,3,13,0.8626319766,26,2,3322,1178,0.9993983153,0.02159468439,True,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_colon,3,47,0.1139775142,1119,3016,258,35,0.07880268784,0.9696707106,False,True,True
+"E4 arm D, 200 frames",e4,200,D,ssl_imnet_matched,3,13,0.2735559642,1116,3037,237,38,0.07238851558,0.9670710572,False,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_imnet_matched,3,47,0.8559914231,0,1,3273,1154,0.9996945632,0,True,True,True
+"E4 arm C, 200 frames",e4,200,C,sup_imnet,3,13,0.8626319766,49,28,3246,1105,0.9914477703,0.0424610052,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet_matched,3,13,0.5796386003,106,17,3332,1123,0.9949238579,0.08624898291,False,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet_matched,3,47,0.8559914231,0,0,3349,1229,1,0,True,True,True
+"E4 arm C, 50 frames",e4,50,C,sup_imnet,3,13,0.8626319766,72,7,3342,1157,0.9979098238,0.05858421481,False,True,True
+"E4 arm C, 500 frames",e4,500,C,ssl_imnet_matched,3,47,0.8559914231,10,0,1031,994,1,0.009960159363,True,True,True
+E3 zero-shot,e3,,all,ssl_colon,4,29,0.33659935,1177,168,16,77,0.08695652174,0.9385964912,False,True,True
+E3 zero-shot,e3,,all,ssl_colon,4,47,0.2220349014,1182,168,16,72,0.08695652174,0.9425837321,False,True,True
+E3 zero-shot,e3,,all,sup_imnet,4,29,0.2550530732,1224,169,15,30,0.08152173913,0.976076555,False,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet_matched,4,29,0.8347283006,0,0,3324,1204,1,0,True,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet_matched,4,47,0.9343383312,24,60,3264,1180,0.9819494585,0.01993355482,True,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet,4,29,0.7323860526,0,0,3324,1204,1,0,True,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_imnet_matched,4,29,0.8347283006,0,0,3274,1154,1,0,True,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_imnet_matched,4,47,0.9343383312,61,11,3263,1093,0.9966401955,0.05285961872,False,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet_matched,4,29,0.8347283006,0,0,3349,1229,1,0,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet_matched,4,47,0.9343383312,0,0,3349,1229,1,0,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet,4,29,0.7323860526,0,0,3349,1229,1,0,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet,4,47,0.1735190898,1106,3046,303,123,0.09047476859,0.899918633,False,True,True
+E3 zero-shot,e3,,all,sup_imnet,5,29,0.6296118498,1221,171,13,33,0.07065217391,0.9736842105,False,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_colon,5,13,0.6520038247,91,6,3318,1113,0.9981949458,0.07558139535,False,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet_matched,5,13,0.7881042361,106,1028,2296,1098,0.6907340554,0.08803986711,False,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet_matched,5,29,0.8392925262,0,0,3324,1204,1,0,True,True,True
+"E4 arm C, 100 frames",e4,100,C,ssl_imnet_matched,5,47,0.8042007089,0,0,3324,1204,1,0,True,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_imnet_matched,5,13,0.7881042361,66,7,3267,1088,0.9978619426,0.05719237435,False,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_imnet_matched,5,29,0.8392925262,24,1,3273,1130,0.9996945632,0.02079722704,True,True,True
+"E4 arm C, 200 frames",e4,200,C,ssl_imnet_matched,5,47,0.8042007089,15,132,3142,1139,0.9596823458,0.0129982669,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet_matched,5,13,0.7881042361,0,0,3349,1229,1,0,True,True,True
+"E4 arm C, 50 frames",e4,50,C,ssl_imnet_matched,5,47,0.8042007089,79,79,3270,1150,0.9764108689,0.06427990236,False,True,True
+"E4 arm C, 500 frames",e4,500,C,ssl_imnet_matched,5,29,0.8392925262,24,0,710,980,1,0.02390438247,True,True,True

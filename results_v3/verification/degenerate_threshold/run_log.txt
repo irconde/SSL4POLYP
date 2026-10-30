@@ -1,0 +1,34 @@
+{
+ "source": "results_v3/analysis/run_metrics.csv",
+ "thresholds": [
+  0.05,
+  0.1,
+  0.2
+ ],
+ "inequality": "strict (<)",
+ "n_runs": 1320,
+ "n_conditions": 88,
+ "totals": {
+  "0.05": 37,
+  "0.10": 66,
+  "0.20": 135
+ },
+ "recomputed_from_counts_max_abs_diff": {
+  "specificity": 4.992534163861251e-11,
+  "recall": 4.991340674109779e-11
+ },
+ "registered_0.10_counts_equal": true,
+ "degenerate_0.10_runs": {
+  "n": 66,
+  "specificity": {
+   "specificity_min": 0.0,
+   "specificity_median": 0.9921407260037871,
+   "specificity_max": 1.0
+  },
+  "sensitivity": {
+   "sensitivity_min": 0.0,
+   "sensitivity_median": 0.05836187484625428,
+   "sensitivity_max": 1.0
+  }
+ }
+}
