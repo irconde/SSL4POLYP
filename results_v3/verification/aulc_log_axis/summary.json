@@ -1,0 +1,26 @@
+{
+ "root": "checkpoints_v3/campaign/classification",
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "n_contrasts": 12,
+ "n_registered_bootstrapped_alongside": 244,
+ "registered_check": {
+  "n": 48,
+  "exact": 48,
+  "max_abs_diff": 4.297701083899597e-12
+ },
+ "elapsed_s": 105.3
+}
