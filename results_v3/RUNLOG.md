@@ -1118,3 +1118,26 @@ Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
     parent);
   - across all 180 runs, packs, splits, learning rate and source, fine-tuning mode, threshold policy, partition, seed,
     budget and epochs are equal.
+
+### 2026-10-30: SSL-colon-r MAE pretraining finished
+
+- 2026-10-29 14:37:10 → 2026-10-30 08:31:39; training time 17 h 54 min 25 s (main_pretrain.py), GPU 1,
+  `ssl4polyp-pretrain`, commit `5cfd217`. 400/400 epochs (0–399), each 776 iterations (2 min 39 s – 2 min 54 s per
+  epoch), uninterrupted: no power cut, no resume, no error. AMP loss-scaler skips (grad NaN/Inf counters) in 54
+  reporting blocks, as in SSL-imnet-matched (53).
+- Mean train loss (`ckpts/log.txt`, SHA-256 `93aac5c754dfce74cc5e71681e0c83625f5d33d2440ad137297efa66a9d2d20e`):
+
+| Epoch | 0 | 50 | 100 | 150 | 200 | 250 | 300 | 350 | 399 |
+|---|---|---|---|---|---|---|---|---|---|
+| Train loss | 0.796067 | 0.109691 | 0.102570 | 0.099165 | 0.096696 | 0.093677 | 0.090631 | 0.088023 | 0.087181 |
+
+- Final checkpoint `checkpoints_v3/pretrain/mae_sslcolon_r/ckpts/ckpts/checkpoint-399.pth` (`last.pth`), SHA-256
+  `26b296477318e5e19f68ae876824ab716d2c100cf9f2646e77e3015cc572357f`: epoch 399; stored args equal to
+  SSL-imnet-matched's except `data_path`, `output_dir`, `log_dir`; seed 0, empty `resume`, `start_epoch` 0; 254
+  tensors, same names and shapes as SSL-imnet-matched, all finite; loads into the fine-tuning backbone
+  (`ViT_from_MAE`, 254 tensors; the 151 backbone tensors equal the checkpoint).
+- `checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth` = copy (same SHA-256); `checkpoint_sha256` set in
+  `config/model/ssl_colon_r.yaml`. Dry run repeated: plan, checks and few-shot composition byte-identical to the
+  committed records (180 runs, 0 failures).
+- Kept checkpoints: 9, 49, 85, 89, 95, 99, 149, 199, 249, 299, 349, 399 (as for SSL-imnet-matched).
+- Incidents: none.

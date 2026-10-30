@@ -7,7 +7,7 @@ model:
   # unlabelled set with the SSL-imnet-matched arguments and environment
   # (checkpoints_v3/pretrain/mae_sslcolon_r/ckpts/ckpts/checkpoint-399.pth, results_v3/RUNLOG.md).
   checkpoint: checkpoints/pretrained/vit_b/mae_hyperkvasir_r.pth
-  checkpoint_sha256: PENDING
+  checkpoint_sha256: 26b296477318e5e19f68ae876824ab716d2c100cf9f2646e77e3015cc572357f
   frozen: false
   ss_framework: mae
   # Fine-tuning learning rate (sun_full, E1) = SSL-colon's registered rate, not chosen again. E4 keeps its staged schedule.
