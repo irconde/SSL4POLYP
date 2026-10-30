@@ -1,0 +1,203 @@
+[2026-10-30T08:41:44+01:00] phase sun_full start
+[2026-10-30T08:41:46+01:00] phase sun_full: 15 runs, 0 already complete
+[2026-10-30T08:49:26+01:00] sun_full_k1_ssl_colon_r_seed29 gpu=1 attempt=1 ok 460.1s
+[2026-10-30T08:49:27+01:00] sun_full_k1_ssl_colon_r_seed13 gpu=0 attempt=1 ok 460.8s
+[2026-10-30T08:53:55+01:00] sun_full_k2_ssl_colon_r_seed13 gpu=0 attempt=1 ok 268.0s
+[2026-10-30T09:00:37+01:00] sun_full_k2_ssl_colon_r_seed29 gpu=0 attempt=1 ok 402.3s
+[2026-10-30T09:05:29+01:00] sun_full_k1_ssl_colon_r_seed47 gpu=1 attempt=1 ok 963.5s
+[2026-10-30T09:06:07+01:00] sun_full_k2_ssl_colon_r_seed47 gpu=0 attempt=1 ok 330.1s
+[2026-10-30T09:12:41+01:00] sun_full_k3_ssl_colon_r_seed13 gpu=1 attempt=1 ok 431.7s
+[2026-10-30T09:12:46+01:00] sun_full_k3_ssl_colon_r_seed29 gpu=0 attempt=1 ok 399.0s
+[2026-10-30T09:18:08+01:00] sun_full_k3_ssl_colon_r_seed47 gpu=1 attempt=1 ok 327.2s
+[2026-10-30T09:22:15+01:00] sun_full_k4_ssl_colon_r_seed13 gpu=0 attempt=1 ok 568.6s
+[2026-10-30T09:26:20+01:00] sun_full_k4_ssl_colon_r_seed29 gpu=1 attempt=1 ok 492.0s
+[2026-10-30T09:29:15+01:00] sun_full_k4_ssl_colon_r_seed47 gpu=0 attempt=1 ok 420.8s
+[2026-10-30T09:33:18+01:00] sun_full_k5_ssl_colon_r_seed13 gpu=1 attempt=1 ok 417.4s
+[2026-10-30T09:34:47+01:00] sun_full_k5_ssl_colon_r_seed29 gpu=0 attempt=1 ok 331.5s
+[2026-10-30T09:38:35+01:00] sun_full_k5_ssl_colon_r_seed47 gpu=1 attempt=1 ok 317.3s
+[2026-10-30T09:38:35+01:00] phase sun_full end: 15/15 complete, failures=[]
+[2026-10-30T09:38:58+01:00] phase sun_full done (30 .pth under the root)
+[2026-10-30T09:38:58+01:00] phase e2e3 start
+[2026-10-30T09:39:00+01:00] phase e2e3: 30 runs, 0 already complete
+[2026-10-30T09:39:09+01:00] E3_k1_ssl_colon_r_seed13 gpu=1 attempt=1 ok 9.5s
+[2026-10-30T09:39:09+01:00] E2_k1_ssl_colon_r_seed13 gpu=0 attempt=1 ok 9.7s
+[2026-10-30T09:39:19+01:00] E3_k1_ssl_colon_r_seed29 gpu=0 attempt=1 ok 9.6s
+[2026-10-30T09:39:19+01:00] E2_k1_ssl_colon_r_seed29 gpu=1 attempt=1 ok 9.7s
+[2026-10-30T09:39:29+01:00] E3_k1_ssl_colon_r_seed47 gpu=1 attempt=1 ok 9.7s
+[2026-10-30T09:39:29+01:00] E2_k1_ssl_colon_r_seed47 gpu=0 attempt=1 ok 9.7s
+[2026-10-30T09:39:38+01:00] E3_k2_ssl_colon_r_seed13 gpu=0 attempt=1 ok 9.4s
+[2026-10-30T09:39:38+01:00] E2_k2_ssl_colon_r_seed13 gpu=1 attempt=1 ok 9.6s
+[2026-10-30T09:39:48+01:00] E2_k2_ssl_colon_r_seed29 gpu=0 attempt=1 ok 9.6s
+[2026-10-30T09:39:48+01:00] E3_k2_ssl_colon_r_seed29 gpu=1 attempt=1 ok 9.7s
+[2026-10-30T09:39:57+01:00] E2_k2_ssl_colon_r_seed47 gpu=0 attempt=1 ok 9.5s
+[2026-10-30T09:39:58+01:00] E3_k2_ssl_colon_r_seed47 gpu=1 attempt=1 ok 9.8s
+[2026-10-30T09:40:07+01:00] E2_k3_ssl_colon_r_seed13 gpu=0 attempt=1 ok 9.5s
+[2026-10-30T09:40:07+01:00] E3_k3_ssl_colon_r_seed13 gpu=1 attempt=1 ok 9.6s
+[2026-10-30T09:40:16+01:00] E2_k3_ssl_colon_r_seed29 gpu=0 attempt=1 ok 9.5s
+[2026-10-30T09:40:17+01:00] E3_k3_ssl_colon_r_seed29 gpu=1 attempt=1 ok 9.5s
+[2026-10-30T09:40:26+01:00] E2_k3_ssl_colon_r_seed47 gpu=0 attempt=1 ok 9.5s
+[2026-10-30T09:40:26+01:00] E3_k3_ssl_colon_r_seed47 gpu=1 attempt=1 ok 9.4s
+[2026-10-30T09:40:35+01:00] E2_k4_ssl_colon_r_seed13 gpu=0 attempt=1 ok 9.6s
+[2026-10-30T09:40:36+01:00] E3_k4_ssl_colon_r_seed13 gpu=1 attempt=1 ok 9.4s
+[2026-10-30T09:40:45+01:00] E2_k4_ssl_colon_r_seed29 gpu=0 attempt=1 ok 9.5s
+[2026-10-30T09:40:45+01:00] E3_k4_ssl_colon_r_seed29 gpu=1 attempt=1 ok 9.6s
+[2026-10-30T09:40:55+01:00] E3_k4_ssl_colon_r_seed47 gpu=1 attempt=1 ok 9.4s
+[2026-10-30T09:40:55+01:00] E2_k4_ssl_colon_r_seed47 gpu=0 attempt=1 ok 9.7s
+[2026-10-30T09:41:04+01:00] E2_k5_ssl_colon_r_seed13 gpu=1 attempt=1 ok 9.5s
+[2026-10-30T09:41:04+01:00] E3_k5_ssl_colon_r_seed13 gpu=0 attempt=1 ok 9.8s
+[2026-10-30T09:41:14+01:00] E2_k5_ssl_colon_r_seed29 gpu=1 attempt=1 ok 9.5s
+[2026-10-30T09:41:14+01:00] E3_k5_ssl_colon_r_seed29 gpu=0 attempt=1 ok 9.7s
+[2026-10-30T09:41:23+01:00] E2_k5_ssl_colon_r_seed47 gpu=1 attempt=1 ok 9.4s
+[2026-10-30T09:41:24+01:00] E3_k5_ssl_colon_r_seed47 gpu=0 attempt=1 ok 9.6s
+[2026-10-30T09:41:24+01:00] phase e2e3 end: 30/30 complete, failures=[]
+[2026-10-30T09:41:40+01:00] phase e2e3 FAILED (records e2 k1)
+[2026-10-30T11:40:13+01:00] driver fixed (E2/E3 records: parent checkpoint hash check); resuming from e2e3
+[2026-10-30T11:40:13+01:00] phase e2e3 start
+[2026-10-30T11:40:15+01:00] phase e2e3: 30 runs, 30 already complete
+[2026-10-30T11:40:15+01:00] phase e2e3 end: 30/30 complete, failures=[]
+[2026-10-30T11:40:56+01:00] phase e2e3 done (30 .pth under the root)
+[2026-10-30T11:40:56+01:00] phase e1 start
+[2026-10-30T11:40:57+01:00] phase e1: 75 runs, 0 already complete
+[2026-10-30T11:43:03+01:00] E1_k1_ssl_colon_r_seed13_p5 gpu=0 attempt=1 ok 125.2s
+[2026-10-30T11:43:26+01:00] E1_k1_ssl_colon_r_seed13_p10 gpu=1 attempt=1 ok 149.0s
+[2026-10-30T11:46:48+01:00] E1_k1_ssl_colon_r_seed13_p25 gpu=0 attempt=1 ok 225.6s
+[2026-10-30T11:47:55+01:00] E1_k1_ssl_colon_r_seed13_p50 gpu=1 attempt=1 ok 268.1s
+[2026-10-30T11:49:59+01:00] E1_k1_ssl_colon_r_seed29_p5 gpu=1 attempt=1 ok 124.3s
+[2026-10-30T11:52:05+01:00] E1_k1_ssl_colon_r_seed29_p10 gpu=1 attempt=1 ok 125.7s
+[2026-10-30T11:54:33+01:00] E1_k1_ssl_colon_r_seed13_p100 gpu=0 attempt=1 ok 464.8s
+[2026-10-30T11:54:50+01:00] E1_k1_ssl_colon_r_seed29_p25 gpu=1 attempt=1 ok 165.8s
+[2026-10-30T12:01:07+01:00] E1_k1_ssl_colon_r_seed29_p50 gpu=0 attempt=1 ok 393.8s
+[2026-10-30T12:02:31+01:00] E1_k1_ssl_colon_r_seed29_p100 gpu=1 attempt=1 ok 460.7s
+[2026-10-30T12:02:57+01:00] E1_k1_ssl_colon_r_seed47_p5 gpu=0 attempt=1 ok 110.7s
+[2026-10-30T12:04:42+01:00] E1_k1_ssl_colon_r_seed47_p10 gpu=1 attempt=1 ok 131.4s
+[2026-10-30T12:05:55+01:00] E1_k1_ssl_colon_r_seed47_p25 gpu=0 attempt=1 ok 178.0s
+[2026-10-30T12:09:27+01:00] E1_k1_ssl_colon_r_seed47_p50 gpu=1 attempt=1 ok 284.5s
+[2026-10-30T12:12:17+01:00] E1_k2_ssl_colon_r_seed13_p5 gpu=1 attempt=1 ok 170.3s
+[2026-10-30T12:15:35+01:00] E1_k2_ssl_colon_r_seed13_p10 gpu=1 attempt=1 ok 197.7s
+[2026-10-30T12:19:06+01:00] E1_k2_ssl_colon_r_seed13_p25 gpu=1 attempt=1 ok 211.3s
+[2026-10-30T12:21:54+01:00] E1_k1_ssl_colon_r_seed47_p100 gpu=0 attempt=1 ok 958.1s
+[2026-10-30T12:23:27+01:00] E1_k2_ssl_colon_r_seed13_p50 gpu=1 attempt=1 ok 260.6s
+[2026-10-30T12:26:21+01:00] E1_k2_ssl_colon_r_seed13_p100 gpu=0 attempt=1 ok 267.9s
+[2026-10-30T12:26:27+01:00] E1_k2_ssl_colon_r_seed29_p5 gpu=1 attempt=1 ok 180.5s
+[2026-10-30T12:28:30+01:00] E1_k2_ssl_colon_r_seed29_p10 gpu=0 attempt=1 ok 128.5s
+[2026-10-30T12:30:06+01:00] E1_k2_ssl_colon_r_seed29_p25 gpu=1 attempt=1 ok 218.3s
+[2026-10-30T12:33:05+01:00] E1_k2_ssl_colon_r_seed29_p50 gpu=0 attempt=1 ok 274.7s
+[2026-10-30T12:36:12+01:00] E1_k2_ssl_colon_r_seed47_p5 gpu=0 attempt=1 ok 187.0s
+[2026-10-30T12:36:38+01:00] E1_k2_ssl_colon_r_seed29_p100 gpu=1 attempt=1 ok 392.1s
+[2026-10-30T12:39:41+01:00] E1_k2_ssl_colon_r_seed47_p10 gpu=0 attempt=1 ok 209.5s
+[2026-10-30T12:40:38+01:00] E1_k2_ssl_colon_r_seed47_p25 gpu=1 attempt=1 ok 240.5s
+[2026-10-30T12:43:41+01:00] E1_k2_ssl_colon_r_seed47_p50 gpu=0 attempt=1 ok 239.4s
+[2026-10-30T12:45:57+01:00] E1_k2_ssl_colon_r_seed47_p100 gpu=1 attempt=1 ok 319.3s
+[2026-10-30T12:46:14+01:00] E1_k3_ssl_colon_r_seed13_p5 gpu=0 attempt=1 ok 153.5s
+[2026-10-30T12:47:50+01:00] E1_k3_ssl_colon_r_seed13_p10 gpu=1 attempt=1 ok 112.9s
+[2026-10-30T12:48:09+01:00] E1_k3_ssl_colon_r_seed13_p25 gpu=0 attempt=1 ok 114.8s
+[2026-10-30T12:52:21+01:00] E1_k3_ssl_colon_r_seed13_p50 gpu=1 attempt=1 ok 270.3s
+[2026-10-30T12:54:43+01:00] E1_k3_ssl_colon_r_seed29_p5 gpu=1 attempt=1 ok 142.1s
+[2026-10-30T12:55:21+01:00] E1_k3_ssl_colon_r_seed13_p100 gpu=0 attempt=1 ok 432.4s
+[2026-10-30T12:56:43+01:00] E1_k3_ssl_colon_r_seed29_p10 gpu=1 attempt=1 ok 120.7s
+[2026-10-30T12:57:17+01:00] E1_k3_ssl_colon_r_seed29_p25 gpu=0 attempt=1 ok 116.2s
+[2026-10-30T12:59:42+01:00] E1_k3_ssl_colon_r_seed29_p50 gpu=1 attempt=1 ok 178.3s
+[2026-10-30T13:01:38+01:00] E1_k3_ssl_colon_r_seed47_p5 gpu=1 attempt=1 ok 116.6s
+[2026-10-30T13:03:53+01:00] E1_k3_ssl_colon_r_seed29_p100 gpu=0 attempt=1 ok 395.4s
+[2026-10-30T13:04:25+01:00] E1_k3_ssl_colon_r_seed47_p10 gpu=1 attempt=1 ok 166.6s
+[2026-10-30T13:06:59+01:00] E1_k3_ssl_colon_r_seed47_p25 gpu=0 attempt=1 ok 186.2s
+[2026-10-30T13:07:22+01:00] E1_k3_ssl_colon_r_seed47_p50 gpu=1 attempt=1 ok 177.2s
+[2026-10-30T13:09:28+01:00] E1_k4_ssl_colon_r_seed13_p5 gpu=1 attempt=1 ok 125.5s
+[2026-10-30T13:11:18+01:00] E1_k4_ssl_colon_r_seed13_p10 gpu=1 attempt=1 ok 110.7s
+[2026-10-30T13:12:19+01:00] E1_k3_ssl_colon_r_seed47_p100 gpu=0 attempt=1 ok 319.6s
+[2026-10-30T13:14:16+01:00] E1_k4_ssl_colon_r_seed13_p25 gpu=1 attempt=1 ok 178.0s
+[2026-10-30T13:19:09+01:00] E1_k4_ssl_colon_r_seed13_p50 gpu=0 attempt=1 ok 410.6s
+[2026-10-30T13:21:17+01:00] E1_k4_ssl_colon_r_seed29_p5 gpu=0 attempt=1 ok 127.3s
+[2026-10-30T13:23:34+01:00] E1_k4_ssl_colon_r_seed13_p100 gpu=1 attempt=1 ok 558.0s
+[2026-10-30T13:24:46+01:00] E1_k4_ssl_colon_r_seed29_p10 gpu=0 attempt=1 ok 209.9s
+[2026-10-30T13:26:05+01:00] E1_k4_ssl_colon_r_seed29_p25 gpu=1 attempt=1 ok 151.1s
+[2026-10-30T13:30:48+01:00] E1_k4_ssl_colon_r_seed29_p50 gpu=0 attempt=1 ok 361.9s
+[2026-10-30T13:32:49+01:00] E1_k4_ssl_colon_r_seed47_p5 gpu=0 attempt=1 ok 120.7s
+[2026-10-30T13:34:11+01:00] E1_k4_ssl_colon_r_seed29_p100 gpu=1 attempt=1 ok 485.7s
+[2026-10-30T13:34:39+01:00] E1_k4_ssl_colon_r_seed47_p10 gpu=0 attempt=1 ok 109.6s
+[2026-10-30T13:36:43+01:00] E1_k4_ssl_colon_r_seed47_p25 gpu=1 attempt=1 ok 151.6s
+[2026-10-30T13:38:15+01:00] E1_k4_ssl_colon_r_seed47_p50 gpu=0 attempt=1 ok 216.1s
+[2026-10-30T13:40:17+01:00] E1_k5_ssl_colon_r_seed13_p5 gpu=0 attempt=1 ok 122.3s
+[2026-10-30T13:42:18+01:00] E1_k5_ssl_colon_r_seed13_p10 gpu=0 attempt=1 ok 120.9s
+[2026-10-30T13:43:29+01:00] E1_k4_ssl_colon_r_seed47_p100 gpu=1 attempt=1 ok 406.6s
+[2026-10-30T13:46:05+01:00] E1_k5_ssl_colon_r_seed13_p25 gpu=0 attempt=1 ok 227.3s
+[2026-10-30T13:47:46+01:00] E1_k5_ssl_colon_r_seed13_p50 gpu=1 attempt=1 ok 256.7s
+[2026-10-30T13:49:40+01:00] E1_k5_ssl_colon_r_seed29_p5 gpu=1 attempt=1 ok 114.5s
+[2026-10-30T13:52:52+01:00] E1_k5_ssl_colon_r_seed13_p100 gpu=0 attempt=1 ok 406.8s
+[2026-10-30T13:53:14+01:00] E1_k5_ssl_colon_r_seed29_p10 gpu=1 attempt=1 ok 213.8s
+[2026-10-30T13:54:56+01:00] E1_k5_ssl_colon_r_seed29_p25 gpu=0 attempt=1 ok 123.9s
+[2026-10-30T13:56:55+01:00] E1_k5_ssl_colon_r_seed29_p50 gpu=1 attempt=1 ok 220.4s
+[2026-10-30T13:58:44+01:00] E1_k5_ssl_colon_r_seed47_p5 gpu=1 attempt=1 ok 109.7s
+[2026-10-30T14:00:15+01:00] E1_k5_ssl_colon_r_seed29_p100 gpu=0 attempt=1 ok 319.0s
+[2026-10-30T14:01:31+01:00] E1_k5_ssl_colon_r_seed47_p10 gpu=1 attempt=1 ok 167.2s
+[2026-10-30T14:03:41+01:00] E1_k5_ssl_colon_r_seed47_p25 gpu=0 attempt=1 ok 206.5s
+[2026-10-30T14:05:12+01:00] E1_k5_ssl_colon_r_seed47_p50 gpu=1 attempt=1 ok 220.6s
+[2026-10-30T14:08:56+01:00] E1_k5_ssl_colon_r_seed47_p100 gpu=0 attempt=1 ok 314.8s
+[2026-10-30T14:08:56+01:00] phase e1 end: 75/75 complete, failures=[]
+[2026-10-30T14:11:47+01:00] phase e1 verified and recorded; deleting its weights
+[2026-10-30T14:11:50+01:00] phase e1 done (30 .pth under the root)
+[2026-10-30T14:11:50+01:00] phase e4 start
+[2026-10-30T14:11:51+01:00] phase e4: 60 runs, 0 already complete
+[2026-10-30T14:12:18+01:00] E4_k1_ssl_colon_r_seed13_s100 gpu=1 attempt=1 ok 26.6s
+[2026-10-30T14:12:28+01:00] E4_k1_ssl_colon_r_seed13_s50 gpu=0 attempt=1 ok 37.5s
+[2026-10-30T14:12:40+01:00] E4_k1_ssl_colon_r_seed13_s200 gpu=1 attempt=1 ok 22.6s
+[2026-10-30T14:13:13+01:00] E4_k1_ssl_colon_r_seed29_s50 gpu=1 attempt=1 ok 32.6s
+[2026-10-30T14:13:15+01:00] E4_k1_ssl_colon_r_seed13_s500 gpu=0 attempt=1 ok 46.1s
+[2026-10-30T14:13:38+01:00] E4_k1_ssl_colon_r_seed29_s100 gpu=1 attempt=1 ok 25.0s
+[2026-10-30T14:13:42+01:00] E4_k1_ssl_colon_r_seed29_s200 gpu=0 attempt=1 ok 27.3s
+[2026-10-30T14:14:15+01:00] E4_k1_ssl_colon_r_seed47_s50 gpu=0 attempt=1 ok 32.6s
+[2026-10-30T14:14:18+01:00] E4_k1_ssl_colon_r_seed29_s500 gpu=1 attempt=1 ok 40.3s
+[2026-10-30T14:14:39+01:00] E4_k1_ssl_colon_r_seed47_s100 gpu=0 attempt=1 ok 24.7s
+[2026-10-30T14:14:46+01:00] E4_k1_ssl_colon_r_seed47_s200 gpu=1 attempt=1 ok 27.9s
+[2026-10-30T14:15:17+01:00] E4_k2_ssl_colon_r_seed13_s50 gpu=1 attempt=1 ok 31.2s
+[2026-10-30T14:15:18+01:00] E4_k1_ssl_colon_r_seed47_s500 gpu=0 attempt=1 ok 39.0s
+[2026-10-30T14:15:44+01:00] E4_k2_ssl_colon_r_seed13_s100 gpu=1 attempt=1 ok 27.1s
+[2026-10-30T14:15:47+01:00] E4_k2_ssl_colon_r_seed13_s200 gpu=0 attempt=1 ok 28.4s
+[2026-10-30T14:16:12+01:00] E4_k2_ssl_colon_r_seed13_s500 gpu=1 attempt=1 ok 27.4s
+[2026-10-30T14:16:25+01:00] E4_k2_ssl_colon_r_seed29_s50 gpu=0 attempt=1 ok 38.0s
+[2026-10-30T14:16:34+01:00] E4_k2_ssl_colon_r_seed29_s100 gpu=1 attempt=1 ok 21.9s
+[2026-10-30T14:16:52+01:00] E4_k2_ssl_colon_r_seed29_s200 gpu=0 attempt=1 ok 27.3s
+[2026-10-30T14:17:22+01:00] E4_k2_ssl_colon_r_seed29_s500 gpu=1 attempt=1 ok 48.9s
+[2026-10-30T14:17:27+01:00] E4_k2_ssl_colon_r_seed47_s50 gpu=0 attempt=1 ok 35.2s
+[2026-10-30T14:17:45+01:00] E4_k2_ssl_colon_r_seed47_s100 gpu=1 attempt=1 ok 23.0s
+[2026-10-30T14:17:52+01:00] E4_k2_ssl_colon_r_seed47_s200 gpu=0 attempt=1 ok 25.0s
+[2026-10-30T14:18:25+01:00] E4_k2_ssl_colon_r_seed47_s500 gpu=1 attempt=1 ok 39.7s
+[2026-10-30T14:18:27+01:00] E4_k3_ssl_colon_r_seed13_s50 gpu=0 attempt=1 ok 34.4s
+[2026-10-30T14:18:48+01:00] E4_k3_ssl_colon_r_seed13_s100 gpu=1 attempt=1 ok 23.0s
+[2026-10-30T14:18:53+01:00] E4_k3_ssl_colon_r_seed13_s200 gpu=0 attempt=1 ok 26.7s
+[2026-10-30T14:19:31+01:00] E4_k3_ssl_colon_r_seed29_s50 gpu=0 attempt=1 ok 37.4s
+[2026-10-30T14:19:38+01:00] E4_k3_ssl_colon_r_seed13_s500 gpu=1 attempt=1 ok 49.7s
+[2026-10-30T14:19:54+01:00] E4_k3_ssl_colon_r_seed29_s100 gpu=0 attempt=1 ok 22.9s
+[2026-10-30T14:20:04+01:00] E4_k3_ssl_colon_r_seed29_s200 gpu=1 attempt=1 ok 26.7s
+[2026-10-30T14:20:33+01:00] E4_k3_ssl_colon_r_seed29_s500 gpu=0 attempt=1 ok 39.1s
+[2026-10-30T14:20:45+01:00] E4_k3_ssl_colon_r_seed47_s50 gpu=1 attempt=1 ok 40.2s
+[2026-10-30T14:21:03+01:00] E4_k3_ssl_colon_r_seed47_s100 gpu=0 attempt=1 ok 29.9s
+[2026-10-30T14:21:11+01:00] E4_k3_ssl_colon_r_seed47_s200 gpu=1 attempt=1 ok 26.1s
+[2026-10-30T14:21:41+01:00] E4_k3_ssl_colon_r_seed47_s500 gpu=0 attempt=1 ok 38.1s
+[2026-10-30T14:21:42+01:00] E4_k4_ssl_colon_r_seed13_s50 gpu=1 attempt=1 ok 30.8s
+[2026-10-30T14:22:02+01:00] E4_k4_ssl_colon_r_seed13_s100 gpu=0 attempt=1 ok 21.6s
+[2026-10-30T14:22:08+01:00] E4_k4_ssl_colon_r_seed13_s200 gpu=1 attempt=1 ok 26.6s
+[2026-10-30T14:22:40+01:00] E4_k4_ssl_colon_r_seed29_s50 gpu=1 attempt=1 ok 32.0s
+[2026-10-30T14:22:43+01:00] E4_k4_ssl_colon_r_seed13_s500 gpu=0 attempt=1 ok 41.1s
+[2026-10-30T14:23:08+01:00] E4_k4_ssl_colon_r_seed29_s100 gpu=1 attempt=1 ok 28.3s
+[2026-10-30T14:23:11+01:00] E4_k4_ssl_colon_r_seed29_s200 gpu=0 attempt=1 ok 27.2s
+[2026-10-30T14:23:41+01:00] E4_k4_ssl_colon_r_seed29_s500 gpu=1 attempt=1 ok 32.4s
+[2026-10-30T14:23:42+01:00] E4_k4_ssl_colon_r_seed47_s50 gpu=0 attempt=1 ok 31.2s
+[2026-10-30T14:24:06+01:00] E4_k4_ssl_colon_r_seed47_s100 gpu=1 attempt=1 ok 25.0s
+[2026-10-30T14:24:10+01:00] E4_k4_ssl_colon_r_seed47_s200 gpu=0 attempt=1 ok 28.3s
+[2026-10-30T14:24:42+01:00] E4_k4_ssl_colon_r_seed47_s500 gpu=1 attempt=1 ok 36.5s
+[2026-10-30T14:24:44+01:00] E4_k5_ssl_colon_r_seed13_s50 gpu=0 attempt=1 ok 34.0s
+[2026-10-30T14:25:04+01:00] E4_k5_ssl_colon_r_seed13_s100 gpu=1 attempt=1 ok 21.9s
+[2026-10-30T14:25:12+01:00] E4_k5_ssl_colon_r_seed13_s200 gpu=0 attempt=1 ok 27.7s
+[2026-10-30T14:25:42+01:00] E4_k5_ssl_colon_r_seed29_s50 gpu=0 attempt=1 ok 30.5s
+[2026-10-30T14:25:49+01:00] E4_k5_ssl_colon_r_seed13_s500 gpu=1 attempt=1 ok 44.9s
+[2026-10-30T14:26:09+01:00] E4_k5_ssl_colon_r_seed29_s100 gpu=0 attempt=1 ok 26.9s
+[2026-10-30T14:26:22+01:00] E4_k5_ssl_colon_r_seed29_s200 gpu=1 attempt=1 ok 32.4s
+[2026-10-30T14:26:53+01:00] E4_k5_ssl_colon_r_seed47_s50 gpu=1 attempt=1 ok 31.2s
+[2026-10-30T14:26:55+01:00] E4_k5_ssl_colon_r_seed29_s500 gpu=0 attempt=1 ok 45.2s
+[2026-10-30T14:27:22+01:00] E4_k5_ssl_colon_r_seed47_s100 gpu=1 attempt=1 ok 29.2s
+[2026-10-30T14:27:25+01:00] E4_k5_ssl_colon_r_seed47_s200 gpu=0 attempt=1 ok 30.9s
+[2026-10-30T14:28:06+01:00] E4_k5_ssl_colon_r_seed47_s500 gpu=1 attempt=1 ok 44.0s
+[2026-10-30T14:28:06+01:00] phase e4 end: 60/60 complete, failures=[]
+[2026-10-30T14:28:46+01:00] phase e4 done (150 .pth under the root)
+[2026-10-30T14:28:46+01:00] ALL_DONE

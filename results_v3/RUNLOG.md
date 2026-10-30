@@ -1141,3 +1141,40 @@ Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
   committed records (180 runs, 0 failures).
 - Kept checkpoints: 9, 49, 85, 89, 95, 99, 149, 199, 249, 299, 349, 399 (as for SSL-imnet-matched).
 - Incidents: none.
+
+### 2026-10-30: SSL-colon-r campaign (180 runs)
+
+- `ssl4polyp-ft`, commit `76c1da7`, GPUs 0 and 1, driver `results_v3/verification/exp_sslcolon_r_driver.sh` (log
+  `exp_sslcolon_r_driver.log`): `run_campaign.py <phase> --regimes ssl_colon_r --root
+  checkpoints_v3/exp_sslcolon_r/classification --records results_v3/exp_sslcolon_r`, phases in order; after each,
+  `verify_phase.py` and per-run records with hashed manifest.
+- 2026-10-30 08:41 → 14:28. 180/180 runs complete, all at the first attempt: 0 failures, 0 retries.
+
+| Phase | Runs | GPU-hours | Section 6 problems |
+|---|---|---|---|
+| sun_full | 15 | 1.83 | 0 |
+| E2/E3 | 30 | 0.08 | 0 |
+| E1 | 75 | 4.87 | 0 |
+| E4 | 60 | 0.53 | 0 |
+| Total | 180 | 7.31 | 0 |
+
+- Records: `results_v3/verification/exp_sslcolon_r_<phase>_{verification.json,events.jsonl,runs.csv,results_manifest.csv}`.
+  E2/E3 runs only evaluate their sun_full parent, so their records hold no checkpoint of their own; the parent's SHA-256
+  was recomputed and equals the one in each metrics JSON (30/30, `exp_sslcolon_r_e2e3_parent_check.csv`).
+- **Driver incident (no run affected):** the first driver version required a checkpoint inside every E2/E3 run directory
+  and stopped at 09:41 after the E2/E3 runs and their section 6 checks had passed. The waiter missed the stop (it matched
+  its own command line), so the driver idled until 11:40, when it was fixed (parent hash check above) and resumed from
+  E2/E3; the launcher skipped the 30 finished runs.
+- Weights: E1 weights deleted (14:11) after its section 6 checks and after its manifest recorded the 75 checkpoint
+  SHA-256 (all equal to the metrics JSON). sun_full (parents of E2/E3/E4) and E4 weights kept: 150 `.pth`.
+
+### 2026-10-30: SSL-colon-r analysis, tag `v3-cmpb-exp-sslcolon-r-results`
+
+- `PYTHONPATH=. python -m analysis.v3.exploratory_sslcolon_r --out results_v3/analysis_exploratory_sslcolon_r`,
+  `ssl4polyp-analysis`, code unchanged since `ee9023b`; 965 s. Registered values recomputed: 42/42 equal to
+  `results_v3/analysis/contrast_summary.csv` (max |diff| 4.7e-11).
+- H2 with SSL-colon-r: −0.0050, t-test CI [−0.0176, 0.0076], bootstrap CI [−0.0121, 0.0019] (registered −0.0138).
+  Neither interval lies above zero → **rule (a)**: no domain advantage.
+- (b): paired SSL-colon-r − SSL-colon AULC of AUPRC = 0.0089 (t-test CI [−0.0033, 0.0211], bootstrap CI
+  [0.0026, 0.0152]); |0.0089| ≤ 0.0138 → **(b) not met**.
+- Exploratory: no Holm, no verdicts. Registered results unchanged.

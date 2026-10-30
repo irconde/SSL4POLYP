@@ -1,0 +1,40 @@
+[load] registered 720 runs, SSL-colon-r 180 runs (checkpoints_v3/exp_sslcolon_r/classification)
+[bootstrap] e1: 248 contrasts, units {('sun', 1): {'y0': 15, 'y1': 15}, ('sun', 2): {'y0': 15, 'y1': 15}, ('sun', 3): {'y0': 15, 'y1': 15}, ('sun', 4): {'y0': 15, 'y1': 15}, ('sun', 5): {'y0': 15, 'y1': 15}} (120s)
+[bootstrap] e2: 109 contrasts, units {('sun', 1): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 2): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 3): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 4): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}, ('sun', 5): {'y0': 15, 'y1:flat': 5, 'y1:polypoid': 10}} (176s)
+[bootstrap] e3: 30 contrasts, units {'polypgen': {'y0': 6, 'y1': 6}} (188s)
+[bootstrap] e4: 1358 contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (874s)
+[bootstrap] neg: 33 contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (940s)
+{
+ "reg_roots": [
+  "checkpoints_v3/campaign/classification"
+ ],
+ "r_root": "checkpoints_v3/exp_sslcolon_r/classification",
+ "r_regime": "ssl_colon_r",
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "n_contrasts": 21,
+ "n_extra_bootstrapped": 1757,
+ "registered_check": {
+  "n": 42,
+  "exact": 42,
+  "max_abs_diff": 4.717001789167341e-11
+ },
+ "loss_epochs": {
+  "r": 400,
+  "matched": 400
+ },
+ "elapsed_s": 964.6
+}
