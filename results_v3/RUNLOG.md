@@ -1178,3 +1178,31 @@ Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
 - (b): paired SSL-colon-r − SSL-colon AULC of AUPRC = 0.0089 (t-test CI [−0.0033, 0.0211], bootstrap CI
   [0.0026, 0.0152]); |0.0089| ≤ 0.0138 → **(b) not met**.
 - Exploratory: no Holm, no verdicts. Registered results unchanged.
+
+### 2026-10-31: E4 negative-type sensitivity plan registered before launching, tag `v3-cmpb-sens-e4-negtype-plan`
+
+| Document | Path | SHA-256 | Registered |
+|---|---|---|---|
+| Sensitivity plan | `docs/v3/sensitivity_e4_negative_type_plan.md` | `7f9c9964e52005cd36e7f0f99ba9a97973da036ab5a14860c1ac9663814da414` | 2026-10-31 |
+
+- Question: is the improvement of the adapted E4 arms at 500 frames due to the support size or to its sequence
+  negatives? Post hoc sensitivity analysis: no Holm, no verdicts; registered results unchanged.
+- Packs `data_packs/v3/polypgen_fewshot_s200seq/` (15), from polyp-db-analysis `56c7a1b`/`fca9597`:
+  - same 100 positives as the registered `s200` packs, and 100 sequence negatives from the registered `s500` support
+    sequences;
+  - test = the registered `s500` test split, byte for byte;
+  - CSVs copied unchanged, manifests with `<DATA_ROOT>`;
+  - hashes equal to `index.yaml` and the manifests;
+  - no support frame in the test, negative sequences disjoint across splits;
+  - `verify_data_packs.py --v3` (extended to sensitivity pack families) passes, 416 splits
+    (`results_v3/verification/e4_negtype_packs/`).
+- Launch: `config/exp/v3/e4_budgets/s200seq.yaml` (registered `s200` schedule) and
+  `config/data/v3/polypgen_fewshot_s200seq.yaml`; `campaign_plan.negtype_matrix`, phase `e4negtype` of
+  `run_campaign.py` and `verify_phase.py`; root `checkpoints_v3/sens_e4_negtype/classification`.
+- Dry run of the 60 runs (`campaign_plan.py --negtype`, `campaign_plan_sens_e4_negtype.csv`): no SAP-rule failure.
+  Resolved arguments differ from the registered `s200` run of the same pack and regime only in packs, experiment config
+  name and output paths. Registered 720-run matrix with the changed code byte-identical to HEAD.
+- Analysis code `scripts/v3/e4_negtype.py`, test with the registered 200-frame runs standing in for the new ones
+  (`results_v3/verification/e4_negtype_dry_test/`): 200iso and 500 equal to `e4_common_eval`, 168/168 quantities
+  (max |diff| 5.0e-11); type contrasts exactly 0; bootstrap space equal to the registered E4 space.
+- Nothing trained before this entry.

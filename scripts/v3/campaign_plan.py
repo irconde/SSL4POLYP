@@ -80,8 +80,8 @@ def resolve(argv: List[str]) -> Dict[str, object]:
     return {"args": args, **prepared}
 
 
-def parent_path(k: int, seed: int, regime: str) -> str:
-    return f"{CAMPAIGN['root']}/k{k}/sun_full/{regime}_seed{seed}/sun_baselines/{TAG[regime]}_SUNFull_s{seed}.pth"
+def parent_path(k: int, seed: int, regime: str, root: Optional[str] = None) -> str:
+    return f"{root or CAMPAIGN['root']}/k{k}/sun_full/{regime}_seed{seed}/sun_baselines/{TAG[regime]}_SUNFull_s{seed}.pth"
 
 
 def manifest(pack: str) -> dict:
@@ -119,6 +119,22 @@ def run_matrix(regimes=REGIMES) -> List[Dict[str, object]]:
                     runs.append({"experiment": "E4", "k": k, "seed": seed, "regime": regime, "variant": f"s{size}",
                                  "argv": ["--exp-config", f"exp/v3/e4_budgets/s{size}.yaml", *base, "--parent-checkpoint", parent,
                                           "--output-dir", f"{CKPT_ROOT}/k{k}/e4/s{size}/{regime}_seed{seed}"]})
+    return runs
+
+
+def negtype_matrix(regimes=REGIMES) -> List[Dict[str, object]]:
+    """E4 negative-type sensitivity (docs/v3/sensitivity_e4_negative_type_plan.md), never in the registered matrix:
+    adaptation of the registered sun_full models on the 200-frame packs with sequence negatives (s200 schedule)."""
+
+    runs: List[Dict[str, object]] = []
+    for k in PARTITIONS:
+        for seed in SEEDS:
+            for regime in regimes:
+                base = ["--partition", str(k), "--seed", str(seed), "--model-key", regime, "--roots", "data/roots.json"]
+                runs.append({"experiment": "E4seq", "k": k, "seed": seed, "regime": regime, "variant": "s200seq",
+                             "argv": ["--exp-config", "exp/v3/e4_budgets/s200seq.yaml", *base,
+                                      "--parent-checkpoint", parent_path(k, seed, regime, CKPT_ROOT),
+                                      "--output-dir", f"{CAMPAIGN['root']}/k{k}/e4/s200/{regime}_seed{seed}"]})
     return runs
 
 
@@ -177,6 +193,14 @@ def check_run(run: Dict[str, object], resolved: Dict[str, object], index: dict) 
         gen = manifest(pack).get("generator") or {}
         expect(gen.get("seed") == 1000 * k + seed, f"pack seed {gen.get('seed')} != {1000 * k + seed}")
         expect(index["partitions"][k]["fewshot_pack_seeds"][seed] == 1000 * k + seed, "index pack seed")
+        expect(a.lr_source == "finetune_schedule", f"lr source {a.lr_source}")
+        expect(a.threshold_policy == "sun_val_frozen", f"policy {a.threshold_policy}")
+    if exp == "E4seq":
+        pack = f"v3/polypgen_fewshot_s200seq/k{k}/seed{seed}"
+        expect(a.parent_checkpoint == parent_path(k, seed, regime, CKPT_ROOT), f"parent {a.parent_checkpoint}")
+        expect(a.train_pack == pack and a.val_pack == pack and a.test_pack == pack, f"packs {a.train_pack}")
+        gen = manifest(pack).get("generator") or {}
+        expect(gen.get("seed") == 1000 * k + seed, f"pack seed {gen.get('seed')} != {1000 * k + seed}")
         expect(a.lr_source == "finetune_schedule", f"lr source {a.lr_source}")
         expect(a.threshold_policy == "sun_val_frozen", f"policy {a.threshold_policy}")
     return errors
@@ -259,13 +283,15 @@ def main() -> int:
     parser.add_argument("--tag", default="", help="suffix for the output file names")
     parser.add_argument("--root", default=CKPT_ROOT, help="checkpoint root of the campaign")
     parser.add_argument("--lr-override", default=None, help="explicit --override lr=<value> for sun_full and E1")
+    parser.add_argument("--negtype", action="store_true", help="the E4 negative-type sensitivity runs instead of the campaign")
     args = parser.parse_args()
     set_campaign(args.root, args.lr_override)
+    matrix = negtype_matrix if args.negtype else run_matrix
     index = yaml.safe_load((V3 / "index.yaml").read_text())
     sap = current_sap()
 
     plan_rows, failures = [], []
-    for run in run_matrix(tuple(args.regimes)):
+    for run in matrix(tuple(args.regimes)):
         try:
             resolved = resolve(run["argv"])
             errors = check_run(run, resolved, index)

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Run one phase of the campaign v3 matrix on the local GPUs (one run per GPU).
 
-Phases: ``sun_full``, ``e2e3`` (E2 and E3 evaluations of the sun_full models), ``e1``, ``e4``.
+Phases: ``sun_full``, ``e2e3`` (E2 and E3 evaluations of the sun_full models), ``e1``, ``e4``; ``e4negtype`` runs the
+E4 negative-type sensitivity (``campaign_plan.negtype_matrix``, not part of the registered matrix).
 The run list and command lines come from ``campaign_plan.run_matrix`` (the dry-run matrix).
 
 * Resumable: a run is complete when its output directory holds ``RUN_COMPLETE.json``. A directory
@@ -30,7 +31,8 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import campaign_plan as cp  # noqa: E402
 
-PHASES = {"sun_full": ("sun_full",), "e2e3": ("E2", "E3"), "e1": ("E1",), "e4": ("E4",)}
+PHASES = {"sun_full": ("sun_full",), "e2e3": ("E2", "E3"), "e1": ("E1",), "e4": ("E4",),
+          "e4negtype": ("E4seq",)}  # E4 negative-type sensitivity (docs/v3/sensitivity_e4_negative_type_plan.md)
 TRANSIENT = re.compile(
     r"CUDA out of memory|OutOfMemoryError|CUBLAS_STATUS_ALLOC_FAILED|Input/output error|OSError|IOError"
     r"|DataLoader worker \(pid|Broken pipe|Too many open files|No space left",
@@ -99,7 +101,8 @@ def main() -> int:
         with lock, events_path.open("a") as handle:
             handle.write(json.dumps({"time": now(), "commit": commit, **payload}) + "\n")
 
-    runs = [r for r in cp.run_matrix(tuple(args.regimes)) if r["experiment"] in PHASES[args.phase]]
+    matrix = cp.negtype_matrix if args.phase == "e4negtype" else cp.run_matrix
+    runs = [r for r in matrix(tuple(args.regimes)) if r["experiment"] in PHASES[args.phase]]
     todo = [r for r in runs if not is_complete(r)]
     event(kind="phase_start", phase=args.phase, expected=len(runs), already_complete=len(runs) - len(todo), gpus=args.gpus,
           root=args.root, lr_override=args.lr_override)

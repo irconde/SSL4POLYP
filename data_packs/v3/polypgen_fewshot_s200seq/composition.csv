@@ -1,0 +1,16 @@
+k,seed,pack_seed,selection_seed,train_pos,train_neg_seq,val_pos,val_neg_seq,train_sequences,val_sequences,train_candidate_frames,val_candidate_frames,test_pos,test_neg,support_in_test,train_sequence_ids,val_sequence_ids
+1,13,1013,201013,80,80,20,20,10,4,1582,1102,1004,506,0,seq10_neg seq11_neg seq15_neg seq16_neg seq17_neg seq18_neg seq20_neg seq21_neg seq22_neg seq23_neg,seq14_neg seq19_neg seq1_neg seq8_neg
+1,29,1029,201029,80,80,20,20,10,4,1782,999,1004,409,0,seq10_neg seq11_neg seq13_neg seq14_neg seq17_neg seq19_neg seq20_neg seq21_neg seq22_neg seq23_neg,seq15_neg seq18_neg seq1_neg seq8_neg
+1,47,1047,201047,80,80,20,20,11,3,1795,663,1004,732,0,seq11_neg seq12_neg seq14_neg seq16_neg seq17_neg seq19_neg seq1_neg seq20_neg seq22_neg seq23_neg seq9_neg,seq13_neg seq18_neg seq8_neg
+2,13,2013,202013,80,80,20,20,10,4,1988,684,1004,518,0,seq10_neg seq11_neg seq14_neg seq15_neg seq18_neg seq19_neg seq21_neg seq23_neg seq8_neg seq9_neg,seq12_neg seq13_neg seq17_neg seq20_neg
+2,29,2029,202029,80,80,20,20,12,2,2118,222,1004,850,0,seq11_neg seq12_neg seq13_neg seq15_neg seq18_neg seq19_neg seq1_neg seq21_neg seq23_neg seq3_neg seq8_neg seq9_neg,seq20_neg seq22_neg
+2,47,2047,202047,80,80,20,20,11,3,1897,431,1004,862,0,seq10_neg seq14_neg seq15_neg seq16_neg seq17_neg seq18_neg seq19_neg seq20_neg seq21_neg seq22_neg seq9_neg,seq11_neg seq13_neg seq3_neg
+3,13,3013,203013,80,80,20,20,12,2,2582,306,1004,302,0,seq10_neg seq11_neg seq12_neg seq13_neg seq14_neg seq15_neg seq16_neg seq18_neg seq19_neg seq1_neg seq23_neg seq8_neg,seq20_neg seq21_neg
+3,29,3029,203029,80,80,20,20,12,2,2074,430,1004,686,0,seq10_neg seq11_neg seq12_neg seq13_neg seq14_neg seq15_neg seq19_neg seq20_neg seq22_neg seq23_neg seq3_neg seq9_neg,seq21_neg seq8_neg
+3,47,3047,203047,80,80,20,20,12,2,1903,256,1004,1031,0,seq11_neg seq13_neg seq14_neg seq15_neg seq17_neg seq19_neg seq20_neg seq21_neg seq22_neg seq23_neg seq3_neg seq9_neg,seq12_neg seq18_neg
+4,13,4013,204013,80,80,20,20,9,5,1986,500,1004,704,0,seq10_neg seq14_neg seq15_neg seq17_neg seq1_neg seq20_neg seq23_neg seq8_neg seq9_neg,seq11_neg seq16_neg seq21_neg seq22_neg seq3_neg
+4,29,4029,204029,80,80,20,20,10,4,1503,880,1004,807,0,seq11_neg seq12_neg seq15_neg seq17_neg seq18_neg seq21_neg seq23_neg seq3_neg seq8_neg seq9_neg,seq13_neg seq14_neg seq16_neg seq19_neg
+4,47,4047,204047,80,80,20,20,10,4,2043,685,1004,462,0,seq10_neg seq11_neg seq12_neg seq14_neg seq16_neg seq19_neg seq1_neg seq20_neg seq22_neg seq8_neg,seq13_neg seq15_neg seq17_neg seq3_neg
+5,13,5013,205013,80,80,20,20,10,4,1456,861,1004,873,0,seq10_neg seq12_neg seq14_neg seq16_neg seq18_neg seq20_neg seq22_neg seq23_neg seq3_neg seq9_neg,seq11_neg seq15_neg seq21_neg seq8_neg
+5,29,5029,205029,80,80,20,20,12,2,1974,506,1004,710,0,seq10_neg seq12_neg seq13_neg seq15_neg seq17_neg seq18_neg seq20_neg seq21_neg seq22_neg seq3_neg seq8_neg seq9_neg,seq19_neg seq1_neg
+5,47,5047,205047,80,80,20,20,9,5,1454,897,1004,839,0,seq13_neg seq14_neg seq16_neg seq20_neg seq22_neg seq23_neg seq3_neg seq8_neg seq9_neg,seq10_neg seq11_neg seq18_neg seq19_neg seq21_neg

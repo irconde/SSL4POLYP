@@ -43,7 +43,8 @@ def main() -> int:
     parser.add_argument("--records", default="results_v3/campaign")
     args = parser.parse_args()
     cp.set_campaign(args.root, args.lr_override)
-    runs = [r for r in cp.run_matrix(tuple(args.regimes)) if r["experiment"] in rc.PHASES[args.phase]]
+    matrix = cp.negtype_matrix if args.phase == "e4negtype" else cp.run_matrix
+    runs = [r for r in matrix(tuple(args.regimes)) if r["experiment"] in rc.PHASES[args.phase]]
     results, problems = [], []
     commits = Counter()
     for run in runs:

@@ -11,8 +11,9 @@ For every pack split it checks:
 
 With ``--v3`` it verifies the campaign v3 packs under ``<packs-root>/v3/`` instead (every directory
 with a ``manifest.yaml``): the same per-split checks, plus every CSV SHA-256 against
-``v3/index.yaml``, no CSV missing from or absent in the index, and the parent hashes declared by
-subsets (``k*/base``) and few-shot packs (``_parent/polypgen_clean_test_extended``).
+``v3/index.yaml`` (or the ``index.yaml`` of a sensitivity pack family such as ``v3/polypgen_fewshot_s200seq/``),
+no CSV missing from or absent in the index, and the parent hashes declared by subsets (``k*/base``) and few-shot packs
+(``_parent/polypgen_clean_test_extended``).
 
 Writes ``<out>/pack_hashes.csv`` and ``<out>/pack_verification.json`` (``*_v3`` with ``--v3``) and exits
 non-zero on any mismatch.
@@ -153,10 +154,18 @@ def check_parent(label: str, parent_hashes: Dict[str, str], parent_dir: Path) ->
     return rows, failures
 
 
+def sensitivity_dirs(v3_root: Path) -> List[Path]:
+    """Pack families added for sensitivity analyses (e.g. ``polypgen_fewshot_s200seq``), each with its own index.yaml."""
+    return sorted(d for d in v3_root.iterdir() if d.is_dir() and (d / "index.yaml").exists())
+
+
 def v3_index(v3_root: Path) -> Dict[str, str]:
     index = yaml.safe_load((v3_root / "index.yaml").read_text())
     hashes = {rel: h for part in index["partitions"].values() for rel, h in part["csv_sha256"].items()}
     hashes.update(index.get("parent") or {})
+    for d in sensitivity_dirs(v3_root):
+        packs = yaml.safe_load((d / "index.yaml").read_text())["packs"]
+        hashes.update({f"{d.name}/{pack}/{split}.csv": h for pack, v in packs.items() for split, h in v["csv_sha256"].items()})
     return hashes
 
 
@@ -182,7 +191,8 @@ def main() -> int:
     if args.v3:
         v3_root = args.packs_root / "v3"
         index = v3_index(v3_root)
-        on_disk = {p.relative_to(v3_root).as_posix() for p in v3_root.rglob("*.csv")}
+        summaries = {p for d in sensitivity_dirs(v3_root) for p in d.glob("*.csv")}  # e.g. composition.csv, not a pack
+        on_disk = {p.relative_to(v3_root).as_posix() for p in v3_root.rglob("*.csv") if p not in summaries}
         failures += [f"{rel}: in index.yaml, file missing" for rel in sorted(set(index) - on_disk)]
         failures += [f"{rel}: CSV not in index.yaml" for rel in sorted(on_disk - set(index))]
         for manifest_path in sorted(v3_root.rglob("manifest.yaml")):
@@ -196,7 +206,7 @@ def main() -> int:
             if parent_hashes:
                 if "/sun_subsets/" in f"/{label}/":
                     parent_dir = v3_root / label.split("/")[0] / "base"
-                elif "/polypgen_fewshot/" in f"/{label}/":
+                elif "/polypgen_fewshot/" in f"/{label}/" or label.startswith("polypgen_fewshot_"):
                     parent_dir = v3_root / "_parent" / "polypgen_clean_test_extended"
                 else:
                     failures.append(f"{label}: parent pack not resolved")

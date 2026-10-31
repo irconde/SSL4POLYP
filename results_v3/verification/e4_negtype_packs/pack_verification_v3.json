@@ -1,0 +1,8 @@
+{
+  "checked_splits": 416,
+  "index_csvs": 266,
+  "csvs_on_disk": 266,
+  "pack_dirs": 106,
+  "failures": [],
+  "passed": true
+}

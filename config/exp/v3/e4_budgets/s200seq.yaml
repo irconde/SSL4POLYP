@@ -1,0 +1,5 @@
+# E4 negative-type sensitivity (docs/v3/sensitivity_e4_negative_type_plan.md): registered 200-frame
+# schedule (s200.yaml) on the 200-frame packs with sequence negatives.
+defaults:
+  - s200.yaml
+  - data/v3/polypgen_fewshot_s200seq

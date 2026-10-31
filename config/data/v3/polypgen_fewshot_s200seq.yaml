@@ -1,0 +1,9 @@
+# E4 negative-type sensitivity (docs/v3/sensitivity_e4_negative_type_plan.md): 200-frame packs with the
+# positives of the registered s200 pack and 100 sequence negatives; test split = registered s500 test split.
+# One pack per partition k and training seed s (pack seed 1000*k + s), selected by --seed.
+defaults:
+  - polypgen_fewshot
+dataset:
+  pack_pattern: v3/polypgen_fewshot_s200seq/k{partition}/seed{seed}
+  manifest_pattern: v3/polypgen_fewshot_s200seq/k{partition}/seed{seed}/manifest.yaml
+  sizes: [200]

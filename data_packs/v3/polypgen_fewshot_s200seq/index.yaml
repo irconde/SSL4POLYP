@@ -1,0 +1,107 @@
+seed_offset: 200000
+packs:
+  k1/seed13:
+    pack_seed: 1013
+    selection_seed: 201013
+    csv_sha256:
+      train: 93206eb315a34918e297a12162b5db58b8fbe912cc0a7418f513d0490050bb53
+      val: 63e9c7d4b95d477567c53de60af39d7bfd3e1859de57928b2c2565f06fcd40ac
+      test: 26d213b1ae9b237e80c0b9c2a85ae36014d0769558fdf83bf3d4c6ed2de1dd11
+  k1/seed29:
+    pack_seed: 1029
+    selection_seed: 201029
+    csv_sha256:
+      train: 1be49a3a789bb1fea17cf02c1e15c3ffc91a85688242fd8c9dfaff64a9f295d0
+      val: 1a831cda773b1f24424ef66a0759cb045ff5b27fc282cac096b8fb1784d85453
+      test: 8172d7a93e8e95598c8c3bb61b97279af1afaae16594ece00dfedb2429213b3a
+  k1/seed47:
+    pack_seed: 1047
+    selection_seed: 201047
+    csv_sha256:
+      train: 5577da112f29822be93f55b342a2d78a0954d7e25c4b2fdd75ff583f5b0c1e77
+      val: 2aa16bd3f2b1a87df796e08ec7b1ac73f37725d2ac6a0142ebeed6ab0ac4688b
+      test: 3b5ebd91d19d102e412b1178abf8d9416dc494605e00af9c266637521a271ead
+  k2/seed13:
+    pack_seed: 2013
+    selection_seed: 202013
+    csv_sha256:
+      train: 8a6232e70e38132cce20b00f770bf5ca361d664ed71655fb66bd3f04e566ea06
+      val: b5406c095f2a247604eb8e069e8f4650c7dea11a53159ea62638dc5d3d32d66e
+      test: 5dd2b47918cc20d69137c18519b0b67238fcd09a8c4a67874e461eac0e846ea1
+  k2/seed29:
+    pack_seed: 2029
+    selection_seed: 202029
+    csv_sha256:
+      train: 15a1d0fa3f599e1cc2e3da1fccac04b5af49a6b452be93fc743b895a45426001
+      val: 8e8ce3628a56c73e3ab4877777e44c797490cd31967cef9c780ee7fabc79bf07
+      test: 7b064cc5282c6f6bffbade1e5995c7b513b60f8b5e5b760faaf5678eaf80e727
+  k2/seed47:
+    pack_seed: 2047
+    selection_seed: 202047
+    csv_sha256:
+      train: 6b8af3325612c0e4641eaca0f4be38f3d5a10300ae94898bf74d783b89c973bd
+      val: 127c74515ec15fa54a10063f43ccd51b204f370b08dc68cc1e5d345a668dcb60
+      test: b67163f49c66b81c0ef58427b5c0d6743e1d32ecf5ce1b200819953260210aeb
+  k3/seed13:
+    pack_seed: 3013
+    selection_seed: 203013
+    csv_sha256:
+      train: 9acd753b4234b238f296687b04ea229d34cfa628425a99945733347a0d847ce1
+      val: 9db20197396312c070e92bcd641ab99e4714c70a7046d08ad5257bed15762090
+      test: 7189151195908572ae961c564acb7b37b6c18d2f7f74cefc5ee231cf77246dd1
+  k3/seed29:
+    pack_seed: 3029
+    selection_seed: 203029
+    csv_sha256:
+      train: 107b53a07517dee743a1f8a6d5190ba7cef920e56eaa87e339be447ac7c8962c
+      val: 6e7dcdb4a25a84b8845d480fdc6c9b5b2e409e2a6f8c9a86fc236f685aff898f
+      test: edab5109dbc5a09e4e128efbd00d2bbb8a44fa0b5c3c28a06f265976fdca9e2b
+  k3/seed47:
+    pack_seed: 3047
+    selection_seed: 203047
+    csv_sha256:
+      train: fff93c27108359e701ad572788aed89d3f4b6c19ec1f514af0b6416bf6a55f4e
+      val: d688dbf7458d3e5428f2e6cd780043343bdbc91edd2843fbdfa47acbb1608711
+      test: f630c15aea2ce63ff91651b22d9894d9ef312301218e4bd0019b93190598f994
+  k4/seed13:
+    pack_seed: 4013
+    selection_seed: 204013
+    csv_sha256:
+      train: 54eba668b8b1744a29ca53e0cc40b4346179921411d73f384d2fc8b59f79c606
+      val: 6c5fa08075e4923768fa2dc00a4a1d9ac8918c5cec825e318a8ca9be9c8c5596
+      test: 974b975998ebeb5c905f8fd8980525ea0eac9bb1aa514bf576a17f0c2e4cceaa
+  k4/seed29:
+    pack_seed: 4029
+    selection_seed: 204029
+    csv_sha256:
+      train: e92f14857c8cd5551c10bedd298892640c81518ba09f7f4f363124e0262b26f3
+      val: 2486f0b603b46e4aa8f489f35f88533be85dd8e2ba50877023d58e74366af6c6
+      test: b915117ceebfac3839cf8dfc8291a2c7061ee8909b1cd7525ab2a0389d167d58
+  k4/seed47:
+    pack_seed: 4047
+    selection_seed: 204047
+    csv_sha256:
+      train: 785ffad3d9fd91f41f1f27ad298a5aea28b5784264f94394cbaab8211ccfbd9a
+      val: b9091dae146adf4c8cb0aa1acd919c858d4322f5976cdd5a48ac7c348c8f241c
+      test: 677dfacd3356d94fd06d5db647d4a868a5382e36a965fe3e96e4d3b509c6855e
+  k5/seed13:
+    pack_seed: 5013
+    selection_seed: 205013
+    csv_sha256:
+      train: fffcf261c1e3da5d10fc48578acbca94b789e4eafb070ef846a6c25ce08550cc
+      val: c91f6d3cdd53ec51cee37c6a0d93de0d24b9f513e15acdffd8a1afa6db1d2cdc
+      test: 0c13d1f622de900f35136e151ef6a97409793d0970e4085776a946481f56b107
+  k5/seed29:
+    pack_seed: 5029
+    selection_seed: 205029
+    csv_sha256:
+      train: b91e89b0258366858054d238dd6a431c1644bc51e2c599955ec67b46cd3bd3ff
+      val: 7ebe0b264ba7b5865b8c02a7ce5c303acd56ebbd1627b8c063274cfc69cdd846
+      test: 4912d13c79d5aeea828b09299c32b18787b53dbf6b1b7533e2c63a47335932f5
+  k5/seed47:
+    pack_seed: 5047
+    selection_seed: 205047
+    csv_sha256:
+      train: 3d5cd15fdcfd9f25d08f4ab7e49b434d60d41ab785a484f294629e9c9d078c79
+      val: ee8cbbf11282f4314098ebf32840e29a9c173dae280d9ebe7d24f0540fb04ade
+      test: f3b93095a8011c3a0ddccf246a93fd01f6446b648abd29d5026b389f2a2ea284

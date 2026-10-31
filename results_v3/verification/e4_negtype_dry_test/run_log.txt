@@ -1,0 +1,49 @@
+[bootstrap] e4: 58 contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (185s)
+{
+ "registered_root": "checkpoints_v3/campaign/classification",
+ "seq": {
+  "source": "registered 200-frame runs (dry run)"
+ },
+ "dry_seq": true,
+ "regimes": [
+  "sup_imnet",
+  "ssl_imnet",
+  "ssl_colon",
+  "ssl_imnet_matched"
+ ],
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "bootstrap_units": {
+  "polypgen": {
+   "neg": 24,
+   "pos": 6
+  }
+ },
+ "bootstrap_space_equals_registered_e4": true,
+ "n_contrasts": 58,
+ "common_eval_check": {
+  "n": 168,
+  "exact": 168,
+  "max_abs_diff": 4.967526390231569e-11
+ },
+ "zeroshot_200seq_vs_registered_500_max_abs_prob_diff": 0.00042438507080078125,
+ "kept_inherited_tau_D": {
+  "200iso": 0,
+  "200seq": 0,
+  "500": 0
+ },
+ "elapsed_s": 185.2
+}

@@ -1,0 +1,17 @@
+{
+  "sap": {
+    "name": "SAP v3.3",
+    "path": "docs/v3/plan_analisis_estadistico_v3_3.md",
+    "registered_sha256": "fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56",
+    "file_sha256": "fd6b0342d529f77897ae6fd8c08e3d5cb101ab090fc09fe7540f40ea70f7ff56",
+    "match": true
+  },
+  "runs": {
+    "E4seq": 60
+  },
+  "total_runs": 60,
+  "run_failures": [],
+  "partition_check_failures": [],
+  "pending_regimes": [],
+  "fewshot_s50_lt120_isolated": []
+}

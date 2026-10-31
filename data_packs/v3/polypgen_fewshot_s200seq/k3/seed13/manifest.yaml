@@ -1,0 +1,196 @@
+name: polypgen_fewshot_s200seq
+version: 1.0.0
+policy:
+  unit_of_split: frame
+  fewshot_budget_S: 200
+  variant: sequence_negatives
+  parent_pack: polypgen_clean_test_extended
+  positives_source: registered polypgen_fewshot_s200 (same frames, same train/val
+    split)
+  negatives_source:
+    origin: negative sequences assigned to the support of the registered s500 pack
+    train:
+      sequence_frames: 80
+      sequences:
+      - seq10_neg
+      - seq11_neg
+      - seq12_neg
+      - seq13_neg
+      - seq14_neg
+      - seq15_neg
+      - seq16_neg
+      - seq18_neg
+      - seq19_neg
+      - seq1_neg
+      - seq23_neg
+      - seq8_neg
+    val:
+      sequence_frames: 20
+      sequences:
+      - seq20_neg
+      - seq21_neg
+  class_ratio_per_split:
+    train:
+      pos: 80
+      neg: 80
+    val:
+      pos: 20
+      neg: 20
+    test:
+      pos: 1004
+      neg: 302
+  neg_sampling:
+    strategy: round_robin_over_hmac_ranked_sequences
+    selection_seed: 203013
+    selection_seed_rule: 200000 + pack_seed
+    max_frames_per_sequence: null
+    sequence_level_disjointness: true
+  test_split: identical to the registered polypgen_fewshot_s500 test split
+  sampling: pos:registered s200; neg:round_robin_over_sequences(hmac_sha256(sequence_id|frame_id,203013));
+    pack_seed=3013
+row_schema:
+  fields:
+  - name: dataset
+    type: string
+    desc: constant 'polypgen_clean'
+  - name: split
+    type: string
+    desc: train|val|test (frame-level)
+  - name: case_id
+    type: string
+  - name: frame_id
+    type: string
+  - name: frame_path
+    type: path
+  - name: label
+    type: int
+selection_keys:
+  train: hmac_sha256(frame_id,203013) within sequence, round-robin across sequences
+  val: hmac_sha256(frame_id,203013) within sequence, round-robin across sequences
+  test: registered s500 test split
+counts:
+  train:
+    frames: 160
+    pos: 80
+    neg: 80
+    neg_frame: 0
+    neg_seq_frames: 80
+    neg_seq_sequences: 12
+  val:
+    frames: 40
+    pos: 20
+    neg: 20
+    neg_frame: 0
+    neg_seq_frames: 20
+    neg_seq_sequences: 2
+  test:
+    frames: 1306
+    pos: 1004
+    neg: 302
+    neg_frame: 0
+    neg_seq_frames: 302
+    neg_seq_sequences: 4
+summary_by_split:
+- split: train
+  frames: 160
+  pos_frames: 80
+  neg_frames: 80
+  neg_frame: 0
+  neg_seq_frames: 80
+  neg_seq_sequences: 12
+- split: val
+  frames: 40
+  pos_frames: 20
+  neg_frames: 20
+  neg_frame: 0
+  neg_seq_frames: 20
+  neg_seq_sequences: 2
+- split: test
+  frames: 1306
+  pos_frames: 1004
+  neg_frames: 302
+  neg_frame: 0
+  neg_seq_frames: 302
+  neg_seq_sequences: 4
+notes:
+  s500_train_sequences:
+  - seq10_neg
+  - seq11_neg
+  - seq12_neg
+  - seq13_neg
+  - seq14_neg
+  - seq15_neg
+  - seq16_neg
+  - seq18_neg
+  - seq19_neg
+  - seq1_neg
+  - seq23_neg
+  - seq8_neg
+  s500_val_sequences:
+  - seq20_neg
+  - seq21_neg
+  candidate_frames:
+    train: 2582
+    val: 306
+roots:
+  polypgen_clean: <DATA_ROOT>/polypgen
+parent_pack:
+  name: polypgen-clean-test-extended
+  path: <DATA_ROOT>/data_packs_v3_staging/_parent/polypgen_clean_test_extended
+  manifest_sha256: a794b8ff1219f2afb7243d64ed0d3f2713a694a4ee3ba09f2689d46f6bdb0aa4
+  hashes:
+    test: 32d8ed6a5fb8494014ff8d4a3a693dc378852f2671274ffa9e07104295c72f4a
+derived_from:
+  polypgen_fewshot_s200:
+    path: <DATA_ROOT>/data_packs_v3_staging/k3/polypgen_fewshot/seed13/s200
+    files_sha256:
+      manifest.yaml: d11539906729f074fde300748bef18b6e26e9911c0c0eaf2bc743848f2cb1d01
+      test.csv: bec7ed0b8a00e01b035f8853f92655f3dc3c98b841608444041eece041c4ad5b
+      train.csv: 96dc9362cc9ed989b8aac0bc7cd16b2ce9aaca54efdeab8218d8aca5f36cf1ca
+      val.csv: 9aefe65728443d5365642e9c5132454effa008f38be67bf4efae9bea2254a059
+  polypgen_fewshot_s500:
+    path: <DATA_ROOT>/data_packs_v3_staging/k3/polypgen_fewshot/seed13/s500
+    files_sha256:
+      manifest.yaml: 49103327aaff66b40ba183251abb4c4cb04ef2c0b898aabcfad57445e3f8acbc
+      test.csv: 7189151195908572ae961c564acb7b37b6c18d2f7f74cefc5ee231cf77246dd1
+      train.csv: 726377ff4e6fbdd51b0e7f2cd24349c1ff13661c77975653ebd82d3cab744327
+      val.csv: 91c9eed666d70a48f2abdbf88c72d7e26444a3cf6f24e70af0bd7c8a729d77ba
+generator:
+  repo: polyp-db-analysis
+  git_commit: fca95979fa876d2baf202ae986317adc014d20cd
+  command: python scripts/build_polypgen_fewshot_s200seq.py --packs-root <DATA_ROOT>/data_packs_v3_staging
+    --out <DATA_ROOT>/data_packs_v3_staging/polypgen_fewshot_s200seq
+  seed: 3013
+  git_dirty: false
+  environment:
+    python: 3.12.16
+    pandas: 2.3.3
+    numpy: 2.5.4
+generated_at: '2026-10-31T08:01:45.716853+00:00'
+hashes:
+  train: 9acd753b4234b238f296687b04ea229d34cfa628425a99945733347a0d847ce1
+  val: 9db20197396312c070e92bcd641ab99e4714c70a7046d08ad5257bed15762090
+  test: 7189151195908572ae961c564acb7b37b6c18d2f7f74cefc5ee231cf77246dd1
+case_lengths:
+  3: 2
+  10: 1
+  28: 1
+  16: 1
+  9: 1
+  14: 1
+  80: 1
+  4: 2
+  5: 1
+  2: 2
+  20: 1
+  196: 1
+  189: 1
+  318: 1
+  116: 1
+  142: 1
+  43: 1
+  302: 1
+inputs:
+  polypgen_clean:
+    frames_parquet_sha256: 1098b9c410941b4d764a525493068d25cbd15426b51c49c722777af368c32f32
+    cases_parquet_sha256: 5a3f3c377ca5b55b3e54f620741b5d53093fb689b7ad9ba81cc6ec6806f34191
