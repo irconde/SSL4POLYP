@@ -1206,3 +1206,21 @@ Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
   (`results_v3/verification/e4_negtype_dry_test/`): 200iso and 500 equal to `e4_common_eval`, 168/168 quantities
   (max |diff| 5.0e-11); type contrasts exactly 0; bootstrap space equal to the registered E4 space.
 - Nothing trained before this entry.
+
+### 2026-10-31: E4 negative-type sensitivity results, tag `v3-cmpb-sens-e4-negtype-results`
+
+- Plan `docs/v3/sensitivity_e4_negative_type_plan.md` (SHA-256 `7f9c9964…14da414`) followed as registered, code
+  unchanged since `7a541ba`. Driver `results_v3/verification/sens_e4_negtype_driver.sh`.
+- Adaptations 09:25–09:36, GPUs 0 and 1: 60/60 complete at the first attempt, 0 failures, 0 retries, 0.37 GPU-hours.
+  Section 6 checks 1,500/1,500, 0 problems. Records and hashed manifest written; the 60 checkpoint SHA-256 equal
+  those in the metrics JSONs. Adaptation weights then deleted (0 `.pth` left). Arm B computed by each run, not
+  trained.
+- Analysis `scripts/v3/e4_negtype.py`, 176 s: 200iso and 500 equal `e4_common_eval`, 168/168 (max |diff| 5.0e-11);
+  bootstrap space = registered E4 space. All contrasts paired within run (`pairing_check.csv`, 180/180). Arm A, new
+  − registered 200-frame runs on the common set: balanced accuracy 0 in all 60 pairs, AUROC within ±6.1e-6.
+- Fixed reading, balanced accuracy, both intervals:
+  - **D − A:** type +0.1538 [0.1363, 0.1713; 0.0955, 0.2148] → **type matters**; size −0.0114 [−0.0513, 0.0285;
+    −0.0594, 0.0337] → **not shown**.
+  - **C − A** (secondary): type +0.1918 [0.1546, 0.2289; 0.1329, 0.2424] → **type matters**; size −0.0934
+    [−0.1193, −0.0676; −0.1394, −0.0442] → **opposite direction**.
+- Post hoc sensitivity analysis: no Holm, no verdicts. Registered results unchanged.

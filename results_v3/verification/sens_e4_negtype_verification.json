@@ -1,0 +1,21 @@
+{
+  "phase": "e4negtype",
+  "expected_runs": 60,
+  "complete_runs": 60,
+  "checks": 1500,
+  "checks_passed": 1500,
+  "checks_by_criterion": {
+    "reload": 60,
+    "epoch": 60,
+    "ckpt_sha": 60,
+    "csv_columns": 360,
+    "pred": 360,
+    "json_vs_csv": 420,
+    "tau": 120,
+    "partition_seed": 60
+  },
+  "git_commits": {
+    "7a541ba96fce1ed7dcf0ab7ea36d722c3178e705": 60
+  },
+  "problems": []
+}
