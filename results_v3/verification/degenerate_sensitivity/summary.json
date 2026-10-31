@@ -1,0 +1,43 @@
+{
+ "root": "checkpoints_v3/campaign/classification",
+ "regimes": [
+  "sup_imnet",
+  "ssl_imnet",
+  "ssl_colon",
+  "ssl_imnet_matched"
+ ],
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "bootstrap_units": {
+  "polypgen": {
+   "neg": 24,
+   "pos": 6
+  }
+ },
+ "bootstrap_space_equals_registered_e4": true,
+ "degenerate_views": 49,
+ "registered_check": {
+  "n": 108,
+  "exact": 108,
+  "max_abs_diff": 4.967526390231569e-11
+ },
+ "H7": {
+  "registered": -0.07484029021892456,
+  "a_exclusion": -0.04233035197993672,
+  "share_of_registered_effect_removed_by_a": 0.43439086278111716
+ },
+ "elapsed_s": 590.4
+}
