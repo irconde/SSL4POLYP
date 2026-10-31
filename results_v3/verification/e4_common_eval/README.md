@@ -30,6 +30,12 @@ the four budgets. Analysis of existing data only: nothing was trained and no reg
   The original-split contrasts use every E4 view, so the bootstrap spaces and draws are those of the registered e4
   family. The common-set views are subsets of the same units and use the same draws.
 
+**Bootstrap replicates:** on the common set, the negatives of each pack come from 4 sequences. In 309 of the 2000
+bootstrap replicates some pack has no negatives, so balanced accuracy, specificity and AUROC are undefined for it. As in
+the registered analysis, those replicates are discarded: the bootstrap CIs of balanced accuracy, specificity and AUROC
+use 1691 replicates (column `boot_B` of the CSVs); sensitivity uses 2000. The original 500-frame split is the common
+set, so the same holds for its registered contrasts (Table S17).
+
 ## Check
 
 The original-split contrasts reproduce the registered values (`results_v3/analysis/contrast_summary.csv`, ids

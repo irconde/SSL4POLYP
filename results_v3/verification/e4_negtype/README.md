@@ -35,6 +35,10 @@ registered before launching, `docs/v3/sensitivity_e4_negative_type_plan.md` (SHA
 - **Reproduction check:** 200iso and 500 equal `../e4_common_eval/`, 168/168 quantities (max |diff| 5.0e-11;
   `common_eval_check.csv`).
 - **Bootstrap:** the space equals the registered E4 space (6 positive units, 24 negative units).
+- **Bootstrap replicates:** on the common set, the negatives of each pack come from 4 sequences. In 309 of the 2000
+  bootstrap replicates some pack has no negatives, so balanced accuracy, specificity and AUROC are undefined for it. As
+  in the registered analysis, those replicates are discarded: the bootstrap CIs of balanced accuracy, specificity and
+  AUROC use 1691 replicates (column `boot_B` of the CSVs); sensitivity uses 2000.
 - **D's τ:** no run kept the inherited τ for D, in any condition.
 
 ### Pairing
