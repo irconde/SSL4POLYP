@@ -1,0 +1,6 @@
+k,test_pos_cases,test_neg_cases,val_pos_cases,val_neg_cases,train_pos_cases,train_neg_cases,e1_p5_train_cases,e1_p10_train_cases,e1_p25_train_cases,e1_p50_train_cases,e1_p100_train_cases
+1,15,15,15,15,70,70,8,14,36,70,140
+2,15,15,15,15,70,70,8,14,36,70,140
+3,15,15,15,15,70,70,8,14,36,70,140
+4,15,15,15,15,70,70,8,14,36,70,140
+5,15,15,15,15,70,70,8,14,36,70,140
