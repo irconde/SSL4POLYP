@@ -133,6 +133,9 @@ SHA-256 of every split CSV.
 >
 > Full mapping: [docs/history-rewrite.csv](https://github.com/irconde/polyp-db-analysis/blob/main/docs/history-rewrite.csv)
 > in `polyp-db-analysis`.
+>
+> The `polypgen_fewshot_s200seq` packs were generated after the rewrite, with `polyp-db-analysis` commits `56c7a1b`
+> and `fca9597`. Their hashes are unchanged and current.
 
 Campaign v3 uses `data_packs/v3/`:
 
@@ -140,7 +143,11 @@ Campaign v3 uses `data_packs/v3/`:
   103, 104);
 - `k*/sun_subsets`: nested E1 subsets (seed 13);
 - `k*/polypgen_fewshot/seed{13,29,47}/s{50,100,200,500}`: E4 packs (seed 1000·k + s);
-- `_parent/`: the PolypGen parent packs; `REPORT.txt`: the generation report.
+- `_parent/`: the PolypGen parent packs; `REPORT.txt`: the generation report;
+- `polypgen_fewshot_s200seq/k*/seed{13,29,47}`: the 200-frame packs with sequence negatives of the E4
+  negative-type sensitivity analysis (`docs/v3/sensitivity_e4_negative_type_plan.md`), with their own `index.yaml`
+  and `composition.csv`. They were generated with `polyp-db-analysis` commits `56c7a1b` and `fca9597`, and are not
+  part of the registered campaign.
 
 `data_packs/v3/index.yaml` lists the seeds and the SHA-256 of all 221 CSVs. The CSVs are stored byte for
 byte (CRLF line endings, `-text` in `.gitattributes`). To verify them (`ssl4polyp-ft`):
@@ -150,9 +157,15 @@ python scripts/v3/verify_data_packs.py --v3 --out <dir>                 # CSVs a
 python scripts/v3/verify_data_packs.py --v3 --skip-images --out <dir>   # CSVs only (no data needed)
 ```
 
-For each of the 91 pack directories of `data_packs/v3/` the script checks every CSV SHA-256 against
-`index.yaml` and against the pack's `manifest.yaml`, the frame, positive and negative counts, the parent hashes
-declared by the subsets and few-shot packs, and that the index and the files on disk list the same 221 CSVs.
+For each of the 106 pack directories of `data_packs/v3/` (91 of the campaign and the 15
+`polypgen_fewshot_s200seq` packs) the script checks:
+
+- every CSV SHA-256, against `index.yaml` (for the s200seq packs, their own `polypgen_fewshot_s200seq/index.yaml`) and
+  against the pack's `manifest.yaml`;
+- the frame, positive and negative counts;
+- the parent hashes declared by the subsets and few-shot packs;
+- that the indexes and the files on disk list the same 266 CSVs (221 + 45).
+
 Without `--skip-images` it also checks that every referenced image exists under the roots of `data/roots.json`,
 that its size matches the CSV and, for PolypGen, its SHA-1 against `manifests/frames.csv`. It writes
 `pack_hashes_v3.csv` and `pack_verification_v3.json` to `--out`, prints the summary (`"passed": true`, no
