@@ -1,0 +1,44 @@
+[bootstrap] neg: 24 contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (112s)
+{
+ "root": "checkpoints_v3/campaign/classification",
+ "budget": 50,
+ "regimes": [
+  "sup_imnet",
+  "ssl_imnet",
+  "ssl_colon",
+  "ssl_imnet_matched"
+ ],
+ "partitions": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "seeds": [
+  13,
+  29,
+  47
+ ],
+ "B": 2000,
+ "boot_seed": 12345,
+ "model_variant": "ttest",
+ "bootstrap_units": {
+  "polypgen": {
+   "neg": 24,
+   "pos": 6
+  }
+ },
+ "bootstrap_space_equals_registered_neg": true,
+ "boot_B_valid": {
+  "min": 1997,
+  "max": 2000
+ },
+ "n_contrasts": 24,
+ "registered_check": {
+  "n": 36,
+  "exact": 36,
+  "max_abs_diff": 4.560898880789921e-11
+ },
+ "elapsed_s": 112.0
+}
