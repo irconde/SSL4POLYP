@@ -137,6 +137,19 @@ SHA-256 of every split CSV.
 > The `polypgen_fewshot_s200seq` packs were generated after the rewrite, with `polyp-db-analysis` commits `56c7a1b`
 > and `fca9597`. Their hashes are unchanged and current.
 
+> **Commit hashes of this repository.** The run records (`RUN_COMPLETE.json`, `events.jsonl`, `results_v3/`) cite
+> commits of this repository by their hashes before its history was rewritten, with identical file contents. Other
+> commit hashes cited in `results_v3/` are translated by the full mapping.
+>
+> | Cited in run records | Current commit | Content |
+> |---|---|---|
+> | `8fdbb6b` | `d422280` | Code from which the SUP-imnet, SSL-imnet and SSL-colon campaign runs were launched |
+> | `3afbe6f` | `5fa9a78` | Code from which the SSL-imnet-matched campaign runs were launched |
+> | `3a38993` | `5d292f2` | SAP v3.2 revision c |
+> | `213efe5` | `f203f16` | SAP v3.1 registration and code from which the learning-rate sweep was run |
+>
+> Full mapping: [docs/history-rewrite.csv](docs/history-rewrite.csv).
+
 Campaign v3 uses `data_packs/v3/`:
 
 - `k1`…`k5/base`: SUN partitions (`polypdb sun morph`, 33 frames per case, partition seeds 47, 101, 102,
@@ -298,7 +311,13 @@ govern were generated or analysed. Each change is justified in
 Full hashes are in `results_v3/RUNLOG.md`. The file `plan_analisis_estadistico_v3_2.md` now holds revision c;
 the original v3.2 and revision b are at their tags.
 
-[^1]: Registered in commit `213efe5`, before the sweep; `v3-cmpb-lr` is the first tag that contains it.
+**Timing.** SAP versions v3 to v3.2c were registered before the campaign started (`v3-cmpb-sap32c` at 2026-10-15
+10:21:20 +02:00; first run at 10:23:41). v3.3 replaced only the inference procedure (section 4). It was tagged at
+2026-10-17 13:14:26 +02:00, after the last campaign run had finished (12:52:28), and before any hypothesis estimate
+was computed (`v3-cmpb-analysis-results`, 15:31:35). The per-run test metrics, which the training script writes into
+each run directory, already existed before v3.3, but no hypothesis estimate did.
+
+[^1]: Registered in commit `f203f16` (`213efe5` in the sweep run records), before the sweep; `v3-cmpb-lr` is the first tag that contains it.
 
 Other campaign tags:
 
