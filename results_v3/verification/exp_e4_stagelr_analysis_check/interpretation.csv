@@ -1,0 +1,4 @@
+contrast,id,registered_id,registered_estimate,estimate,t_ci_lo,t_ci_hi,boot_lo,boot_hi,boot_B,category
+H7' (C' - A),C'-A|all|pooled,C-A|all|pooled,-0.07484029022,-0.07484029022,-0.1012042138,-0.04847636665,-0.1352850697,-0.01499337403,1691,robust
+D' - A,D'-A|all|pooled,D-A|all|pooled,-0.02127855798,-0.02127855798,-0.03289704402,-0.009660071935,-0.08010431755,0.03373947081,1691,attenuated
+D' - C',D'-C'|all|pooled,D-C|all|pooled,0.05356173224,0.05356173224,0.03335541749,0.07376804698,0.04066739148,0.0625819163,1691,robust
