@@ -1,0 +1,157 @@
+{
+ "runs": [
+  {
+   "run": "flagon/k1/e4/s100/sup_imnet_seed13",
+   "epochs_logged": 13,
+   "epochs_trained": 13,
+   "stage1_epochs": 4,
+   "max_rel_err": 2.9620530728785675e-11,
+   "rel_err_ok": true,
+   "backbone0_stage1": true,
+   "trainable_head": [
+    1538
+   ],
+   "trainable_backbone_stage1": [
+    0
+   ],
+   "trainable_backbone_stage2": [
+    14175744
+   ],
+   "expected_stage2": 14175744,
+   "stage2_ok": true,
+   "run_block": {
+    "e4_stage_lr_persist": true,
+    "e4_unfreeze_sequential_blocks": true
+   },
+   "first_rows": [
+    [
+     1,
+     0.00025,
+     0.0
+    ],
+    [
+     2,
+     0.0005,
+     0.0
+    ],
+    [
+     4,
+     0.001,
+     0.0
+    ],
+    [
+     5,
+     0.0005,
+     1.5e-05
+    ],
+    [
+     6,
+     0.00049904867452,
+     1.4971460236e-05
+    ]
+   ]
+  },
+  {
+   "run": "flagon/k1/e4/s50/sup_imnet_seed13",
+   "epochs_logged": 17,
+   "epochs_trained": 17,
+   "stage1_epochs": 10,
+   "max_rel_err": 1.9999952214788358e-11,
+   "rel_err_ok": true,
+   "backbone0_stage1": true,
+   "trainable_head": [
+    1538
+   ],
+   "trainable_backbone_stage1": [
+    0
+   ],
+   "trainable_backbone_stage2": [
+    7087872
+   ],
+   "expected_stage2": 7087872,
+   "stage2_ok": true,
+   "run_block": {
+    "e4_stage_lr_persist": true,
+    "e4_unfreeze_sequential_blocks": true
+   },
+   "first_rows": [
+    [
+     1,
+     8.3333333333e-05,
+     0.0
+    ],
+    [
+     2,
+     0.00016666666667,
+     0.0
+    ],
+    [
+     10,
+     0.00048096988313,
+     0.0
+    ],
+    [
+     11,
+     0.00046650635095,
+     4.6650635095e-06
+    ],
+    [
+     12,
+     0.00044833833507,
+     4.4833833507e-06
+    ]
+   ]
+  },
+  {
+   "run": "flagon/k1/e4/s50/ssl_colon_seed13",
+   "epochs_logged": 14,
+   "epochs_trained": 14,
+   "stage1_epochs": 10,
+   "max_rel_err": 1.9999952214788358e-11,
+   "rel_err_ok": true,
+   "backbone0_stage1": true,
+   "trainable_head": [
+    1538
+   ],
+   "trainable_backbone_stage1": [
+    0
+   ],
+   "trainable_backbone_stage2": [
+    7087872
+   ],
+   "expected_stage2": 7087872,
+   "stage2_ok": true,
+   "run_block": {
+    "e4_stage_lr_persist": true,
+    "e4_unfreeze_sequential_blocks": null
+   },
+   "first_rows": [
+    [
+     1,
+     8.3333333333e-05,
+     0.0
+    ],
+    [
+     2,
+     0.00016666666667,
+     0.0
+    ],
+    [
+     10,
+     0.00048096988313,
+     0.0
+    ],
+    [
+     11,
+     0.00046650635095,
+     4.6650635095e-06
+    ],
+    [
+     12,
+     0.00044833833507,
+     4.4833833507e-06
+    ]
+   ]
+  }
+ ]
+}

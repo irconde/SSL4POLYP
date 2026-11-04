@@ -1,0 +1,41 @@
+k1/e4/s100/sup_imnet_seed13            SUPImNet_PolypGenFew100_s13_test_outputs.csv               5ea1af558108 5ea1af558108 IDENTICAL
+k1/e4/s100/sup_imnet_seed13            SUPImNet_PolypGenFew100_s13_train_outputs.csv              ed1d1eb34d18 ed1d1eb34d18 IDENTICAL
+k1/e4/s100/sup_imnet_seed13            SUPImNet_PolypGenFew100_s13_val_outputs.csv                f3aff537d523 f3aff537d523 IDENTICAL
+k1/e4/s100/sup_imnet_seed13            SUPImNet_PolypGenFew100_s13_zeroshot_outputs.csv           2c702959ca3b 2c702959ca3b IDENTICAL
+k1/e4/s100/sup_imnet_seed13            SUPImNet_PolypGenFew100_s13_zeroshot_train_outputs.csv     7333e3e9fa2a 7333e3e9fa2a IDENTICAL
+k1/e4/s100/sup_imnet_seed13            SUPImNet_PolypGenFew100_s13_zeroshot_val_outputs.csv       85e97cccc199 85e97cccc199 IDENTICAL
+k1/e4/s100/sup_imnet_seed13            test.csv                                                   94792455e648 94792455e648 IDENTICAL
+k1/e4/s100/sup_imnet_seed13            train.csv                                                  912d2220854f 912d2220854f IDENTICAL
+k1/e4/s100/sup_imnet_seed13            val.csv                                                    b6b5f2937881 b6b5f2937881 IDENTICAL
+   e4_arms (A-D tau and test metrics) equal: True
+k1/e4/s50/ssl_colon_seed13             SSLColon_PolypGenFew50_s13_test_outputs.csv                8451f6cf37b5 8451f6cf37b5 IDENTICAL
+k1/e4/s50/ssl_colon_seed13             SSLColon_PolypGenFew50_s13_train_outputs.csv               108b88fee098 108b88fee098 IDENTICAL
+k1/e4/s50/ssl_colon_seed13             SSLColon_PolypGenFew50_s13_val_outputs.csv                 0cf4341ce6fb 0cf4341ce6fb IDENTICAL
+k1/e4/s50/ssl_colon_seed13             SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv            6bbf6fe5f3d7 6bbf6fe5f3d7 IDENTICAL
+k1/e4/s50/ssl_colon_seed13             SSLColon_PolypGenFew50_s13_zeroshot_train_outputs.csv      5433af1eb12e 5433af1eb12e IDENTICAL
+k1/e4/s50/ssl_colon_seed13             SSLColon_PolypGenFew50_s13_zeroshot_val_outputs.csv        aba288ec0d5e aba288ec0d5e IDENTICAL
+k1/e4/s50/ssl_colon_seed13             test.csv                                                   fe8a35c6dc24 fe8a35c6dc24 IDENTICAL
+k1/e4/s50/ssl_colon_seed13             train.csv                                                  229f993cf1fb 229f993cf1fb IDENTICAL
+k1/e4/s50/ssl_colon_seed13             val.csv                                                    4863fc9a12f1 4863fc9a12f1 IDENTICAL
+   e4_arms (A-D tau and test metrics) equal: True
+k1/e4/s200/ssl_imnet_seed13            SSLImNet_PolypGenFew200_s13_test_outputs.csv               bc3b693c53ef bc3b693c53ef IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            SSLImNet_PolypGenFew200_s13_train_outputs.csv              6f69f48fec40 6f69f48fec40 IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            SSLImNet_PolypGenFew200_s13_val_outputs.csv                03978c8f575d 03978c8f575d IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            SSLImNet_PolypGenFew200_s13_zeroshot_outputs.csv           d8ed14ce8ecd d8ed14ce8ecd IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            SSLImNet_PolypGenFew200_s13_zeroshot_train_outputs.csv     40d64e9e3c3e 40d64e9e3c3e IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            SSLImNet_PolypGenFew200_s13_zeroshot_val_outputs.csv       2dd4260b1437 2dd4260b1437 IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            test.csv                                                   5eafeffa96f7 5eafeffa96f7 IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            train.csv                                                  77c3a2d6236d 77c3a2d6236d IDENTICAL
+k1/e4/s200/ssl_imnet_seed13            val.csv                                                    c99b97d559f8 c99b97d559f8 IDENTICAL
+   e4_arms (A-D tau and test metrics) equal: True
+k1/e4/s500/ssl_imnet_matched_seed13    SSLImNetMatched_PolypGenFew500_s13_test_outputs.csv        a9b0f791a6cf a9b0f791a6cf IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    SSLImNetMatched_PolypGenFew500_s13_train_outputs.csv       1699959e767c 1699959e767c IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    SSLImNetMatched_PolypGenFew500_s13_val_outputs.csv         7a589fa64b63 7a589fa64b63 IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    SSLImNetMatched_PolypGenFew500_s13_zeroshot_outputs.csv    33ed6e953ca7 33ed6e953ca7 IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    SSLImNetMatched_PolypGenFew500_s13_zeroshot_train_outputs.csv 6385bfb33e5d 6385bfb33e5d IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    SSLImNetMatched_PolypGenFew500_s13_zeroshot_val_outputs.csv 1227c1a786bb 1227c1a786bb IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    test.csv                                                   26d213b1ae9b 26d213b1ae9b IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    train.csv                                                  c9b1b147cd9f c9b1b147cd9f IDENTICAL
+k1/e4/s500/ssl_imnet_matched_seed13    val.csv                                                    c676c8e413dc c676c8e413dc IDENTICAL
+   e4_arms (A-D tau and test metrics) equal: True
+CSV identical 36 of 36
