@@ -61,11 +61,23 @@
   "D": 3
  },
  "interpretation": {
-  "H7' (C' - A)": "robust",
-  "D' - A": "attenuated",
-  "D' - C'": "robust"
+  "H7' (C' - A)": {
+   "registered_category": "robust",
+   "category": "robust",
+   "change": "maintained"
+  },
+  "D' - A": {
+   "registered_category": "attenuated",
+   "category": "attenuated",
+   "change": "maintained"
+  },
+  "D' - C'": {
+   "registered_category": "robust",
+   "category": "robust",
+   "change": "maintained"
+  }
  },
- "elapsed_s": 813.0,
+ "elapsed_s": 811.0,
  "registered_check": {
   "n": 366,
   "exact": 366,

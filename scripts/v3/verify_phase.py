@@ -41,10 +41,19 @@ def main() -> int:
     parser.add_argument("--root", default=cp.CKPT_ROOT)
     parser.add_argument("--lr-override", default=None)
     parser.add_argument("--records", default="results_v3/campaign")
+    parser.add_argument("--stagelr-variant", choices=cp.STAGELR_VARIANTS, default=None,
+                        help="phase e4stagelr only (docs/v3/exploratory_e4_stagelr_plan.md)")
     args = parser.parse_args()
+    if (args.phase == "e4stagelr") != (args.stagelr_variant is not None):
+        sys.exit("--stagelr-variant is required by, and only accepted with, phase e4stagelr")
+    if args.phase == "e4stagelr":
+        args.root, args.records = cp.STAGELR_ROOTS[args.stagelr_variant], rc.STAGELR_RECORDS
     cp.set_campaign(args.root, args.lr_override)
-    matrix = cp.negtype_matrix if args.phase == "e4negtype" else cp.run_matrix
-    runs = [r for r in matrix(tuple(args.regimes)) if r["experiment"] in rc.PHASES[args.phase]]
+    if args.phase == "e4stagelr":
+        matrix_runs = cp.stagelr_matrix(tuple(args.regimes), args.stagelr_variant)
+    else:
+        matrix_runs = (cp.negtype_matrix if args.phase == "e4negtype" else cp.run_matrix)(tuple(args.regimes))
+    runs = [r for r in matrix_runs if r["experiment"] in rc.PHASES[args.phase]]
     results, problems = [], []
     commits = Counter()
     for run in runs:
@@ -69,6 +78,13 @@ def main() -> int:
                 lr_ok = str(run_block.get("lr_source", "")).startswith("model config")
             checks.append({"run": name, "criterion": "lr", "passed": lr_ok,
                            "evidence": f"lr={run_block.get('lr')} source={run_block.get('lr_source')}"})
+        if run["experiment"] == "E4stagelr":
+            unfreeze = run["stagelr_variant"] == "declared" and run["regime"] == "sup_imnet"
+            flags_ok = (run_block.get("e4_stage_lr_persist") is True
+                        and bool(run_block.get("e4_unfreeze_sequential_blocks", False)) is unfreeze)
+            checks.append({"run": name, "criterion": "stagelr_flags", "passed": flags_ok,
+                           "evidence": f"persist={run_block.get('e4_stage_lr_persist')} "
+                                       f"unfreeze={run_block.get('e4_unfreeze_sequential_blocks')}"})
         checks.append({"run": name, "criterion": "partition_seed", "passed": meta_ok,
                        "evidence": f"partition={run_block.get('partition')} seed={payload.get('seed')}"})
         for c in checks:
@@ -80,7 +96,8 @@ def main() -> int:
     summary = {"phase": args.phase, "expected_runs": len(runs), "complete_runs": sum(rc.is_complete(r) for r in runs),
                "checks": len(results), "checks_passed": sum(c["passed"] for c in results),
                "checks_by_criterion": dict(by_criterion), "git_commits": dict(commits), "problems": problems}
-    phase_dir = args.phase if set(args.regimes) == set(cp.REGIMES) else f"{args.phase}_{'_'.join(args.regimes)}"
+    phase_name = f"{args.phase}_{args.stagelr_variant}" if args.phase == "e4stagelr" else args.phase
+    phase_dir = phase_name if set(args.regimes) == set(cp.REGIMES) else f"{phase_name}_{'_'.join(args.regimes)}"
     out = args.out or REPO / f"{args.records}/{phase_dir}/verification.json"
     out.write_text(json.dumps(summary, indent=2))
     print(json.dumps({k: v for k, v in summary.items() if k != "problems"}, indent=2))

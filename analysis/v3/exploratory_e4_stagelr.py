@@ -22,7 +22,9 @@ D − A, D − C as references; SUP-imnet only: C'p − A, D'p − A, D'p − C'
 Inference with the registered functions: t-test on the 5 partition means (``mixed.fit_many``, variant ``ttest``) and
 cluster bootstrap of the E4 units (``design.bootstrap``, B = 2000, seed 12345). The bootstrap space is checked to equal
 the registered e4 space, so the draws are those of the registered analysis. The interpretation rules of the plan are
-applied to the three global contrasts H7', D' − A and D' − C' only.
+applied to the three global contrasts H7', D' − A and D' − C' only; the same rule applied to the registered
+contrast gives its reference category, and the report says whether the new category is maintained, weakened or
+strengthened (plan revision 1).
 
 Identity check (before any new run is analysed): ``--identity`` uses the registered root in place of both new roots.
 H7 and the per-budget arm contrasts (pooled and per regime) must then reproduce ``results_v3/analysis/contrast_summary.csv``
@@ -70,6 +72,8 @@ PERSISTONLY_PAIRS = (("Cp", "A"), ("Dp", "A"), ("Dp", "Cp"), ("Cp", "C"), ("Dp",
 # the three global contrasts with an interpretation rule, and the registered contrast whose sign they are compared with
 RULED = {("Cs", "A"): ("C", "A"), ("Ds", "A"): ("D", "A"), ("Ds", "Cs"): ("D", "C")}
 NAME = {("Cs", "A"): "H7' (C' - A)", ("Ds", "A"): "D' - A", ("Ds", "Cs"): "D' - C'"}
+# plan r1: order of the categories, to report whether the new category is maintained, weakened or strengthened
+STRENGTH = {"reversed": 0, "not supported": 1, "attenuated": 2, "robust": 3}
 
 
 def cid(treat: str, base: str, budget, regime: str) -> str:
@@ -238,10 +242,19 @@ def main(argv=None) -> int:
     interp = []
     for (t, a), (rt, ra) in RULED.items():
         r, ref = res_i.loc[cid(t, a, "all", "pooled")], res_i.loc[cid(rt, ra, "all", "pooled")]
+        new_cat = interpret(r["estimate"], r["t_ci_lo"], r["t_ci_hi"], r["boot_lo"], r["boot_hi"], ref["estimate"])
+        # plan r1: the same rule applied to the registered contrast gives its reference category
+        reg_cat = interpret(ref["estimate"], ref["t_ci_lo"], ref["t_ci_hi"], ref["boot_lo"], ref["boot_hi"], ref["estimate"])
+        rank_new, rank_reg = STRENGTH.get(new_cat), STRENGTH.get(reg_cat)
+        change = ("undefined" if rank_new is None or rank_reg is None else
+                  "maintained" if rank_new == rank_reg else "strengthened" if rank_new > rank_reg else "weakened")
         interp.append({"contrast": NAME[(t, a)], "id": cid(t, a, "all", "pooled"), "registered_id": cid(rt, ra, "all", "pooled"),
-                       "registered_estimate": ref["estimate"], "estimate": r["estimate"], "t_ci_lo": r["t_ci_lo"],
+                       "registered_estimate": ref["estimate"], "registered_t_ci_lo": ref["t_ci_lo"],
+                       "registered_t_ci_hi": ref["t_ci_hi"], "registered_boot_lo": ref["boot_lo"],
+                       "registered_boot_hi": ref["boot_hi"], "registered_category": reg_cat,
+                       "estimate": r["estimate"], "t_ci_lo": r["t_ci_lo"],
                        "t_ci_hi": r["t_ci_hi"], "boot_lo": r["boot_lo"], "boot_hi": r["boot_hi"], "boot_B": r["boot_B"],
-                       "category": interpret(r["estimate"], r["t_ci_lo"], r["t_ci_hi"], r["boot_lo"], r["boot_hi"], ref["estimate"])})
+                       "category": new_cat, "change": change})
     interp = pd.DataFrame(interp)
 
     # degenerate predictors (registered rule, cut 0.10) per arm, budget and regime
@@ -303,7 +316,8 @@ def main(argv=None) -> int:
             "model_variant": MODEL_VARIANT, "contrasts": len(defs), "bootstrap_units": {str(g): v for g, v in counts.items()},
             "bootstrap_space_equals_registered_e4": True, "new_runs": infos,
             "degenerate_totals": deg_tot.set_index("arm")["degenerate"].to_dict(), "registered_degenerate_run_metrics": reg_deg,
-            "interpretation": interp.set_index("contrast")["category"].to_dict(), "elapsed_s": round(time.time() - t0, 1)}
+            "interpretation": interp.set_index("contrast")[["registered_category", "category", "change"]].to_dict("index"),
+            "elapsed_s": round(time.time() - t0, 1)}
     md = ["# E4-stagelr: arm contrasts with the declared stage learning rates", "",
           "Exploratory analysis, not registered: no Holm correction, no confirmation verdicts. Balanced accuracy.", "",
           to_markdown(interp, "Global contrasts with an interpretation rule"),

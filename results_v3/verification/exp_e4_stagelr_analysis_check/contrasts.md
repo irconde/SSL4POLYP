@@ -4,11 +4,11 @@ Exploratory analysis, not registered: no Holm correction, no confirmation verdic
 
 ### Global contrasts with an interpretation rule
 
-| contrast | id | registered_id | registered_estimate | estimate | t_ci_lo | t_ci_hi | boot_lo | boot_hi | boot_B | category |
-|---|---|---|---|---|---|---|---|---|---|---|
-| H7' (C' - A) | C'-A/all/pooled | C-A/all/pooled | -0.0748 | -0.0748 | -0.1012 | -0.0485 | -0.1353 | -0.0150 | 1691 | robust |
-| D' - A | D'-A/all/pooled | D-A/all/pooled | -0.0213 | -0.0213 | -0.0329 | -0.0097 | -0.0801 | 0.0337 | 1691 | attenuated |
-| D' - C' | D'-C'/all/pooled | D-C/all/pooled | 0.0536 | 0.0536 | 0.0334 | 0.0738 | 0.0407 | 0.0626 | 1691 | robust |
+| contrast | id | registered_id | registered_estimate | registered_t_ci_lo | registered_t_ci_hi | registered_boot_lo | registered_boot_hi | registered_category | estimate | t_ci_lo | t_ci_hi | boot_lo | boot_hi | boot_B | category | change |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| H7' (C' - A) | C'-A/all/pooled | C-A/all/pooled | -0.0748 | -0.1012 | -0.0485 | -0.1353 | -0.0150 | robust | -0.0748 | -0.1012 | -0.0485 | -0.1353 | -0.0150 | 1691 | robust | maintained |
+| D' - A | D'-A/all/pooled | D-A/all/pooled | -0.0213 | -0.0329 | -0.0097 | -0.0801 | 0.0337 | attenuated | -0.0213 | -0.0329 | -0.0097 | -0.0801 | 0.0337 | 1691 | attenuated | maintained |
+| D' - C' | D'-C'/all/pooled | D-C/all/pooled | 0.0536 | 0.0334 | 0.0738 | 0.0407 | 0.0626 | robust | 0.0536 | 0.0334 | 0.0738 | 0.0407 | 0.0626 | 1691 | robust | maintained |
 
 ### Global and per-budget contrasts (mean of regimes)
 
