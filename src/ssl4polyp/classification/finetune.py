@@ -46,8 +46,12 @@ def normalise_finetune_mode(raw: Any, *, default: str = "full") -> str:
     return mode
 
 
-def configure_finetune_parameters(model: nn.Module, mode: str) -> None:
-    """Toggle ``requires_grad`` flags according to the desired fine-tuning regime."""
+def configure_finetune_parameters(model: nn.Module, mode: str, *, sequential_blocks: bool = False) -> None:
+    """Toggle ``requires_grad`` flags according to the desired fine-tuning regime.
+
+    ``sequential_blocks`` (exploratory, ``--e4-unfreeze-sequential-blocks``) also accepts ``model.blocks`` stored as
+    ``nn.Sequential`` (timm 0.4.12 ViT, SUP-imnet); the default ignores it, as in the registered campaign.
+    """
 
     resolved_mode = normalise_finetune_mode(mode, default="full")
 
@@ -74,7 +78,8 @@ def configure_finetune_parameters(model: nn.Module, mode: str) -> None:
                 _clear_param_grad(param)
 
         blocks = getattr(model, "blocks", None)
-        if isinstance(blocks, (nn.ModuleList, list, tuple)) and len(blocks) > 0:
+        block_types = (nn.ModuleList, list, tuple) + ((nn.Sequential,) if sequential_blocks else ())
+        if isinstance(blocks, block_types) and len(blocks) > 0:
             tail_count = 0
             if resolved_mode == "head+1":
                 tail_count = 1

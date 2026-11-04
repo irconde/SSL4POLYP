@@ -138,6 +138,71 @@ def negtype_matrix(regimes=REGIMES) -> List[Dict[str, object]]:
     return runs
 
 
+# Exploratory E4-stagelr (docs/v3/exploratory_e4_stagelr_plan.md), never in the registered matrix.
+# declared: --e4-stage-lr-persist in the four regimes, plus --e4-unfreeze-sequential-blocks for SUP-imnet (240 runs);
+# persistonly: SUP-imnet with --e4-stage-lr-persist only (60 runs).
+STAGELR_VARIANTS = ("declared", "persistonly")
+STAGELR_ROOTS = {"declared": "checkpoints_v3/exp_e4_stagelr/classification",
+                 "persistonly": "checkpoints_v3/exp_e4_stagelr_persistonly/classification"}
+
+
+def stagelr_flags(regime: str, variant: str) -> List[str]:
+    flags = ["--e4-stage-lr-persist"]
+    if variant == "declared" and regime == "sup_imnet":
+        flags.append("--e4-unfreeze-sequential-blocks")
+    return flags
+
+
+def stagelr_matrix(regimes=REGIMES, variant: str = "declared") -> List[Dict[str, object]]:
+    """E4 adaptations of the registered matrix with the declared stage learning rates: the registered E4 argv and
+    parents (CKPT_ROOT) plus the opt-in flags, written under the variant's own root."""
+
+    if variant not in STAGELR_VARIANTS:
+        raise ValueError(f"unknown E4-stagelr variant {variant!r}")
+    if variant == "persistonly":
+        regimes = tuple(r for r in regimes if r == "sup_imnet")
+    root = STAGELR_ROOTS[variant]
+    runs: List[Dict[str, object]] = []
+    for k in PARTITIONS:
+        for seed in SEEDS:
+            for regime in regimes:
+                base = ["--partition", str(k), "--seed", str(seed), "--model-key", regime, "--roots", "data/roots.json"]
+                for size in SIZES:
+                    runs.append({"experiment": "E4stagelr", "k": k, "seed": seed, "regime": regime, "variant": f"s{size}",
+                                 "stagelr_variant": variant,
+                                 "argv": ["--exp-config", f"exp/v3/e4_budgets/s{size}.yaml", *base,
+                                          "--parent-checkpoint", parent_path(k, seed, regime, CKPT_ROOT),
+                                          *stagelr_flags(regime, variant),
+                                          "--output-dir", f"{root}/k{k}/e4/s{size}/{regime}_seed{seed}"]})
+    return runs
+
+
+def registered_parent_sha256() -> Dict[str, set]:
+    """Parent checkpoint SHA-256 recorded by the registered E4 runs (provenance.parent_run), by parent path."""
+
+    recorded: Dict[str, set] = defaultdict(set)
+    for path in (REPO / CKPT_ROOT).glob("k*/e4/s*/*_seed*/**/*_last.metrics.json"):
+        parent = json.loads(path.read_text())["provenance"]["parent_run"]
+        k, regime_seed = path.relative_to(REPO / CKPT_ROOT).parts[0], path.relative_to(REPO / CKPT_ROOT).parts[3]
+        regime, seed = regime_seed.rsplit("_seed", 1)
+        recorded[parent_path(int(k[1:]), int(seed), regime, CKPT_ROOT)].add(parent["checkpoint_sha256"])
+    return recorded
+
+
+def stagelr_parent_checks(runs: List[Dict[str, object]]) -> List[str]:
+    """Every parent exists and its SHA-256 equals the single value recorded by the registered E4 runs."""
+
+    recorded = registered_parent_sha256()
+    errors: List[str] = []
+    for parent in sorted({r["argv"][r["argv"].index("--parent-checkpoint") + 1] for r in runs}):
+        path = REPO / parent
+        if not path.exists():
+            errors.append(f"missing parent {parent}")
+        elif recorded.get(parent) != {sha256(path)}:
+            errors.append(f"parent SHA-256 differs from the registered record: {parent}")
+    return errors
+
+
 def check_run(run: Dict[str, object], resolved: Dict[str, object], index: dict) -> List[str]:
     """Return the list of SAP-rule violations for one resolved run."""
 
@@ -195,6 +260,19 @@ def check_run(run: Dict[str, object], resolved: Dict[str, object], index: dict) 
         expect(index["partitions"][k]["fewshot_pack_seeds"][seed] == 1000 * k + seed, "index pack seed")
         expect(a.lr_source == "finetune_schedule", f"lr source {a.lr_source}")
         expect(a.threshold_policy == "sun_val_frozen", f"policy {a.threshold_policy}")
+    if exp == "E4stagelr":
+        size = int(str(run["variant"])[1:])
+        pack = f"v3/k{k}/polypgen_fewshot/seed{seed}/s{size}"
+        variant = run["stagelr_variant"]
+        expect(a.parent_checkpoint == parent_path(k, seed, regime, CKPT_ROOT), f"parent {a.parent_checkpoint}")
+        expect(a.train_pack == pack and a.val_pack == pack and a.test_pack == pack, f"packs {a.train_pack}")
+        expect(a.lr_source == "finetune_schedule", f"lr source {a.lr_source}")
+        expect(a.threshold_policy == "sun_val_frozen", f"policy {a.threshold_policy}")
+        expect(getattr(a, "e4_stage_lr_persist", False) is True, "--e4-stage-lr-persist not set")
+        unfreeze = variant == "declared" and regime == "sup_imnet"
+        expect(getattr(a, "e4_unfreeze_sequential_blocks", False) is unfreeze,
+               f"--e4-unfreeze-sequential-blocks {getattr(a, 'e4_unfreeze_sequential_blocks', False)} != {unfreeze}")
+        expect(str(a.output_dir).startswith(STAGELR_ROOTS[variant] + "/"), f"output {a.output_dir}")
     if exp == "E4seq":
         pack = f"v3/polypgen_fewshot_s200seq/k{k}/seed{seed}"
         expect(a.parent_checkpoint == parent_path(k, seed, regime, CKPT_ROOT), f"parent {a.parent_checkpoint}")
@@ -284,14 +362,20 @@ def main() -> int:
     parser.add_argument("--root", default=CKPT_ROOT, help="checkpoint root of the campaign")
     parser.add_argument("--lr-override", default=None, help="explicit --override lr=<value> for sun_full and E1")
     parser.add_argument("--negtype", action="store_true", help="the E4 negative-type sensitivity runs instead of the campaign")
+    parser.add_argument("--stagelr", choices=STAGELR_VARIANTS, default=None,
+                        help="the exploratory E4-stagelr runs of this variant instead of the campaign")
     args = parser.parse_args()
     set_campaign(args.root, args.lr_override)
-    matrix = negtype_matrix if args.negtype else run_matrix
+    if args.stagelr:
+        matrix_runs = stagelr_matrix(tuple(args.regimes), args.stagelr)
+    else:
+        matrix_runs = (negtype_matrix if args.negtype else run_matrix)(tuple(args.regimes))
     index = yaml.safe_load((V3 / "index.yaml").read_text())
     sap = current_sap()
 
     plan_rows, failures = [], []
-    for run in matrix(tuple(args.regimes)):
+    parent_errors = stagelr_parent_checks(matrix_runs) if args.stagelr else []
+    for run in matrix_runs:
         try:
             resolved = resolve(run["argv"])
             errors = check_run(run, resolved, index)
@@ -321,14 +405,17 @@ def main() -> int:
             writer.writerows(rows)
     counts = Counter(r["experiment"] for r in plan_rows)
     summary = {"sap": sap, "runs": dict(counts), "total_runs": len(plan_rows), "run_failures": failures,
-               "partition_check_failures": part_errors, "pending_regimes": pending,
+               "partition_check_failures": part_errors + parent_errors, "pending_regimes": pending,
                "fewshot_s50_lt120_isolated": [r for r in composition if r.get("flag_lt120_isolated_neg")]}
     (args.out / f"campaign_plan_checks{args.tag}.json").write_text(json.dumps(summary, indent=2, default=str))
     print(json.dumps({k: summary[k] for k in ("sap", "runs", "total_runs")}, indent=2))
     print("run failures:", len(failures), failures[:3])
     print("partition check failures:", part_errors)
+    if args.stagelr:
+        print("parent checks:", len({r["argv"][r["argv"].index("--parent-checkpoint") + 1] for r in matrix_runs}),
+              "parents, failures:", parent_errors)
     print("pending:", [p["regime"] for p in pending])
-    return 0 if sap["match"] and not failures and not part_errors else 1
+    return 0 if sap["match"] and not failures and not part_errors and not parent_errors else 1
 
 
 if __name__ == "__main__":

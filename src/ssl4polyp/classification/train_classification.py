@@ -1171,9 +1171,31 @@ def _materialize_finetune_schedule(
 class FinetuneScheduleRuntime:
     """Runtime helper that applies fine-tuning stages as training progresses."""
 
-    def __init__(self, stages: Sequence[FinetuneStage]) -> None:
+    def __init__(
+        self,
+        stages: Sequence[FinetuneStage],
+        *,
+        persist_lrs: bool = False,
+        sequential_blocks: bool = False,
+    ) -> None:
         self.stages: list[FinetuneStage] = list(stages)
         self._current_stage_index: Optional[int] = None
+        # Exploratory opt-ins (docs/v3/exploratory_e4_stagelr_plan.md); both False = registered behaviour.
+        self.persist_lrs = bool(persist_lrs)
+        self.sequential_blocks = bool(sequential_blocks)
+        self._scheduler = None
+
+    def bind_scheduler(self, scheduler) -> None:
+        """Epoch LambdaLR whose base_lrs carry the stage rates (--e4-stage-lr-persist, interpretation I2)."""
+        if not isinstance(scheduler, torch.optim.lr_scheduler.LambdaLR):
+            raise RuntimeError("--e4-stage-lr-persist requires the cosine (LambdaLR) scheduler.")
+        if self._current_stage_index is not None:
+            raise RuntimeError("--e4-stage-lr-persist: scheduler bound after a stage was already applied.")
+        if len(scheduler.lr_lambdas) != len(scheduler.base_lrs) or len(scheduler.base_lrs) != len(
+            scheduler.optimizer.param_groups
+        ):
+            raise RuntimeError("--e4-stage-lr-persist: one lr_lambda and base_lr per optimizer group expected.")
+        self._scheduler = scheduler
 
     def is_active(self) -> bool:
         return bool(self.stages)
@@ -1200,13 +1222,26 @@ class FinetuneScheduleRuntime:
         if self._current_stage_index == stage.index:
             return stage
         target_model = _unwrap_model(model)
-        configure_finetune_parameters(target_model, stage.mode)
+        if self.sequential_blocks:
+            configure_finetune_parameters(target_model, stage.mode, sequential_blocks=True)
+        else:
+            configure_finetune_parameters(target_model, stage.mode)
         for group in optimizer.param_groups:
             name = group.get("name")
             if name == "head":
                 group["lr"] = stage.head_lr
             elif name == "backbone":
                 group["lr"] = stage.backbone_lr
+        if self.persist_lrs:
+            # I2: the stage rate becomes the group's base rate; the global warm-up/cosine factor scales it.
+            scheduler = self._scheduler
+            if scheduler is None:
+                raise RuntimeError("--e4-stage-lr-persist: scheduler not bound before the first stage.")
+            for idx, group in enumerate(optimizer.param_groups):
+                stage_lr = float(group["lr"])
+                scheduler.base_lrs[idx] = stage_lr
+                group["initial_lr"] = stage_lr
+                group["lr"] = stage_lr * float(scheduler.lr_lambdas[idx](scheduler.last_epoch))
         if rank == 0:
             label_suffix = f" ({stage.label})" if stage.label else ""
             print(
@@ -2288,6 +2323,10 @@ def _build_run_metadata(
     if lr_value is not None:
         run_block["lr"] = float(lr_value)
         run_block["lr_source"] = str(getattr(args, "lr_source", "experiment config"))
+    if getattr(args, "e4_stage_lr_persist", False):
+        run_block["e4_stage_lr_persist"] = True
+    if getattr(args, "e4_unfreeze_sequential_blocks", False):
+        run_block["e4_unfreeze_sequential_blocks"] = True
     init_ckpt = getattr(args, "ckpt", None)
     if init_ckpt:
         run_block["init_checkpoint"] = str(init_ckpt)
@@ -6008,9 +6047,17 @@ def build(args, rank, device: torch.device, distributed: bool):
     )
     schedule_runtime: Optional[FinetuneScheduleRuntime]
     if schedule_stages:
-        schedule_runtime = FinetuneScheduleRuntime(schedule_stages)
+        schedule_runtime = FinetuneScheduleRuntime(
+            schedule_stages,
+            persist_lrs=bool(getattr(args, "e4_stage_lr_persist", False)),
+            sequential_blocks=bool(getattr(args, "e4_unfreeze_sequential_blocks", False)),
+        )
     else:
         schedule_runtime = None
+    if schedule_runtime is None and (
+        getattr(args, "e4_stage_lr_persist", False) or getattr(args, "e4_unfreeze_sequential_blocks", False)
+    ):
+        raise ValueError("--e4-stage-lr-persist / --e4-unfreeze-sequential-blocks need a finetune_schedule (E4).")
 
     initial_mode = getattr(args, "finetune_mode", "full")
     if schedule_runtime and schedule_runtime.is_active():
@@ -6253,6 +6300,8 @@ def build(args, rank, device: torch.device, distributed: bool):
     use_amp = args.precision == "amp" and device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     scheduler = create_scheduler(optimizer, args)
+    if schedule_runtime is not None and schedule_runtime.persist_lrs:
+        schedule_runtime.bind_scheduler(scheduler)
     if best_val_perf is not None:
         optimizer.load_state_dict(main_dict["optimizer_state_dict"])
         scaler.load_state_dict(main_dict["scaler_state_dict"])
@@ -6940,6 +6989,14 @@ def train(rank, args):
                 args.finetune_mode = stage.mode
                 args.frozen = stage.mode == "none"
         target_model = _unwrap_model(model)
+        if schedule_runtime is not None and schedule_runtime.persist_lrs and rank == 0:
+            lrs_now = {g.get("name"): float(g["lr"]) for g in optimizer.param_groups}
+            lr_line = (
+                f"[stage-lr] epoch={epoch} head={lrs_now.get('head', float('nan')):.10e} "
+                f"backbone={lrs_now.get('backbone', float('nan')):.10e}"
+            )
+            print(lr_line)
+            _append_log_lines(log_path, [lr_line])
         epoch_param_groups = collect_finetune_param_groups(target_model)
         epoch_trainable_counts = _summarize_trainable_param_counts(epoch_param_groups)
         try:
@@ -8418,6 +8475,19 @@ def get_args():
         "--skip-test-eval",
         action="store_true",
         help="Never evaluate the test split (validation-only runs such as the learning-rate sweep).",
+    )
+    parser.add_argument(
+        "--e4-stage-lr-persist",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Exploratory (docs/v3/exploratory_e4_stagelr_plan.md): stage head/backbone rates become the base rates "
+        "of the warm-up/cosine schedule instead of being overwritten after each stage's first epoch.",
+    )
+    parser.add_argument(
+        "--e4-unfreeze-sequential-blocks",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Exploratory: head+1/head+2 also unfreeze nn.Sequential blocks (timm ViT, SUP-imnet).",
     )
     parser.add_argument(
         "--limit-test-batches",

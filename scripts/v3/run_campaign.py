@@ -2,7 +2,9 @@
 """Run one phase of the campaign v3 matrix on the local GPUs (one run per GPU).
 
 Phases: ``sun_full``, ``e2e3`` (E2 and E3 evaluations of the sun_full models), ``e1``, ``e4``; ``e4negtype`` runs the
-E4 negative-type sensitivity (``campaign_plan.negtype_matrix``, not part of the registered matrix).
+E4 negative-type sensitivity (``campaign_plan.negtype_matrix``, not part of the registered matrix); ``e4stagelr`` runs
+the exploratory E4-stagelr adaptations (``campaign_plan.stagelr_matrix``, ``--stagelr-variant``; root and records fixed
+per variant, docs/v3/exploratory_e4_stagelr_plan.md).
 The run list and command lines come from ``campaign_plan.run_matrix`` (the dry-run matrix).
 
 * Resumable: a run is complete when its output directory holds ``RUN_COMPLETE.json``. A directory
@@ -32,7 +34,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import campaign_plan as cp  # noqa: E402
 
 PHASES = {"sun_full": ("sun_full",), "e2e3": ("E2", "E3"), "e1": ("E1",), "e4": ("E4",),
-          "e4negtype": ("E4seq",)}  # E4 negative-type sensitivity (docs/v3/sensitivity_e4_negative_type_plan.md)
+          "e4negtype": ("E4seq",),  # E4 negative-type sensitivity (docs/v3/sensitivity_e4_negative_type_plan.md)
+          "e4stagelr": ("E4stagelr",)}  # exploratory E4-stagelr (docs/v3/exploratory_e4_stagelr_plan.md)
+STAGELR_RECORDS = "results_v3/exp_e4_stagelr"
 TRANSIENT = re.compile(
     r"CUDA out of memory|OutOfMemoryError|CUBLAS_STATUS_ALLOC_FAILED|Input/output error|OSError|IOError"
     r"|DataLoader worker \(pid|Broken pipe|Too many open files|No space left",
@@ -73,7 +77,17 @@ def main() -> int:
     parser.add_argument("--root", default=cp.CKPT_ROOT, help="checkpoint root (default: the registered campaign)")
     parser.add_argument("--lr-override", default=None, help="explicit --override lr=<value> for sun_full and E1")
     parser.add_argument("--records", default="results_v3/campaign", help="directory for events and logs")
+    parser.add_argument("--stagelr-variant", choices=cp.STAGELR_VARIANTS, default=None,
+                        help="phase e4stagelr only: declared (240 runs) or persistonly (60 SUP-imnet runs)")
     args = parser.parse_args()
+    if (args.phase == "e4stagelr") != (args.stagelr_variant is not None):
+        sys.exit("--stagelr-variant is required by, and only accepted with, phase e4stagelr")
+    if args.phase == "e4stagelr":
+        if args.root != cp.CKPT_ROOT and args.root != cp.STAGELR_ROOTS[args.stagelr_variant]:
+            sys.exit(f"phase e4stagelr writes under {cp.STAGELR_ROOTS[args.stagelr_variant]}; --root {args.root} refused")
+        if args.records not in ("results_v3/campaign", STAGELR_RECORDS):
+            sys.exit(f"phase e4stagelr records go to {STAGELR_RECORDS}; --records {args.records} refused")
+        args.root, args.records = cp.STAGELR_ROOTS[args.stagelr_variant], STAGELR_RECORDS
     os.chdir(REPO)
     global ABORTED
     cp.set_campaign(args.root, args.lr_override)
@@ -90,9 +104,10 @@ def main() -> int:
         sys.exit(f"Tracked files modified; commit before running the campaign:\n{dirty}")
     commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 
-    phase_dir = REPO / args.records / args.phase
+    phase_name = f"{args.phase}_{args.stagelr_variant}" if args.phase == "e4stagelr" else args.phase
+    phase_dir = REPO / args.records / phase_name
     if set(args.regimes) != set(cp.REGIMES):
-        phase_dir = REPO / args.records / f"{args.phase}_{'_'.join(args.regimes)}"
+        phase_dir = REPO / args.records / f"{phase_name}_{'_'.join(args.regimes)}"
     (phase_dir / "logs").mkdir(parents=True, exist_ok=True)
     events_path = phase_dir / "events.jsonl"
     lock = threading.Lock()
@@ -101,11 +116,14 @@ def main() -> int:
         with lock, events_path.open("a") as handle:
             handle.write(json.dumps({"time": now(), "commit": commit, **payload}) + "\n")
 
-    matrix = cp.negtype_matrix if args.phase == "e4negtype" else cp.run_matrix
-    runs = [r for r in matrix(tuple(args.regimes)) if r["experiment"] in PHASES[args.phase]]
+    if args.phase == "e4stagelr":
+        matrix_runs = cp.stagelr_matrix(tuple(args.regimes), args.stagelr_variant)
+    else:
+        matrix_runs = (cp.negtype_matrix if args.phase == "e4negtype" else cp.run_matrix)(tuple(args.regimes))
+    runs = [r for r in matrix_runs if r["experiment"] in PHASES[args.phase]]
     todo = [r for r in runs if not is_complete(r)]
     event(kind="phase_start", phase=args.phase, expected=len(runs), already_complete=len(runs) - len(todo), gpus=args.gpus,
-          root=args.root, lr_override=args.lr_override)
+          root=args.root, lr_override=args.lr_override, **({"stagelr_variant": args.stagelr_variant} if args.stagelr_variant else {}))
     print(f"[{now()}] phase {args.phase}: {len(runs)} runs, {len(runs) - len(todo)} already complete", flush=True)
 
     jobs: "queue.Queue[dict]" = queue.Queue()
