@@ -1225,3 +1225,45 @@ Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
   - **C − A** (secondary): type +0.1918 [0.1546, 0.2289; 0.1329, 0.2424] → **type matters**; size −0.0934
     [−0.1193, −0.0676; −0.1394, −0.0442] → **opposite direction**.
 - Post hoc sensitivity analysis: no Holm, no verdicts. Registered results unchanged.
+
+### 2026-11-04: E4-stagelr exploratory plan registered before launching, tags `v3-cmpb-exp-e4-stagelr-plan` and `-plan-r1`
+
+Times in UTC (local Europe/Madrid, UTC+01:00, in brackets).
+
+- **Finding:** in the 240 registered E4 runs the stage learning rates of `config/exp/v3/e4_budgets/s*.yaml` held for the
+  first epoch of each stage only (the epoch `LambdaLR` reset both groups to base · λ), and SUP-imnet unfroze no block
+  in stage 2 (58 runs; `finetune.py:77` does not accept timm 0.4.12's `nn.Sequential`). Registered results unchanged.
+- **Code:** commit `61a3099` (21:19:30 [22:19:30]): opt-in `--e4-stage-lr-persist` (interpretation I2) and
+  `--e4-unfreeze-sequential-blocks`, both `argparse.SUPPRESS`; `campaign_plan.stagelr_matrix` (declared 240 runs,
+  persist-only 60), phase `e4stagelr` of `run_campaign.py`. Analysis `analysis/v3/exploratory_e4_stagelr.py`, commit
+  `7ea0d9c`; plan `docs/v3/exploratory_e4_stagelr_plan.md` and control records, commit `e1a002e` (both 21:40:14
+  [22:40:14]); tag `v3-cmpb-exp-e4-stagelr-plan` at `e1a002e` (21:40:20 [22:40:20]).
+- **Controls**, `ssl4polyp-ft`, records `results_v3/verification/exp_e4_stagelr_controls/`, `campaign_plan*_exp_e4_stagelr_*`,
+  `exp_e4_stagelr_analysis_check/`:
+  1. **Dry run** (21:16 [22:16], on the working tree committed unchanged as `61a3099`): the 720 registered runs
+     resolve byte-identically with the changed code and with HEAD `9548c8c` (namespace and prepared configuration,
+     root of the extracted tree normalised); the 240 + 60 new runs resolve with 0 failures and differ from the
+     registered E4 run only in the flags and in `output_dir` / `thresholds_root`; 60/60 parents equal the SHA-256
+     recorded by the registered E4 runs.
+  2. **Flag off**, commit `61a3099`, registered GPU of each run (21:19–21:21 [22:19–22:21]):
+     `E4_k1_sup_imnet_seed13_s100` (GPU 1, 22.5 s), `E4_k1_ssl_colon_seed13_s50` (GPU 1, 33.1 s),
+     `E4_k1_ssl_imnet_seed13_s200` (GPU 1, 25.3 s), `E4_k1_ssl_imnet_matched_seed13_s500` (GPU 0, 53.9 s): 36/36 CSVs
+     byte-identical to the registered runs (test, validation, train and zero-shot outputs, pack copies), `e4_arms`
+     equal, no `[stage-lr]` line and no new run-block key.
+  3. **Flag on** (declared), k = 1, seed 13 (21:20–21:22 [22:20–22:22]): SUP-imnet s100 (GPU 1, 22.7 s), SUP-imnet s50
+     (GPU 0, 32.3 s), SSL-colon s50 (GPU 1, 30.7 s). Every epoch follows I2 (max relative error 3.0e-11), backbone 0
+     in stage 1, stage-2 trainable backbone parameters 14,175,744 / 7,087,872 / 7,087,872, flags in the run block.
+  4. **Arms A and B** of those three runs: 9/9 zero-shot CSVs byte-identical to the registered runs, `e4_arms.A/B`
+     equal. The balanced accuracy of C' and D' of these three runs was printed while checking `e4_arms`.
+  5. **Analysis identity check** (registered root in place of both new roots; 21:27–21:40 [22:27–22:40]): 366/366
+     quantities of `contrast_summary.csv` reproduced (H7 and the per-budget C − A, D − A, D − C, pooled and per
+     regime; max |diff| 5.0e-11); 70 new − registered contrasts exactly 0 in the estimate and every replicate.
+- **Control weights:** the 14 `.pth` of the control runs (5.49 GB) were deleted at 21:27 [22:27] after their SHA-256 was
+  recorded in `exp_e4_stagelr_controls/files_manifest.csv` (147 files). The three flag-on control runs are repeated
+  in the main campaign and compared with these records (CSVs byte for byte, checkpoints by SHA-256).
+- **Revision 1** (commits `101749e`, `fce4c8e`; tag `v3-cmpb-exp-e4-stagelr-plan-r1`), before any run of the
+  experiment: reference categories with the same rule (H7 robust, D − A attenuated, D − C robust) and the change of
+  category reported; GPUs, weights and failure handling fixed; the identity check run again with the r1 code
+  (366/366, zero contrasts 0). `verify_phase.py` gains phase `e4stagelr` (registered e4 phase: 4,500/4,500 checks, as
+  recorded); `scripts/v3/check_e4_stagelr_runs.py` makes the per-run checks without printing metrics.
+- Nothing of the experiment trained before this entry.
