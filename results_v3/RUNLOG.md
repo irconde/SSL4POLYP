@@ -120,9 +120,10 @@ Supersedes SAP v3 (`f2120a09…cc0474`); adds section 10 (learning-rate selectio
 
 ### 2026-10-15: learning-rate sweep (SAP v3.1 section 10), validation only
 
-`ssl4polyp-ft`, commit `213efe5`, `scripts/v3/run_lr_sweep.sh` on GPUs 0 and 1 (shared queue),
-sun_full k = 1, `--skip-test-eval` (no test split scored; no test CSV exists). 27/27 runs ok,
-08:08–09:36 (81.7 min wall, 2.67 GPU-hours). The lr 1e-3 / seed 13 runs reproduce the smoke2
+`ssl4polyp-ft`, commit `f203f16` (`213efe5` in the sweep run records), `scripts/v3/run_lr_sweep.sh` on GPUs 0
+and 1 (shared queue), sun_full k = 1, `--skip-test-eval` (no test split scored; no test CSV exists). 27/27 runs ok,
+08:14–09:36 +02:00 (CEST; first run start 08:14:57, `ALL_DONE` 09:36:41, `results_v3/lr_sweep/k1/timings.log`;
+81.7 min wall, 2.67 GPU-hours). The lr 1e-3 / seed 13 runs reproduce the smoke2
 validation CSVs bit for bit (one on the other GPU). Summary: `scripts/v3/summarize_lr_sweep.py` →
 `results_v3/verification/lr_sweep_{runs,summary}.csv`, `lr_sweep_decision.json`.
 
