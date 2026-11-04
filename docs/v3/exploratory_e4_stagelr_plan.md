@@ -78,10 +78,15 @@ would be a no-op, so they are run once.
   dump, the logs and every output are unchanged) and the matrix and phase. With `--e4-stage-lr-persist` the run block
   records `e4_stage_lr_persist: true` and the log a `[stage-lr] epoch=… head=… backbone=…` line per epoch; with
   `--e4-unfreeze-sequential-blocks`, `e4_unfreeze_sequential_blocks: true`.
-- **Execution** (after the plan tag; not started):
+- **Execution** (after the revision-1 tag; not started):
   - `python scripts/v3/run_campaign.py e4stagelr --stagelr-variant declared` then `--stagelr-variant persistonly`,
-    in `ssl4polyp-ft`, GPUs 0 and 1, one run per GPU; failed runs retried once and reported; no commits while a phase
-    runs.
+    in `ssl4polyp-ft`; no commits while a phase runs.
+  - **GPUs (r1):** the two RTX 6000 Ada (GPUs 0 and 1), one run per GPU, from a shared queue as in the registered
+    campaign; the GPU of every run is recorded (`RUN_COMPLETE.json`, `events.jsonl`).
+  - **Failures (r1):** a failed run is retried once with the same command line and seed, and both attempts are
+    recorded. `run_campaign.py` retries transient failures itself; any other failure stops the phase, which is then
+    relaunched once (it resumes, and the failed run starts again from scratch). A second failure of the same run stops
+    the experiment and is reported before anything else is done.
   - Outputs: `checkpoints_v3/exp_e4_stagelr/classification/` and `checkpoints_v3/exp_e4_stagelr_persistonly/classification/`
     (not in git); records `results_v3/exp_e4_stagelr/e4stagelr_{declared,persistonly}/`.
 - **Verification of each phase:**
@@ -89,8 +94,16 @@ would be a no-op, so they are run once.
     epoch and group, backbone 0 in stage 1, and trainable backbone parameters 7,087,872 (one block, 50 frames) or
     14,175,744 (two blocks) in stage 2, in all regimes of the declared variant; 0 in stage 2 for persist-only;
   - the zero-shot outputs (arms A and B) byte-identical to those of the registered run (all runs);
-  - a results manifest with the SHA-256 of every file and checkpoint (`scripts/v3/batch_records.py`).
-- **Weights:** the adapted weights are deleted once the manifest records their SHA-256 (decided). Parents and every
+  - the parent's SHA-256 equal to the value recorded by the registered E4 run;
+  - the three flag-on control runs (k = 1, seed 13: SUP-imnet s100 and s50, SSL-colon s50) repeated in the declared
+    phase byte-identical to the controls (every output CSV; weights compared through the SHA-256 of
+    `results_v3/verification/exp_e4_stagelr_controls/files_manifest.csv`);
+  - the integrity checks of `verify_phase.py e4stagelr --stagelr-variant …` (section 6 checks of the campaign plus the
+    flags in the run block), and a results manifest with the path, bytes and SHA-256 of every file and checkpoint
+    (`scripts/v3/batch_records.py`).
+  - The rate, stage, arm A/B, parent and control checks are made by `scripts/v3/check_e4_stagelr_runs.py --variant …`
+    (r1), which prints no metric; the weights are deleted only after all checks and the manifest.
+- **Weights (r1):** the adapted weights are deleted once the manifest records their SHA-256. Parents and every
   registered file are untouched.
 - **Expected duration:** the registered 240 adaptations took 2.2 GPU-hours (66 min on two GPUs). With the declared
   rates, early stopping may come later (at most 30–50 epochs of about 1 s): ≤ 4.5 GPU-hours for the 240 runs and
@@ -144,6 +157,12 @@ exhaustive:
 - **Not supported:** the sign changes; **reversed** when, in addition, both intervals exclude zero on the opposite
   side.
 
+**Reference category (r1).** The same rule, applied to each registered contrast against its own sign, gives its
+reference category: H7 = C − A **robust**, D − A **attenuated** (its bootstrap CI includes 0), D − C **robust**
+(values in Controls, item 5). For each of the three new contrasts the report states whether its category is
+**maintained**, **weakened** or **strengthened** with respect to the reference, with the order robust > attenuated >
+not supported > reversed. No other claim is derived from these categories.
+
 Per budget, per regime, the SUP-imnet variant contrasts and the degenerate counts are reported without a category.
 
 ## What will not be claimed
@@ -191,6 +210,9 @@ Records under `results_v3/verification/` (`exp_e4_stagelr_controls/`, `campaign_
    references of the three ruled contrasts (global, mean of 4 regimes × 4 budgets): H7 = C − A −0.0748 (t-test CI
    −0.1012 to −0.0485; bootstrap CI −0.1353 to −0.0150), D − A −0.0213 (−0.0329 to −0.0097; −0.0801 to 0.0337),
    D − C 0.0536 (0.0334 to 0.0738; 0.0407 to 0.0626); bootstrap B = 1,691 for all three.
+   Run again with the revision-1 code (2026-11-04): the same 366/366 quantities and zero contrasts; reference
+   categories H7 robust, D − A attenuated, D − C robust, and "maintained" for the three contrasts, as expected when the
+   new runs are the registered ones.
 
 The control runs at k = 1, seed 13 are the same runs as the corresponding runs of the experiment; their outputs were
 inspected only for the checks above (the balanced accuracy of C' and D' of the three flag-on runs was printed while
@@ -204,10 +226,22 @@ checking `e4_arms`). Their weights were deleted after recording their SHA-256 (`
 - **RUNLOG and tags:** a RUNLOG entry per stage; tag `v3-cmpb-exp-e4-stagelr-plan` (this plan, the code and the
   checked analysis) and, at the end, `v3-cmpb-exp-e4-stagelr-results`.
 
-## Open points (TO DECIDE)
+## Revision 1 (2026-11-04)
 
-- **TO DECIDE:** GPU assignment of the experiment runs. Proposed: any GPU (bit-for-bit reproduction was checked on the
-  registered GPU of each control run only; no conclusion depends on cross-GPU equality).
-- **TO DECIDE:** whether the C' and D' values of the three k = 1, seed 13 control runs are reused as experiment runs or
-  the runs are repeated (they are deterministic; proposed: repeat, and check they are byte-identical to the controls).
-- **TO DECIDE:** RUNLOG entry for this preparation stage (not written yet).
+Registered before any run of the experiment (tag `v3-cmpb-exp-e4-stagelr-plan-r1`). It closes the open points of the
+original plan and adds the reference categories; the design, estimands and checks are otherwise unchanged.
+
+- **Interpretation:** the rule is also applied to the registered contrasts, giving their reference categories (H7
+  robust, D − A attenuated, D − C robust), and the report states whether each new category is maintained, weakened or
+  strengthened. The operational definition is written out: "excludes zero" = the interval lies entirely on the side of
+  the registered sign. The analysis code writes the reference category and the change
+  (`interpretation.csv`, `summary.json`); the identity check was run again with this code (Controls, item 5).
+- **Control runs:** the three flag-on control runs (SUP-imnet s100 and s50, SSL-colon s50; k = 1, seed 13) are repeated
+  in the main campaign and must be byte-identical to the controls. The balanced accuracy of C' and D' of these three
+  runs was seen before the main experiment was launched.
+- **GPUs:** both RTX 6000 Ada, shared queue as in the registered campaign, GPU recorded per run.
+- **Weights:** the adapted weights are deleted after their SHA-256 is recorded in the results manifest.
+- **Failures:** a failed run is retried once with the same seed and recorded; a second failure stops the experiment.
+- **RUNLOG:** an entry for the preparation (phase 2) and one for the results.
+- **Superseded open points (original plan, SHA-256 `a2761d07b12f8f6b18dc87720124e61e6609da054996f142077bb6caf2885236`):**
+  GPU assignment, reuse or repetition of the control runs, and the RUNLOG entry, all marked TO DECIDE.
