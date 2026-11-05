@@ -358,7 +358,10 @@ Other campaign tags:
 | 2026-10-25 | `v3-cmpb-figures`, `v3-cmpb-figures2` | Manuscript figures 2–6 (`figures2`: revised labels) |
 
 `v3-cmpb-submission` (2026-10-27) predates the sensitivity and exploratory analyses of the article. The version of
-the repository that corresponds to the article is tagged `v3-cmpb-manuscript`.
+the repository that corresponds to the article is tagged `v3-cmpb-manuscript-r1`. The earlier tag `v3-cmpb-manuscript`
+(2026-11-05) is superseded: the revision corrects documentation paths and one README command and adds versioned
+copies of logs and one helper script that the documentation cites. The registered code, data and results are
+unchanged.
 
 Exploratory and sensitivity tags (not part of the SAP; each plan was tagged before its runs, `-r1` marks a plan
 revision registered before launching):
