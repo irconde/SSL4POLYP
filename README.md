@@ -21,7 +21,7 @@ A ViT-B/16 frame classifier (polyp / no polyp) is fine-tuned from four initialis
 |---|---|---|
 | SUP-imnet | Supervised AugReg ViT-B/16 (ImageNet-21k, fine-tuned on ImageNet-1k) | ImageNet |
 | SSL-imnet | MAE | ImageNet-1k (1.28 M images) |
-| SSL-colon | MAE | HyperKvasir unlabelled (99,417 images) |
+| SSL-colon | MAE | HyperKvasir unlabelled images (99,417 in the public release; the original SSL-colon loader held between 99,072 and 99,199, see the erratum in `results_v3/RUNLOG.md`) |
 | SSL-imnet-matched | MAE, same arguments as SSL-colon | Class-stratified ImageNet-1k subset of 99,417 images |
 
 SSL-imnet-matched isolates the effect of the pretraining domain from the amount of pretraining data.
@@ -162,6 +162,11 @@ Campaign v3 uses `data_packs/v3/`:
   and `composition.csv`. They were generated with `polyp-db-analysis` commits `56c7a1b` and `fca9597`, and are not
   part of the registered campaign.
 
+> **Partitions.** Partition 1 of the campaign (`v3/k1`) is the `sun_morphology` partition, which already existed
+> when SAP v3.2 was registered; partitions 2 to 5 were generated after it. The learning-rate sweep used a different
+> partition, the morphology-unstratified `sun_full` partition (`data_packs/sun_full`), although the sweep records
+> and the RUNLOG call it `k = 1`.
+
 `data_packs/v3/index.yaml` lists the seeds and the SHA-256 of all 221 CSVs. The CSVs are stored byte for
 byte (CRLF line endings, `-text` in `.gitattributes`). To verify them (`ssl4polyp-ft`):
 
@@ -204,7 +209,8 @@ commits and checks of each step are in `results_v3/RUNLOG.md`.
 
 ### 1. MAE pretraining (`ssl4polyp-pretrain`)
 
-SSL-colon (`mae_hyperkvasir.pth`) was pretrained on HyperKvasir unlabelled images before campaign v3
+SSL-colon (`mae_hyperkvasir.pth`) was pretrained on HyperKvasir unlabelled images (99,417 in the public release; the
+original SSL-colon loader held between 99,072 and 99,199, see the erratum in `results_v3/RUNLOG.md`) before campaign v3
 (see `src/ssl4polyp/models/mae/run_hyperkvasir_pretraining.py`). SSL-imnet-matched reuses its stored
 arguments on a 99,417-image ImageNet subset:
 
@@ -267,9 +273,25 @@ All metrics are recomputed from the per-frame CSVs; only τ is read from the JSO
 `report.md`, `summary.json`, `contrast_summary.csv`, `paired_differences.csv`, `run_metrics.csv`, `tables/`,
 `figures/`. Module-level documentation: [analysis/v3/README.md](analysis/v3/README.md).
 
+> **Sign of the E2 gap.** The E2 morphology gap in `table5b_e2_gap.csv` is defined as the flat minus the polypoid
+> AUROC, so its values have the opposite sign to the polypoid-minus-flat gap reported in the article.
+
+> **Bootstrap replicates.** The registered bootstrap intervals of H6 and H7 rest on 1,691 valid replicates out of
+> 2,000 (1,997 for H5). A replicate is discarded when a 500-frame evaluation split loses all its negative sequences
+> or, for H5, when no isolated-negative center is drawn; averaging the defined budgets instead of discarding moves
+> the limits by at most 0.004 (Supplementary Section S1.5; counts, causes, probabilities and intervals in
+> [docs/verification/bootstrap_discard/](docs/verification/bootstrap_discard/README.md)).
+
 Exploratory analyses (not part of the SAP; plans registered before launching, see below):
 `analysis/v3/exploratory_lr_common.py` and `analysis/v3/exploratory_lr_sslimnet.py`, outputs in
 `results_v3/analysis_exploratory_*/`.
+
+> **E4 stage learning rates.** In the registered E4 runs, the stage learning rates of
+> `config/exp/v3/e4_budgets/*.yaml` took effect only in the first epoch of each stage, because the epoch scheduler
+> recomputes both parameter groups from the base rate, and in SUP-imnet the second stage unfroze no block, because
+> timm 0.4.12 stores the blocks in an `nn.Sequential` that `finetune.py` does not accept. The exploratory experiment
+> `exp_e4_stagelr` repeats the adaptations with the declared schedule (tags `v3-cmpb-exp-e4-stagelr-plan`, `-plan-r1`
+> and `-results`); the registered code and results are unchanged.
 
 ### 4. Figures (`ssl4polyp-analysis`)
 
@@ -311,11 +333,12 @@ govern were generated or analysed. Each change is justified in
 Full hashes are in `results_v3/RUNLOG.md`. The file `plan_analisis_estadistico_v3_2.md` now holds revision c;
 the original v3.2 and revision b are at their tags.
 
-**Timing.** SAP versions v3 to v3.2c were registered before the campaign started (`v3-cmpb-sap32c` at 2026-10-15
-10:21:20 +02:00; first run at 10:23:41). v3.3 replaced only the inference procedure (section 4). It was tagged at
-2026-10-17 13:14:26 +02:00, after the last campaign run had finished (12:52:28), and before any hypothesis estimate
-was computed (`v3-cmpb-analysis-results`, 15:31:35). The per-run test metrics, which the training script writes into
-each run directory, already existed before v3.3, but no hypothesis estimate did.
+**Timing.** SAP versions v3 to v3.2c were committed before the campaign started (`v3-cmpb-sap32c`, commit and tag
+at 2026-10-15 10:21:20 +02:00; first run at 10:23:41). v3.3 replaced only the inference procedure (section 4) and
+was committed after the last campaign run had finished and before any hypothesis was estimated (commit and tag
+`v3-cmpb-sap33` at 2026-10-17 13:14:26 +02:00; last run finished at 12:52:28; `v3-cmpb-analysis-results` at
+15:31:35). The per-run test metrics written by the training script existed before v3.3, but no hypothesis estimate
+did.
 
 [^1]: Registered in commit `f203f16` (`213efe5` in the sweep run records), before the sweep; `v3-cmpb-lr` is the first tag that contains it.
 
@@ -331,6 +354,21 @@ Other campaign tags:
 | 2026-10-17 | `v3-cmpb-analysis-results` | Analysis of the real data (SAP v3.3) |
 | 2026-10-18 | `v3-cmpb-exp-lr-results`, `v3-cmpb-exp-lr2-results` | Exploratory analyses |
 | 2026-10-25 | `v3-cmpb-figures`, `v3-cmpb-figures2` | Manuscript figures 2–6 (`figures2`: revised labels) |
+
+`v3-cmpb-submission` (2026-10-27) predates the sensitivity and exploratory analyses of the article. The version of
+the repository that corresponds to the article is tagged `v3-cmpb-manuscript`.
+
+Exploratory and sensitivity tags (not part of the SAP; each plan was tagged before its runs, `-r1` marks a plan
+revision registered before launching):
+
+| Date | Tags | Purpose |
+|---|---|---|
+| 2026-10-17, 2026-10-18 | `v3-cmpb-exp-lr-plan`, `-results` | Shared fine-tuning learning rate of 1e-3 for SUP-imnet, SSL-imnet and SSL-colon |
+| 2026-10-18 | `v3-cmpb-exp-lr2-plan`, `-results` | SSL-imnet at 1e-4 |
+| 2026-10-28, 2026-10-29 | `v3-cmpb-exp-lr-budget-plan`, `-plan-r1`, `-results` | Learning rate selected per regime and E1 budget |
+| 2026-10-29, 2026-10-30 | `v3-cmpb-exp-sslcolon-r-plan`, `-plan-r1`, `-results` | SSL-colon re-pretrained (SSL-colon-r) |
+| 2026-10-31 | `v3-cmpb-sens-e4-negtype-plan`, `-results` | E4 sensitivity to the type of negatives (200-frame packs with sequence negatives) |
+| 2026-11-04, 2026-11-05 | `v3-cmpb-exp-e4-stagelr-plan`, `-plan-r1`, `-results` | E4 adaptations with the declared stage learning rates |
 
 ## License
 
