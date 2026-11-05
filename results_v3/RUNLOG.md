@@ -127,6 +127,10 @@ and 1 (shared queue), sun_full k = 1, `--skip-test-eval` (no test split scored; 
 validation CSVs bit for bit (one on the other GPU). Summary: `scripts/v3/summarize_lr_sweep.py` →
 `results_v3/verification/lr_sweep_{runs,summary}.csv`, `lr_sweep_decision.json`.
 
+> **Clarification (2026-11-05).** "sun_full k = 1" here and in the sweep records is the earlier, morphology-unstratified
+> `sun_full` partition (`data_packs/sun_full`, `polypdb sun build`), not partition 1 of the campaign (`v3/k1`, the
+> `sun_morphology` partition). The SSL-imnet-matched sweep (2026-10-17) used the same `sun_full` partition.
+
 Validation AP of the best-epoch weights (seeds 13 / 29 / 47):
 
 | Regime | lr | Mean AP ± SD | Per seed | Epoch-1 train loss | Best epoch | Best epoch < 6 |
@@ -686,6 +690,13 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   unlabelled images; the per-iteration half-cycle cosine schedule (`lr_sched.adjust_learning_rate` at
   `epoch + iter / 776`, lr 1e-3, min_lr 0, 40 warmup epochs, 400 epochs) is therefore the same. The
   HyperKvasir training logs are not available, so this follows from the stored arguments and dataset size.
+
+> **Erratum (2026-11-05).** The 776 iterations per epoch attributed to the original SSL-colon pretraining were an
+> inference. The learning-rate state stored in `mae_hyperkvasir.pth` implies 774 micro-batches in its last epoch,
+> i.e. between 99,072 and 99,199 images in the loader. SSL-imnet-matched and SSL-colon-r have 99,417 images and 776
+> micro-batches per epoch. (The stored rate, 1.2711970365231196e-13, equals the `adjust_learning_rate` value at the
+> last optimizer update of a 774-iteration epoch 399 and at no other iteration count from 600 to 900; the Adam step
+> count, 154,744, is consistent with 387 updates per epoch: 400 × 387 − 56 skipped AMP steps.)
 
 ### 2026-10-16: SSL-imnet-matched MAE pretraining launched
 
