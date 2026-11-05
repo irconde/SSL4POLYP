@@ -54,6 +54,12 @@ JSON metrics = CSV recomputation (max |diff| = 0), τ recomputed from the CSVs =
 Incidents: none during the runs. Open points for phase 1 are listed in the smoke report
 (environment differs from v2; checkpoint disk use).
 
+> **Note (2026-11-05).** `results_v3/smoke/k1/verification_section6.json` is not versioned. Its copy is
+> `results_v3/verification/smoke_section6.json` (8,294 bytes, SHA-256
+> `591085ab8b9eafed26e0b392e92b93a163c73cf5e21f8a4e8b5092200138dfba`), identical to the original
+> (SHA-256 `d21d3925d0139df9bf68effce7aba39b82cefd390034844153a1e7cc727651ad`) except for 2 absolute paths replaced by
+> `<REPO>` with the rules of `scripts/v3/release_depersonalize_paths.py`.
+
 ### 2026-10-14: environments split
 
 - `ssl4polyp-pretrain`: `conda create --clone` of the original environment, unchanged (timm 0.3.2); MAE
@@ -130,6 +136,10 @@ validation CSVs bit for bit (one on the other GPU). Summary: `scripts/v3/summari
 > **Clarification (2026-11-05).** "sun_full k = 1" here and in the sweep records is the earlier, morphology-unstratified
 > `sun_full` partition (`data_packs/sun_full`, `polypdb sun build`), not partition 1 of the campaign (`v3/k1`, the
 > `sun_morphology` partition). The SSL-imnet-matched sweep (2026-10-17) used the same `sun_full` partition.
+
+> **Note (2026-11-05).** The sweep timings log is versioned as `results_v3/verification/lr_sweep_timings.log` (2,222
+> bytes, 27 runs, SHA-256 `46aae54845859310ad7a48dec77f589cc9f5b262b23a3cf9ba705ff27a6fa45f`), a byte-identical copy
+> of `results_v3/lr_sweep/k1/timings.log`, which stays in `results_v3/lr_sweep/k1/` and is not versioned.
 
 Validation AP of the best-epoch weights (seeds 13 / 29 / 47):
 
@@ -790,6 +800,11 @@ No run stopped before epoch 6 or had its best epoch before 6; no epoch-1 batch l
 Decision (rule 4, applied as written): **SSL-imnet-matched fine-tuning lr = 1e-4**, set as `finetune_lr` in
 `config/model/ssl_imnet_matched.yaml`. Dry run of the regime (`campaign_plan_checks_matched.json`): 180 runs
 (sun_full 15, E1 75, E2 15, E3 15, E4 60), 0 failures against SAP v3.2c.
+
+> **Note (2026-11-05).** The timings log of this sweep is versioned as
+> `results_v3/verification/lr_sweep_matched_timings.log` (836 bytes, 9 runs, SHA-256
+> `90aff03f904eeacb01c2034a359824a0701c92106f8e7b95042c0207870bfd5b`), a byte-identical copy of
+> `results_v3/lr_sweep_matched/k1/timings.log`, which stays there and is not versioned.
 
 ## Campaign 4: SSL-imnet-matched (2026-10-17)
 

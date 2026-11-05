@@ -1,0 +1,10 @@
+lr1.0e-3_ssl_imnet_matched_seed13 gpu=1 ok start=2026-10-17T07:56:38+02:00 elapsed_s=279
+lr3.0e-4_ssl_imnet_matched_seed13 gpu=0 ok start=2026-10-17T07:56:38+02:00 elapsed_s=398
+lr1.0e-3_ssl_imnet_matched_seed29 gpu=0 ok start=2026-10-17T08:03:16+02:00 elapsed_s=300
+lr1.0e-4_ssl_imnet_matched_seed13 gpu=1 ok start=2026-10-17T08:01:17+02:00 elapsed_s=434
+lr1.0e-4_ssl_imnet_matched_seed29 gpu=1 ok start=2026-10-17T08:08:31+02:00 elapsed_s=386
+lr3.0e-4_ssl_imnet_matched_seed29 gpu=0 ok start=2026-10-17T08:08:16+02:00 elapsed_s=495
+lr1.0e-3_ssl_imnet_matched_seed47 gpu=1 ok start=2026-10-17T08:14:57+02:00 elapsed_s=315
+lr3.0e-4_ssl_imnet_matched_seed47 gpu=0 ok start=2026-10-17T08:16:31+02:00 elapsed_s=480
+lr1.0e-4_ssl_imnet_matched_seed47 gpu=1 ok start=2026-10-17T08:20:12+02:00 elapsed_s=555
+ALL_DONE 2026-10-17T08:29:27+02:00

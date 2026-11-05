@@ -1,0 +1,236 @@
+[
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=16 policy=sun_val_frozen vs parent checkpoint epoch=16; evaluated_epoch=16"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLColon_SUNFull_s13_e16_valLoss.pth sha256=0fabeadcbac43763\u2026 stored=0fabeadcbac43763\u2026"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "1438 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "pred:SSLColon_PolypGenClean_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenClean_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenClean_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/classification/k1/e4_s50_ssl_colon_seed13/polypgen_fewshot/s50/seed13/SSLColon_PolypGenFew50_s13_e05_valLoss.pth' (epoch 5)."
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=16 policy=sun_val_frozen vs parent checkpoint epoch=16; evaluated_epoch=5"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLColon_PolypGenFew50_s13_e05_valLoss.pth sha256=ba8a9f7f6ec4bf26\u2026 stored=ba8a9f7f6ec4bf26\u2026"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_val_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "4578 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_zeroshot_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "4 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_zeroshot_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "csv_columns:SSLColon_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "46 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "pred:SSLColon_PolypGenFew50_s13_train_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:zero_shot.test_primary",
+    "passed": true,
+    "evidence": "7 metrics vs SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_A",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_B",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_zeroshot_outputs.csv at tau=0.528404534: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_C",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "json_vs_csv:e4_arm_D",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_PolypGenFew50_s13_test_outputs.csv at tau=0.698928356: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_B",
+    "passed": true,
+    "evidence": "recomputed=0.528404534 stored=0.528404534 (n_support=50)"
+  },
+  {
+    "run": "SSLColon_PolypGenFew50_s13",
+    "criterion": "tau:e4_arm_D",
+    "passed": true,
+    "evidence": "recomputed=0.698928356 stored=0.698928356 (n_val=4)"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "reload",
+    "passed": true,
+    "evidence": "Reloaded best checkpoint weights from '<REPO>/checkpoints_v3/classification/k1/sun_full_ssl_colon_seed13/sun_baselines/SSLColon_SUNFull_s13_e16_valLoss.pth' (epoch 16)."
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "epoch",
+    "passed": true,
+    "evidence": "thresholds.primary.epoch=16 policy=f1_opt_on_val vs evaluated checkpoint epoch=16; evaluated_epoch=16"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "ckpt_sha",
+    "passed": true,
+    "evidence": "SSLColon_SUNFull_s13_e16_valLoss.pth sha256=0fabeadcbac43763\u2026 stored=0fabeadcbac43763\u2026"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "csv_columns:SSLColon_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "pred:SSLColon_SUNFull_s13_test_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "json_vs_csv:test_primary",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_SUNFull_s13_test_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "csv_columns:SSLColon_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "990 rows; missing columns=none; empty required=none"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "pred:SSLColon_SUNFull_s13_val_outputs.csv",
+    "passed": true,
+    "evidence": "0 rows with pred != (prob >= 0.687906384)"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "json_vs_csv:val",
+    "passed": true,
+    "evidence": "11 metrics vs SSLColon_SUNFull_s13_val_outputs.csv at tau=0.687906384: max |diff|=0"
+  },
+  {
+    "run": "SSLColon_SUNFull_s13",
+    "criterion": "tau:primary",
+    "passed": true,
+    "evidence": "recomputed=0.687906384 stored=0.687906384"
+  }
+]
