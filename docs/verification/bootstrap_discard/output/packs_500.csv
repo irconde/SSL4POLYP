@@ -1,0 +1,16 @@
+k,seed,neg_units,units,replicates_undefined,p_undefined
+1,13,4,seq:12 seq:13 seq:3 seq:9,20,0.0125791
+1,29,4,seq:12 seq:16 seq:3 seq:9,23,0.0125791
+1,47,4,seq:10 seq:15 seq:21 seq:3,31,0.0125791
+2,13,4,seq:1 seq:16 seq:22 seq:3,24,0.0125791
+2,29,4,seq:10 seq:14 seq:16 seq:17,30,0.0125791
+2,47,4,seq:1 seq:12 seq:23 seq:8,19,0.0125791
+3,13,4,seq:17 seq:22 seq:3 seq:9,18,0.0125791
+3,29,4,seq:1 seq:16 seq:17 seq:18,35,0.0125791
+3,47,4,seq:1 seq:10 seq:16 seq:8,30,0.0125791
+4,13,4,seq:12 seq:13 seq:18 seq:19,21,0.0125791
+4,29,4,seq:1 seq:10 seq:20 seq:22,23,0.0125791
+4,47,4,seq:18 seq:21 seq:23 seq:9,32,0.0125791
+5,13,4,seq:1 seq:13 seq:17 seq:19,20,0.0125791
+5,29,4,seq:11 seq:14 seq:16 seq:23,22,0.0125791
+5,47,4,seq:1 seq:12 seq:15 seq:17,24,0.0125791

@@ -233,7 +233,8 @@ CUBLAS_WORKSPACE_CONFIG=:4096:8 python src/ssl4polyp/models/mae/main_pretrain.py
 ```
 
 The checkpoint of epoch 399 is `checkpoints/pretrained/vit_b/mae_imnet_matched.pth`
-(SHA-256 `964089f6…1504c328`; one RTX 6000 Ada, about 18 h).
+(SHA-256 `964089f6…1504c328`; one RTX 6000 Ada, about 18 h). The timm 0.3.2 / 0.4.12 forward and backward
+equivalence check is in [docs/verification/timm_equivalence/](docs/verification/timm_equivalence/README.md).
 
 ### 2. Fine-tuning campaign (`ssl4polyp-ft`)
 
@@ -271,7 +272,8 @@ PYTHONPATH=. python -m pytest analysis/v3/tests                                #
 
 All metrics are recomputed from the per-frame CSVs; only τ is read from the JSONs. Outputs:
 `report.md`, `summary.json`, `contrast_summary.csv`, `paired_differences.csv`, `run_metrics.csv`, `tables/`,
-`figures/`. Module-level documentation: [analysis/v3/README.md](analysis/v3/README.md).
+`figures/`. Module-level documentation: [analysis/v3/README.md](analysis/v3/README.md). Map of the supplementary
+tables and figures to their scripts and output files: [docs/supplement-tables.csv](docs/supplement-tables.csv).
 
 > **Sign of the E2 gap.** The E2 morphology gap in `table5b_e2_gap.csv` is defined as the flat minus the polypoid
 > AUROC, so its values have the opposite sign to the polypoid-minus-flat gap reported in the article.

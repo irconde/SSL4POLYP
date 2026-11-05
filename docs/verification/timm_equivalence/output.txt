@@ -1,0 +1,7 @@
+# 2026-11-05T06:40:37Z, commit c3bae2c, CPU
+$ conda run -n ssl4polyp-pretrain python docs/verification/timm_equivalence/fwdbwd.py <tmp>/fb_032.pt
+0.3.2 2.4.1+cu121 params 111907840 loss 1.85469853878021
+$ conda run -n ssl4polyp-ft python docs/verification/timm_equivalence/fwdbwd.py <tmp>/fb_0412.pt
+0.4.12 2.4.1+cu121 params 111907840 loss 1.85469853878021
+$ conda run -n ssl4polyp-ft python docs/verification/timm_equivalence/compare.py <tmp>/fb_032.pt <tmp>/fb_0412.pt
+names equal True init maxdiff 0.0 loss equal True grad maxdiff 0.0 grads bitwise equal True

@@ -1,0 +1,69 @@
+[bootstrap] e4: 120 single-run contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (441s)
+hypothesis                    variant  boot_B   boot_lo   boot_hi                       undefined_by_budget
+        H6       registered (discard)    1691 -0.018377  0.005777 {"50": 0, "100": 0, "200": 0, "500": 309}
+        H6 average of defined budgets    2000 -0.018635  0.006138 {"50": 0, "100": 0, "200": 0, "500": 309}
+        H7       registered (discard)    1691 -0.135285 -0.014993 {"50": 0, "100": 0, "200": 0, "500": 309}
+        H7 average of defined budgets    2000 -0.137327 -0.011393 {"50": 0, "100": 0, "200": 0, "500": 309}
+        H5       registered (discard)    1997 -0.031013  0.309348                                 {"50": 3}
+{
+ "B": 2000,
+ "boot_seed": 12345,
+ "elapsed_s": 492.7,
+ "e4": {
+  "units": {
+   "polypgen": {
+    "neg": 24,
+    "pos": 6
+   }
+  },
+  "neg_units": 24,
+  "discarded_replicates": 309,
+  "discarded_by_budget": {
+   "50": 0,
+   "100": 0,
+   "200": 0,
+   "500": 309
+  },
+  "cause": "a 500-frame pack draws none of its negative units",
+  "pack_neg_units": [
+   4
+  ],
+  "p_pack_undefined": [
+   0.012579
+  ],
+  "p_any_pack_undefined_exact": 0.1572478494655861,
+  "expected_discards": 314.49569893117217,
+  "max_limit_shift_average_vs_discard": {
+   "H6": 0.00036032871870433567,
+   "H7": 0.0036003519935250868
+  }
+ },
+ "h5": {
+  "units": {
+   "polypgen": {
+    "neg": 24,
+    "pos": 6
+   }
+  },
+  "neg_units": 24,
+  "isolated_units": [
+   "center:C1",
+   "center:C2",
+   "center:C3",
+   "center:C4",
+   "center:C5",
+   "center:C6"
+  ],
+  "sequence_units": 18,
+  "discarded_replicates": 3,
+  "cause": "no centre with isolated negatives drawn",
+  "p_no_isolated_exact": 0.0010033912775533338,
+  "p_no_sequence_exact": 3.552713678800501e-15,
+  "expected_discards": 2.0067825551066676
+ },
+ "registered_check": {
+  "n": 9,
+  "max_abs_diff_at_10_digits": 0.0,
+  "max_raw_abs_diff": 5.098144129078719e-12
+ }
+}
