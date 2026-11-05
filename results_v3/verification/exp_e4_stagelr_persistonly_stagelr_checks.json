@@ -1,0 +1,16 @@
+{
+ "variant": "persistonly",
+ "expected_runs": 60,
+ "checked_runs": 60,
+ "reached_stage2": 57,
+ "stopped_in_stage1": [
+  "E4stagelr_k3_sup_imnet_seed29_s50",
+  "E4stagelr_k3_sup_imnet_seed47_s50",
+  "E4stagelr_k5_sup_imnet_seed29_s50"
+ ],
+ "epochs_checked": 1229,
+ "max_rel_err": 3.164318896173491e-11,
+ "control_runs": {},
+ "problems_by_check": {},
+ "problems": []
+}

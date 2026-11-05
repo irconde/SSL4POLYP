@@ -1,0 +1,48 @@
+[load] declared: {'runs': 240, 'zeroshot_probs_equal_registered': 240, 'frames_equal_registered': 240, 'kept_inherited_tau_D': 0} (15s)
+[load] persistonly: {'runs': 60, 'zeroshot_probs_equal_registered': 60, 'frames_equal_registered': 60, 'kept_inherited_tau_D': 0} (16s)
+[bootstrap] 235 contrasts, units {'polypgen': {'neg': 24, 'pos': 6}} (814s)
+{
+ "mode": "analysis",
+ "contrasts": 235,
+ "new_runs": {
+  "declared": {
+   "runs": 240,
+   "zeroshot_probs_equal_registered": 240,
+   "frames_equal_registered": 240,
+   "kept_inherited_tau_D": 0
+  },
+  "persistonly": {
+   "runs": 60,
+   "zeroshot_probs_equal_registered": 60,
+   "frames_equal_registered": 60,
+   "kept_inherited_tau_D": 0
+  }
+ },
+ "degenerate_totals": {
+  "C": 44,
+  "D": 3,
+  "C'": 47,
+  "D'": 2,
+  "C'p": 10,
+  "D'p": 0
+ },
+ "interpretation": {
+  "H7' (C' - A)": {
+   "registered_category": "robust",
+   "category": "robust",
+   "change": "maintained"
+  },
+  "D' - A": {
+   "registered_category": "attenuated",
+   "category": "attenuated",
+   "change": "maintained"
+  },
+  "D' - C'": {
+   "registered_category": "robust",
+   "category": "robust",
+   "change": "maintained"
+  }
+ },
+ "elapsed_s": 815.8
+}
+exit 0

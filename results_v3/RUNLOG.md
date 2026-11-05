@@ -1267,3 +1267,35 @@ Times in UTC (local Europe/Madrid, UTC+01:00, in brackets).
   (366/366, zero contrasts 0). `verify_phase.py` gains phase `e4stagelr` (registered e4 phase: 4,500/4,500 checks, as
   recorded); `scripts/v3/check_e4_stagelr_runs.py` makes the per-run checks without printing metrics.
 - Nothing of the experiment trained before this entry.
+
+### 2026-11-04/05: E4-stagelr runs and analysis, tag `v3-cmpb-exp-e4-stagelr-results`
+
+Times in UTC (local Europe/Madrid, UTC+01:00, in brackets). Plan `docs/v3/exploratory_e4_stagelr_plan.md` revision 1
+(SHA-256 `0705cfc2…38aa`, tag `v3-cmpb-exp-e4-stagelr-plan-r1`), followed as registered; code unchanged since `de567ea`.
+
+- **Runs** (`ssl4polyp-ft`, commit `de567ea`, `run_campaign.py e4stagelr`, GPUs 0 and 1, shared queue, GPU recorded per
+  run):
+  - declared: 240/240 at the first attempt, 0 failures, 0 retries, 22:54:53–00:09:18 [23:54:53–01:09:18], 8,909 GPU-s
+    (2.47 GPU-hours; GPU 0 118 runs, GPU 1 122);
+  - persist-only: 60/60 at the first attempt, 00:09:39–00:26:41 [01:09:39–01:26:41], 2,042 GPU-s (0.57 GPU-hours;
+    GPU 0 31, GPU 1 29).
+- **Checks** (records `results_v3/verification/exp_e4_stagelr_{declared,persistonly}_*`):
+  - `verify_phase.py`: 6,240/6,240 and 1,560/1,560 checks, 0 problems;
+  - `check_e4_stagelr_runs.py`: rates follow I2 in all 5,464 + 1,229 epochs (max relative error 3.3e-11), backbone 0
+    in stage 1, stage-2 trainable backbone parameters 7,087,872 / 14,175,744 (declared, all regimes) and 0
+    (persist-only); 3 SUP-imnet s50 runs stopped in stage 1 in both variants (k3 seeds 29 and 47, k5 seed 29); zero-shot
+    CSVs byte-identical to the registered runs and parent SHA-256 equal in all 300; the three flag-on control runs
+    repeated byte-identical (9 CSVs and 2 checkpoints each);
+  - manifests (`batch_records.py`): 5,280 and 1,320 files, 240 + 60 checkpoints hashed, 0 mismatches. The adapted
+    weights were then deleted (0 `.pth` left; ~96 GB). Registered files untouched.
+- **Analysis** (`analysis/v3/exploratory_e4_stagelr.py`, run once, 816 s; `results_v3/analysis_exploratory_e4_stagelr/`):
+  bootstrap space = registered e4 space; 300/300 runs with the registered evaluation frames, inherited τ and zero-shot
+  outputs. Balanced accuracy, global (4 regimes × 4 budgets), estimate [t-test CI; bootstrap CI], B = 1,691:
+  - H7' = C' − A: −0.0737 [−0.0977, −0.0496; −0.1289, −0.0194], **robust**; registered H7 −0.0748, robust:
+    **maintained**;
+  - D' − A: −0.0123 [−0.0246, +0.0000035; −0.0608, 0.0319], **attenuated**; registered −0.0213, attenuated:
+    **maintained**;
+  - D' − C': +0.0614 [0.0321, 0.0906; 0.0432, 0.0762], **robust**; registered +0.0536, robust: **maintained**.
+  - Degenerate views (specificity or sensitivity < 0.10): C' 47 (registered C 44), D' 2 (D 3); SUP-imnet persist-only
+    C'p 10, D'p 0.
+- Exploratory analysis: no Holm, no verdicts; the registered analysis is unchanged and remains the confirmatory one.

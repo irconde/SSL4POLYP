@@ -1,0 +1,20 @@
+{
+ "variant": "declared",
+ "expected_runs": 240,
+ "checked_runs": 240,
+ "reached_stage2": 237,
+ "stopped_in_stage1": [
+  "E4stagelr_k3_sup_imnet_seed29_s50",
+  "E4stagelr_k3_sup_imnet_seed47_s50",
+  "E4stagelr_k5_sup_imnet_seed29_s50"
+ ],
+ "epochs_checked": 5464,
+ "max_rel_err": 3.3428058000216345e-11,
+ "control_runs": {
+  "E4stagelr_k1_sup_imnet_seed13_s50": 11,
+  "E4stagelr_k1_sup_imnet_seed13_s100": 11,
+  "E4stagelr_k1_ssl_colon_seed13_s50": 11
+ },
+ "problems_by_check": {},
+ "problems": []
+}

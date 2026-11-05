@@ -1,0 +1,22 @@
+{
+  "phase": "e4stagelr",
+  "expected_runs": 60,
+  "complete_runs": 60,
+  "checks": 1560,
+  "checks_passed": 1560,
+  "checks_by_criterion": {
+    "reload": 60,
+    "epoch": 60,
+    "ckpt_sha": 60,
+    "csv_columns": 360,
+    "pred": 360,
+    "json_vs_csv": 420,
+    "tau": 120,
+    "stagelr_flags": 60,
+    "partition_seed": 60
+  },
+  "git_commits": {
+    "de567ea0841559bcfa3dae5f58e5660778091f23": 60
+  },
+  "problems": []
+}
