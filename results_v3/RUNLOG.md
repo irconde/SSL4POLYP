@@ -23,6 +23,12 @@ Any change to the SAP after results are seen goes to `results_v3/SAP_deviations.
   - SSL-imnet `checkpoints/pretrained/vit_b/mae_imagenet.pth`: `aec5f0b68e5f3193a00b07bc65a37440db549c15b36b8bea242606cc40c4bc5d`
 - `checkpoints/classification/clean_checkpoints.py` is disabled for this campaign (refuses `--force`).
 
+> **Note (2026-11-05).** The environment records named above were renamed when the environments were split
+> (commit `a121d00`, 2026-10-14): `env/environment.yml` → `env/environment-pretrain.yml`, `env/pip_freeze.txt` →
+> `env/pip_freeze-pretrain.txt`, `results_v3/environment/environment.yml` → `environment-pretrain.yml`,
+> `results_v3/environment/pip_freeze.txt` → `pip_freeze-pretrain.txt` and `results_v3/environment/versions.json` →
+> `versions-pretrain.json`.
+
 ## Phase 0
 
 ### 2026-10-14: data and pack verification
@@ -764,6 +770,14 @@ Baseline = last commit before 2025-09-24: `27e99ac` (2025-09-20). Files compared
   as noted at launch; no effect since there was no interruption).
 - Incidents: none.
 
+> **Note (2026-11-05).** The pretraining logs are versioned in `results_v3/verification/pretrain/`:
+> `mae_imnet_matched_log.txt` (33,677 bytes, SHA-256 `beb260412ab9ebbb1a715e4b5b130278222a3cf8ce520853697a2393a78204ec`),
+> a byte-identical copy of `checkpoints_v3/pretrain/mae_imnet_matched/ckpts/log.txt` (the SHA-256 cited above); and
+> `mae_imnet_matched_train.log` (2,372,846 bytes, SHA-256 `9fc1ecdea9564d9910f1909675d34c759db5d6592631033969b4901c64e80f36`),
+> a copy of `checkpoints_v3/pretrain/mae_imnet_matched/train.log` (SHA-256
+> `8d7a58c54dd7b3d02fcdf49d9e66dc9809c7738e7143482d1e80516aa1d11022`) identical except for 5 absolute paths replaced by `<REPO>` and
+> `<DATA_ROOT>` with the rules of `scripts/v3/release_depersonalize_paths.py`. The originals are not versioned.
+
 ### 2026-10-17: SSL-imnet-matched incorporated
 
 - `checkpoints/pretrained/vit_b/mae_imnet_matched.pth` = copy of
@@ -813,6 +827,10 @@ Decision (rule 4, applied as written): **SSL-imnet-matched fine-tuning lr = 1e-4
 `v3-cmpb-packs2`, SAP v3.2c, fine-tuning lr 1e-4; `results_v3/campaign/run_campaign4.sh` ran the phases in
 order with `--regimes ssl_imnet_matched` on GPUs 0 and 1 (one run per GPU) and verified each phase before the
 next. Logs and events: `results_v3/campaign/<phase>_ssl_imnet_matched/`.
+
+> **Note (2026-11-05).** `results_v3/campaign/run_campaign4.sh` is not versioned; `results_v3/verification/campaign4_driver.sh`
+> is a byte-identical copy (SHA-256 `04e6a2b3596feb94809143e68df4922ddc3d04b558c928c6dda11149d955b36f`). The events of each phase are versioned as
+> `results_v3/verification/campaign4_<phase>_events.jsonl`, byte-identical to `results_v3/campaign/<phase>_ssl_imnet_matched/events.jsonl`.
 
 | Phase | Wall time | Runs | GPU 0 / 1 | GPU-hours | Section 6 checks | Failures / retries |
 |---|---|---|---|---|---|---|
@@ -899,6 +917,10 @@ any error found is reported and registered as a deviation before re-running.
   4. `manuscript_results_values.md` is not in the repository; the drift report uses its transcription
      `analysis_v2/manuscript_values.py`. The default root `checkpoints_v3/campaign_matched/` does not exist (matched
      runs are under `checkpoints_v3/campaign/`); listed in report.md, no effect.
+
+> **Note (2026-11-05).** `analysis_v2/manuscript_values.py` is now versioned (8,245 bytes, SHA-256
+> `741ca4cd583ddb5eebfacd3f8e03a19b1a04735761939d6b8f41bc8332c9a0ba`), unchanged; it holds only the transcribed
+> manuscript values used by the drift report (no paths or personal data).
 - Drift (`results_v3/analysis/drift/drift_report.md`): vs manuscript, 16/40 paired differences change sign, 217/264
   levels differ by > 0.02; vs analysis_v2, 165/370 sign changes.
 - Closed 2026-10-17 15:31:35 CEST.
@@ -1168,6 +1190,14 @@ Supersedes `1a64dfed…201eba`. Only the interpretation rules change.
   committed records (180 runs, 0 failures).
 - Kept checkpoints: 9, 49, 85, 89, 95, 99, 149, 199, 249, 299, 349, 399 (as for SSL-imnet-matched).
 - Incidents: none.
+
+> **Note (2026-11-05).** The pretraining logs are versioned in `results_v3/verification/pretrain/`:
+> `mae_sslcolon_r_log.txt` (33,885 bytes, SHA-256 `93aac5c754dfce74cc5e71681e0c83625f5d33d2440ad137297efa66a9d2d20e`),
+> a byte-identical copy of `checkpoints_v3/pretrain/mae_sslcolon_r/ckpts/log.txt` (the SHA-256 cited above); and
+> `mae_sslcolon_r_train.log` (2,372,950 bytes, SHA-256 `88d6dc713cbcf7603e8362baf8c578a855f9698fa4d6fe92389793dfe60d2b14`),
+> a copy of `checkpoints_v3/pretrain/mae_sslcolon_r/train.log` (SHA-256
+> `2eb40c2c16979dd38f7423c201f5119fa946ff82f6993703f58328a3db2a4c7a`) identical except for 5 absolute paths replaced by `<REPO>` and
+> `<DATA_ROOT>` with the rules of `scripts/v3/release_depersonalize_paths.py`. The originals are not versioned.
 
 ### 2026-10-30: SSL-colon-r campaign (180 runs)
 
