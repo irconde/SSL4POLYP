@@ -171,8 +171,8 @@ Campaign v3 uses `data_packs/v3/`:
 byte (CRLF line endings, `-text` in `.gitattributes`). To verify them (`ssl4polyp-ft`):
 
 ```bash
-python scripts/v3/verify_data_packs.py --v3 --out <dir>                 # CSVs and images
-python scripts/v3/verify_data_packs.py --v3 --skip-images --out <dir>   # CSVs only (no data needed)
+python scripts/v3/verify_data_packs.py --v3 --out <dir>                 # CSVs and images (reads data/roots.json)
+python scripts/v3/verify_data_packs.py --v3 --skip-images --roots data/roots.example.json --out <dir>   # CSVs only (no data needed)
 ```
 
 For each of the 106 pack directories of `data_packs/v3/` (91 of the campaign and the 15
