@@ -63,3 +63,13 @@
   (`results_v3/verification/analysis_v3_variants/RESULTS.md`).
 - **Effect:** none on H1–H7, metrics, Holm, bootstrap or the double confirmation rule. With all runs present the
   results are identical to v3.2c; the change only matters if runs are missing and removes the singularity check.
+
+## Addenda (2026-11)
+
+- **2026-11-04.** In the planned E4 adaptations the stage learning rates took effect only in the first epoch of each
+  stage and, in SUP-imnet, the second stage unfroze no block. First recorded in the plan e1a002e of the exploratory E4
+  repetition with the declared schedule (see results_v3/RUNLOG.md).
+- **Clarification of the 2026-10-17 entry.** The per-run test metrics written by the training script existed before
+  SAP v3.3 was committed; no hypothesis estimate had been computed.
+- **Erratum.** The original SSL-colon pretraining ran 774 iterations in its final epoch, not 776 (RUNLOG erratum of
+  2026-11-05).
